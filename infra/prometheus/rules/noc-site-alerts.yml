@@ -1,0 +1,33 @@
+groups:
+  - name: noc-site-alerts
+    rules:
+      - alert: SiteWANDown
+        expr: |
+          (probe_success{check="wan_dns"} == 0)
+          or
+          (probe_success{check="wan_vps"} == 0)
+        for: 2m
+        labels:
+          severity: critical
+          site: "{{ $labels.site }}"
+        annotations:
+          summary: "WAN connectivity failure (site={{ $labels.site }}, check={{ $labels.check }})"
+
+      - alert: SiteWebsiteDown
+        expr: probe_success{check="website"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          site: "{{ $labels.site }}"
+        annotations:
+          summary: "Website check failing (site={{ $labels.site }}, target={{ $labels.instance }})"
+
+      - alert: SiteSNMPDown
+        expr: snmp_up{site=~".+"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          site: "{{ $labels.site }}"
+        annotations:
+          summary: "SNMP polling failing (site={{ $labels.site }})"
+

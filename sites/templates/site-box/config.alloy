@@ -1,0 +1,54 @@
+// Alloy config for a site box:
+// - ICMP probes (WAN/local health)
+// - Optional SNMP interface polling (LAN gear)
+// - Push metrics to central Prometheus via remote_write
+
+prometheus.remote_write "central" {
+  endpoint {
+    url = sys.env("CENTRAL_REMOTE_WRITE_URL")
+  }
+}
+
+// ICMP probing without running a separate blackbox-exporter process.
+prometheus.exporter.blackbox "icmp_probe" {
+  config = "{ modules: { icmp: { prober: icmp, timeout: 5s, preferred_ip_protocol: \"ip4\" } } }"
+
+  target {
+    name    = "ping_dns"
+    address = sys.env("PING_TARGET_1")
+    module  = "icmp"
+    labels  = { check = "wan_dns", site = sys.env("SITE_NAME") }
+  }
+
+  target {
+    name    = "ping_vps"
+    address = sys.env("PING_TARGET_2")
+    module  = "icmp"
+    labels  = { check = "wan_vps", site = sys.env("SITE_NAME") }
+  }
+}
+
+prometheus.scrape "icmp_scrape" {
+  targets     = prometheus.exporter.blackbox.icmp_probe.targets
+  forward_to  = [prometheus.remote_write.central.receiver]
+  job_name    = "site_icmp_probe"
+}
+
+// Optional SNMP polling. If SNMP_TARGET_1_IP is not set, you can comment out this block.
+prometheus.exporter.snmp "snmp_ifaces" {
+  config_file = "snmp.yml"
+
+  target "lan_device_1" {
+    address = sys.env("SNMP_TARGET_1_IP")
+    module  = "if_mib"
+    auth    = "public_v2"
+    labels  = { site = sys.env("SITE_NAME") }
+  }
+}
+
+prometheus.scrape "snmp_scrape" {
+  targets    = prometheus.exporter.snmp.snmp_ifaces.targets
+  forward_to = [prometheus.remote_write.central.receiver]
+  job_name   = "site_snmp_if_mib"
+}
+
