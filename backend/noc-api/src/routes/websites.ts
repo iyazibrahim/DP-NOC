@@ -11,7 +11,7 @@ websitesRouter.get(
   "/",
   requireJwt(["operator", "wallboard"]),
   async (_req, res: Response) => {
-    const statuses = await computeAllSitesStatus();
+    const { statuses } = await computeAllSitesStatus();
     const bySite = new Map(statuses.map((s) => [s.siteId, s]));
 
     const websites = siteList.flatMap((site) =>
@@ -36,7 +36,7 @@ websitesRouter.get(
   "/summary",
   requireJwt(["operator", "wallboard"]),
   async (_req, res: Response) => {
-    const statuses = await computeAllSitesStatus();
+    const { statuses } = await computeAllSitesStatus();
     const counts = { healthy: 0, warning: 0, critical: 0, unknown: 0 };
     for (const s of statuses) {
       counts[s.websites.state] += 1;

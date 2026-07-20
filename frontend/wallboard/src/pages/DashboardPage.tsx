@@ -11,10 +11,13 @@ import {
   getSites,
   getTopDevices,
   resetDashboardLayout,
-  saveDashboardLayout
+  saveDashboardLayout,
+  STATUS_POLL_MS
 } from "../api";
 import type { ActiveAlert, DashboardLayout, DashboardWidget, DeviceRow, Site, SiteStatus } from "../types";
 import { WidgetBody, WIDGET_CATALOG } from "../components/WidgetBody";
+import { WidgetConfigEditor } from "../components/WidgetConfigEditor";
+import { useMetricPresets } from "../components/DeviceMetricWidgets";
 
 export function DashboardPage() {
   const { token } = useAuth();
@@ -28,6 +31,7 @@ export function DashboardPage() {
   const [width, setWidth] = useState(1200);
   const [error, setError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const presets = useMetricPresets();
 
   useEffect(() => {
     const el = document.getElementById("dashboard-grid-host");
@@ -63,7 +67,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 15000);
+    const t = setInterval(refresh, STATUS_POLL_MS);
     return () => clearInterval(t);
   }, [refresh]);
 
@@ -102,6 +106,24 @@ export function DashboardPage() {
     if (!layout) return;
     const meta = WIDGET_CATALOG.find((c) => c.type === type)!;
     const id = `${type}-${Date.now()}`;
+    const firstSite = sites[0];
+    const firstDevice = firstSite?.devices?.[0];
+    let config: Record<string, string> | undefined;
+    if (type === "grafana_panel") {
+      config = { embedUrl: `${grafanaUrl}/` };
+    } else if (type === "site_card") {
+      config = { siteId: firstSite?.id ?? "" };
+    } else if (
+      type === "device_metric_chart" ||
+      type === "device_stat_gauge" ||
+      type === "device_detail"
+    ) {
+      config = {
+        siteId: firstSite?.id ?? "",
+        deviceId: firstDevice?.id ?? "",
+        metric: firstDevice?.kind === "network" ? "snmp_up" : "cpu_pct"
+      };
+    }
     const widget: DashboardWidget = {
       i: id,
       type,
@@ -109,15 +131,18 @@ export function DashboardPage() {
       y: Infinity,
       w: meta.defaultW,
       h: meta.defaultH,
-      config:
-        type === "grafana_panel"
-          ? { embedUrl: `${grafanaUrl}/` }
-          : type === "site_card"
-            ? { siteId: sites[0]?.id ?? "" }
-            : undefined
+      config
     };
     setLayout({ ...layout, widgets: [...layout.widgets, widget] });
     setEditing(true);
+  };
+
+  const updateWidgetConfig = (widgetId: string, config: Record<string, string>) => {
+    if (!layout) return;
+    setLayout({
+      ...layout,
+      widgets: layout.widgets.map((w) => (w.i === widgetId ? { ...w, config } : w))
+    });
   };
 
   const removeWidget = (id: string) => {
@@ -194,6 +219,14 @@ export function DashboardPage() {
                   </button>
                 )}
               </div>
+              {editing ? (
+                <WidgetConfigEditor
+                  widget={w}
+                  sites={sites}
+                  presets={presets}
+                  onChange={(config) => updateWidgetConfig(w.i, config)}
+                />
+              ) : null}
               <WidgetBody
                 type={w.type}
                 config={w.config}

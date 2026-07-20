@@ -2,8 +2,9 @@
   {
     "id": "site-1",
     "name": "Digital Penang Office",
-    "lat": 5.4192,
-    "lng": 100.3298,
+    "address": "Wisma Yeap Chor Ee, 15B & 16B, Pengkalan Weld, 10300 George Town",
+    "lat": 5.4134,
+    "lng": 100.3408,
     "wan": {
       "dnsTarget": "1.1.1.1",
       "vpsTarget": "139.99.88.174"
@@ -13,9 +14,10 @@
   },
   {
     "id": "site-2",
-    "name": "Digital Library 1",
-    "lat": 5.4145,
-    "lng": 100.3291,
+    "name": "Penang Digital Library 1",
+    "address": "PDL Phase 1, 135 Jln Masjid Negeri, Taman Guan Joo Seng, 11600 George Town",
+    "lat": 5.396,
+    "lng": 100.3085,
     "wan": {
       "dnsTarget": "1.1.1.1",
       "vpsTarget": "139.99.88.174"
@@ -25,9 +27,10 @@
   },
   {
     "id": "site-3",
-    "name": "Digital Library 2",
-    "lat": 5.4012,
-    "lng": 100.3187,
+    "name": "Penang Digital Library 2",
+    "address": "PDL Phase 2, 123 Jln Masjid Negeri, Taman Guan Joo Seng, 11600 George Town",
+    "lat": 5.3952,
+    "lng": 100.3078,
     "wan": {
       "dnsTarget": "1.1.1.1",
       "vpsTarget": "139.99.88.174"
@@ -38,8 +41,9 @@
   {
     "id": "site-4",
     "name": "Butterworth Digital Library",
-    "lat": 5.3991,
-    "lng": 100.3638,
+    "address": "Lebuh Benggali 1, Kampung Benggali, 12000 Butterworth, Pulau Pinang",
+    "lat": 5.417,
+    "lng": 100.332,
     "wan": {
       "dnsTarget": "1.1.1.1",
       "vpsTarget": "139.99.88.174"
@@ -50,8 +54,9 @@
   {
     "id": "site-5",
     "name": "Batu Maung Digital Library",
-    "lat": 5.2835,
-    "lng": 100.2872,
+    "address": "Floor 3A, Southbay Plaza, Cangkat Batu Maung, Lintang Bayan Lepas, 11900 Bayan Lepas, Penang",
+    "lat": 5.285,
+    "lng": 100.29,
     "wan": {
       "dnsTarget": "1.1.1.1",
       "vpsTarget": "139.99.88.174"

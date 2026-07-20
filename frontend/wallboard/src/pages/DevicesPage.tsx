@@ -22,7 +22,7 @@ export function DevicesPage() {
       <div className="pageHeader">
         <div>
           <h1>Devices</h1>
-          <p className="pageSub">Inventory across all sites (SNMP targets)</p>
+          <p className="pageSub">Inventory across all sites</p>
         </div>
       </div>
       <div className="detailGrid">
@@ -34,8 +34,8 @@ export function DevicesPage() {
               <tr>
                 <th>Name</th>
                 <th>Site</th>
-                <th>Type</th>
-                <th>IP</th>
+                <th>Kind</th>
+                <th>Target</th>
                 <th>Vendor</th>
               </tr>
             </thead>
@@ -44,8 +44,8 @@ export function DevicesPage() {
                 <tr key={`${d.siteId}-${d.id}`}>
                   <td>{d.name}</td>
                   <td>{d.siteName}</td>
-                  <td>{d.type}</td>
-                  <td>{d.snmpIp}</td>
+                  <td>{d.kind ?? "network"}</td>
+                  <td>{d.kind === "server" ? d.hostMetricId ?? d.id : d.snmpIp ?? "—"}</td>
                   <td>{d.vendor}</td>
                 </tr>
               ))}

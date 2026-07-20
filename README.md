@@ -78,13 +78,21 @@ Sidebar:
 
 | Page | Purpose |
 |---|---|
-| Dashboard | Drag-and-drop widgets (`react-grid-layout`) + Grafana panel embeds |
+| Dashboard | Drag-and-drop widgets + live device metrics (recharts) + Grafana embeds |
 | Maps | Leaflet map + top devices by alerts |
-| Sites | Site list and detail (WAN / LAN / websites / devices) |
+| Sites | Full CRUD, map picker, device kinds (server/network), Alloy export |
 | Devices | Inventory + alert ranking |
 | Alerts | Alertmanager feed |
 | Websites | Blackbox probe status |
-| Settings | Grafana URL display + layout reset |
+| Settings | Prometheus retention, exports, Grafana URL, layout reset, seed reset |
+
+## Storage & retention
+
+See [`docs/STORAGE_RETENTION.md`](docs/STORAGE_RETENTION.md). Defaults: **28 days**, **10GB** TSDB cap. Configure in **Settings → Prometheus storage**; restart Prometheus to apply flag changes.
+
+## Reports
+
+Weekly (Sunday 00:00 MYT) and monthly (1st 00:00 MYT) exports when enabled. Manual **Export now** and download from Settings. Files stored in `noc_exports` volume.
 
 ## Site agents
 

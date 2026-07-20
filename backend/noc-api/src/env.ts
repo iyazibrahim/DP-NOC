@@ -17,7 +17,11 @@ const envSchema = z.object({
   PROMETHEUS_BASE_URL: z.string().default("http://localhost:9090"),
   ALERTMANAGER_BASE_URL: z.string().default("http://localhost:9093"),
   GRAFANA_PUBLIC_URL: z.string().default("http://localhost:3001"),
-  PUBLIC_DIR: z.string().optional()
+  PUBLIC_DIR: z.string().optional(),
+  PROMETHEUS_APPLY_CMD: z.string().optional(),
+  ALERTMANAGER_APPLY_CMD: z.string().optional(),
+  STATUS_DASHBOARD_REFRESH_SEC: z.coerce.number().default(10),
+  STATUS_METRIC_FRESH_SEC: z.coerce.number().default(180)
 });
 
 export const env = envSchema.parse(process.env);

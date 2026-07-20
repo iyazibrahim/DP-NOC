@@ -10,6 +10,9 @@ import { alertsRouter } from "./routes/alerts";
 import { dashboardsRouter } from "./routes/dashboards";
 import { devicesRouter } from "./routes/devices";
 import { websitesRouter } from "./routes/websites";
+import { settingsRouter } from "./routes/settings";
+import { metricsRouter } from "./routes/metrics";
+import { exportsRouter } from "./routes/exports";
 
 function resolvePublicDir() {
   if (env.PUBLIC_DIR && fs.existsSync(env.PUBLIC_DIR)) {
@@ -72,6 +75,9 @@ export function createApp() {
   app.use("/api/dashboards", dashboardsRouter);
   app.use("/api/devices", devicesRouter);
   app.use("/api/websites", websitesRouter);
+  app.use("/api/settings", settingsRouter);
+  app.use("/api/metrics", metricsRouter);
+  app.use("/api/exports", exportsRouter);
 
   if (hasUi && publicDir) {
     app.use(express.static(publicDir, { index: false }));

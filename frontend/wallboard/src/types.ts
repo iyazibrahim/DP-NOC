@@ -16,11 +16,15 @@ export type SiteStatus = {
   overall: DomainState;
 };
 
+export type DeviceKind = "server" | "network";
+
 export type SiteDevice = {
   id: string;
   name: string;
   type: string;
-  snmpIp: string;
+  kind: DeviceKind;
+  snmpIp?: string;
+  hostMetricId?: string;
   vendor: string;
 };
 
@@ -29,6 +33,9 @@ export type Site = {
   name: string;
   lat: number;
   lng: number;
+  address?: string;
+  notes?: string;
+  createdAt?: string;
   websiteTargets: Array<{ name: string; url: string }>;
   wan: { dnsTarget: string; vpsTarget: string };
   devices: SiteDevice[];
@@ -49,7 +56,10 @@ export type WidgetType =
   | "mini_map"
   | "website_summary"
   | "site_card"
-  | "grafana_panel";
+  | "grafana_panel"
+  | "device_metric_chart"
+  | "device_stat_gauge"
+  | "device_detail";
 
 export type DashboardWidget = {
   i: string;
@@ -70,4 +80,77 @@ export type DeviceRow = SiteDevice & {
   siteId: string;
   siteName: string;
   alertCount?: number;
+};
+
+export type MetricPreset = {
+  id: string;
+  label: string;
+  kind: "server" | "network" | "any";
+  query: string;
+  unit?: string;
+};
+
+export type RetentionConfig = {
+  retentionTime: string;
+  retentionSizeGB: number;
+  hostScrapeIntervalSec: number;
+  icmpScrapeIntervalSec: number;
+  snmpScrapeIntervalSec: number;
+  scheduledExportsEnabled: boolean;
+};
+
+export type ExportRecord = {
+  id: string;
+  period: "weekly" | "monthly";
+  createdAt: string;
+  dir: string;
+  files: string[];
+};
+
+export type StatusMeta = {
+  checkedAt: string;
+  dashboardRefreshSec: number;
+  metricFreshWindowSec: number;
+  typicalDetectionSec: number;
+  scrapeIntervalSec: number;
+};
+
+export type NotificationsConfig = {
+  telegram: {
+    enabled: boolean;
+    botToken: string;
+    chatId: string;
+    hasToken?: boolean;
+  };
+  email: {
+    enabled: boolean;
+    to: string;
+    from: string;
+    smarthost: string;
+    authUsername: string;
+    authPassword: string;
+    hasPassword?: boolean;
+  };
+  webhook: {
+    enabled: boolean;
+    url: string;
+  };
+  route: {
+    groupWait: string;
+    groupInterval: string;
+    repeatInterval: string;
+  };
+};
+
+export type StatusTimingInfo = {
+  dashboardRefreshSec: number;
+  metricFreshWindowSec: number;
+  typicalDetectionSec: number;
+  scrapeIntervalSec: number;
+  notes: string[];
+};
+
+export type PromQueryResult = {
+  resultType: string;
+  result: unknown;
 };

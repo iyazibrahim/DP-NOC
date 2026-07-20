@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEVICES_FILE="${1:-$SCRIPT_DIR/devices.json}"
 OUT_FILE="${2:-$SCRIPT_DIR/config.alloy}"
+SCRAPE_INTERVAL_SEC="${SCRAPE_INTERVAL_SEC:-60}"
 
 if [[ ! -f "$DEVICES_FILE" ]]; then
   echo "[]" > "$DEVICES_FILE"
@@ -50,6 +51,7 @@ prometheus.scrape "icmp_scrape" {
   targets    = prometheus.exporter.blackbox.icmp_probe.targets
   forward_to = [prometheus.remote_write.central.receiver]
   job_name   = "site_icmp_probe"
+  scrape_interval = "${SCRAPE_INTERVAL_SEC}s"
 }
 
 prometheus.exporter.unix "nuc_host" {
@@ -88,7 +90,7 @@ prometheus.scrape "nuc_host_scrape" {
   targets         = discovery.relabel.nuc_host.output
   forward_to      = [prometheus.remote_write.central.receiver]
   job_name        = "site_host"
-  scrape_interval = "30s"
+  scrape_interval = "${SCRAPE_INTERVAL_SEC}s"
 }
 EOF
 
@@ -141,6 +143,7 @@ PY
   echo "  targets    = prometheus.exporter.snmp.site_devices.targets"
   echo "  forward_to = [prometheus.remote_write.central.receiver]"
   echo "  job_name   = \"site_snmp_if_mib\""
+  echo "  scrape_interval = \"${SCRAPE_INTERVAL_SEC}s\""
   echo "}"
 } >> "$OUT_FILE"
 

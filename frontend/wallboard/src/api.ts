@@ -2,8 +2,16 @@ import type {
   ActiveAlert,
   DashboardLayout,
   DeviceRow,
+  ExportRecord,
+  MetricPreset,
+  PromQueryResult,
+  RetentionConfig,
   Site,
-  SiteStatus
+  SiteDevice,
+  SiteStatus,
+  StatusMeta,
+  NotificationsConfig,
+  StatusTimingInfo
 } from "./types";
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL?.toString() ?? "").replace(/\/$/, "");
@@ -49,6 +57,50 @@ export async function getSite(token: string, id: string) {
   });
 }
 
+export async function createSite(
+  token: string,
+  input: {
+    name: string;
+    lat: number;
+    lng: number;
+    address?: string;
+    notes?: string;
+    wan?: Site["wan"];
+  }
+) {
+  return fetchJson<{ site: Site }>("/api/sites", {
+    method: "POST",
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify(input)
+  });
+}
+
+export async function updateSite(
+  token: string,
+  id: string,
+  patch: Partial<Pick<Site, "name" | "lat" | "lng" | "address" | "notes" | "wan" | "websiteTargets">>
+) {
+  return fetchJson<{ site: Site }>(`/api/sites/${id}`, {
+    method: "PATCH",
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify(patch)
+  });
+}
+
+export async function deleteSite(token: string, id: string) {
+  return fetchJson<{ ok: boolean }>(`/api/sites/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token)
+  });
+}
+
+export async function resetSitesFromSeed(token: string) {
+  return fetchJson<{ sites: Site[] }>("/api/sites/reset-from-seed", {
+    method: "POST",
+    headers: authHeaders(token)
+  });
+}
+
 export async function addSiteDevice(
   token: string,
   siteId: string,
@@ -56,7 +108,9 @@ export async function addSiteDevice(
     id: string;
     name: string;
     type: string;
-    snmpIp: string;
+    kind: SiteDevice["kind"];
+    snmpIp?: string;
+    hostMetricId?: string;
     vendor: string;
   }
 ) {
@@ -71,7 +125,7 @@ export async function updateSiteDevice(
   token: string,
   siteId: string,
   deviceId: string,
-  patch: Partial<{ name: string; type: string; snmpIp: string; vendor: string }>
+  patch: Partial<Omit<SiteDevice, "id">>
 ) {
   return fetchJson<{ site: Site }>(`/api/sites/${siteId}/devices/${deviceId}`, {
     method: "PATCH",
@@ -87,8 +141,19 @@ export async function deleteSiteDevice(token: string, siteId: string, deviceId: 
   });
 }
 
+export async function downloadSiteDevicesJson(token: string, siteId: string) {
+  const res = await fetch(url(`/api/sites/${siteId}/export/devices.json`), {
+    headers: authHeaders(token)
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Download failed: ${res.status} ${body}`);
+  }
+  return res.blob();
+}
+
 export async function getAllSiteStatuses(token: string) {
-  return fetchJson<{ statuses: SiteStatus[] }>("/api/sites/status/all", {
+  return fetchJson<{ statuses: SiteStatus[]; meta: StatusMeta }>("/api/sites/status/all", {
     headers: authHeaders(token)
   });
 }
@@ -145,3 +210,121 @@ export async function resetDashboardLayout(token: string) {
     headers: authHeaders(token)
   });
 }
+
+export async function getRetentionSettings(token: string) {
+  return fetchJson<{
+    config: RetentionConfig;
+    tsdb: unknown;
+    storageBytes: number | null;
+    flagsFile: string;
+  }>("/api/settings/retention", { headers: authHeaders(token) });
+}
+
+export async function saveRetentionSettings(token: string, config: Partial<RetentionConfig>) {
+  return fetchJson<{
+    config: RetentionConfig;
+    tsdb: unknown;
+    storageBytes: number | null;
+    flagsFile: string;
+  }>("/api/settings/retention", {
+    method: "PATCH",
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify(config)
+  });
+}
+
+export async function applyRetentionSettings(token: string) {
+  return fetchJson<{ ok: boolean; message: string }>("/api/settings/retention/apply", {
+    method: "POST",
+    headers: authHeaders(token)
+  });
+}
+
+export async function getMetricPresets(token: string) {
+  return fetchJson<{ presets: MetricPreset[] }>("/api/metrics/presets", {
+    headers: authHeaders(token)
+  });
+}
+
+export async function getMetricInstant(
+  token: string,
+  params: { preset: string; siteId: string; deviceId: string }
+) {
+  const q = new URLSearchParams(params);
+  return fetchJson<{ data: PromQueryResult; query: string }>(`/api/metrics/instant?${q}`, {
+    headers: authHeaders(token)
+  });
+}
+
+export async function getMetricRange(
+  token: string,
+  params: { preset: string; siteId: string; deviceId: string; hours?: number }
+) {
+  const q = new URLSearchParams({
+    preset: params.preset,
+    siteId: params.siteId,
+    deviceId: params.deviceId,
+    hours: String(params.hours ?? 1)
+  });
+  return fetchJson<{ data: PromQueryResult; query: string }>(`/api/metrics/query_range?${q}`, {
+    headers: authHeaders(token)
+  });
+}
+
+export async function listExports(token: string) {
+  return fetchJson<{ exports: ExportRecord[] }>("/api/exports", {
+    headers: authHeaders(token)
+  });
+}
+
+export async function runExport(token: string, period: "weekly" | "monthly") {
+  return fetchJson<{ export: ExportRecord }>("/api/exports/run", {
+    method: "POST",
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify({ period })
+  });
+}
+
+export async function downloadExportFile(token: string, exportId: string, filename: string) {
+  const res = await fetch(url(`/api/exports/${exportId}/download/${filename}`), {
+    headers: authHeaders(token)
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Download failed: ${res.status} ${body}`);
+  }
+  return res.blob();
+}
+
+export async function getNotificationsSettings(token: string) {
+  return fetchJson<{ config: NotificationsConfig }>("/api/settings/notifications", {
+    headers: authHeaders(token)
+  });
+}
+
+export async function saveNotificationsSettings(
+  token: string,
+  config: Partial<NotificationsConfig>
+) {
+  return fetchJson<{ config: NotificationsConfig }>("/api/settings/notifications", {
+    method: "PATCH",
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify(config)
+  });
+}
+
+export async function applyNotificationsSettings(token: string) {
+  return fetchJson<{ ok: boolean; message: string }>("/api/settings/notifications/apply", {
+    method: "POST",
+    headers: authHeaders(token)
+  });
+}
+
+export async function getStatusTiming(token: string) {
+  return fetchJson<StatusTimingInfo>("/api/settings/status-timing", {
+    headers: authHeaders(token)
+  });
+}
+
+/** Dashboard status poll interval (ms) — keep in sync with backend STATUS_DASHBOARD_REFRESH_SEC */
+export const STATUS_POLL_MS = 10_000;

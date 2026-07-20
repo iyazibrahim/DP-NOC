@@ -1,5 +1,5 @@
-import { siteList } from "../data/sites";
-import { promQuery, parseFirstVectorValue } from "./prometheus";
+import { getSiteById, siteList } from "../data/sites";
+import { promQuery, parseFirstVectorValue, parseVectorToNumericValues } from "./prometheus";
 import { getActiveAlerts, type Alert } from "./alertmanager";
 
 export type DomainState = "healthy" | "warning" | "critical" | "unknown";
@@ -21,14 +21,23 @@ export type SiteStatus = {
   overall: DomainState;
 };
 
-function stateFromBooleanSeries(values: number[]): DomainState {
-  if (values.length === 0) return "unknown";
-  const anyFalse = values.some((v) => v === 0);
-  const anyNaN = values.some((v) => !Number.isFinite(v));
-  if (anyNaN) return "warning";
-  if (anyFalse) return "critical";
-  return "healthy";
-}
+export type StatusMeta = {
+  checkedAt: string;
+  dashboardRefreshSec: number;
+  metricFreshWindowSec: number;
+  typicalDetectionSec: number;
+  scrapeIntervalSec: number;
+};
+
+const METRIC_FRESH_WINDOW = "3m";
+const METRIC_HISTORY_WINDOW = "30m";
+
+export const STATUS_META: Omit<StatusMeta, "checkedAt"> = {
+  dashboardRefreshSec: 10,
+  metricFreshWindowSec: 180,
+  typicalDetectionSec: 90,
+  scrapeIntervalSec: 60
+};
 
 function booleanValueToDomain(v: number | null): DomainState {
   if (v === null) return "unknown";
@@ -39,42 +48,80 @@ function booleanValueToDomain(v: number | null): DomainState {
 
 function worst(a: DomainState, b: DomainState): DomainState {
   const score: Record<DomainState, number> = {
-    critical: 3,
-    warning: 2,
-    healthy: 1,
-    unknown: 0
+    critical: 4,
+    warning: 3,
+    healthy: 2,
+    unknown: 1
   };
   return score[a] >= score[b] ? a : b;
 }
 
-function domainFromProbeVector(vectorValues: number[]): DomainStatus {
-  const state = stateFromBooleanSeries(vectorValues);
-  return { state };
+function aggregateProbeStatuses(statuses: DomainStatus[]): DomainStatus {
+  const states = statuses.map((s) => s.state);
+  if (states.every((s) => s === "unknown")) {
+    return {
+      state: "unknown",
+      notes: statuses.find((s) => s.notes)?.notes ?? "No probe metrics yet"
+    };
+  }
+  if (states.some((s) => s === "critical")) {
+    const notes = statuses
+      .filter((s) => s.state === "critical")
+      .map((s) => s.notes)
+      .filter(Boolean)
+      .join("; ");
+    return { state: "critical", notes: notes || "One or more checks are down" };
+  }
+  if (states.some((s) => s === "warning")) {
+    return { state: "warning", notes: "Degraded probe readings" };
+  }
+  if (states.some((s) => s === "unknown")) {
+    return { state: "warning", notes: "Partial probe data — other checks are up" };
+  }
+  return { state: "healthy" };
 }
 
-function parseVectorToNumericValues(data: any): number[] {
-  if (!data || data.resultType !== "vector") return [];
-  if (!Array.isArray(data.result)) return [];
-  return data.result
-    .map((r: any) => r?.value?.[1])
-    .map((v: any) => (typeof v === "string" ? Number(v) : Number(v)))
-    .filter((x: number) => Number.isFinite(x) || x === 0);
+function stateFromBooleanSeries(values: number[]): DomainState {
+  if (values.length === 0) return "unknown";
+  if (values.some((v) => v === 0)) return "critical";
+  if (values.some((v) => !Number.isFinite(v))) return "warning";
+  return "healthy";
 }
 
-async function queryProbeSuccessVector(
-  siteId: string,
-  labelKey: string,
-  labelValue: string
-) {
-  const query = `probe_success{site="${siteId}",${labelKey}="${labelValue}"}`;
-  const data = await promQuery(query);
-  const values = parseVectorToNumericValues(data);
-  return { data, values };
+async function queryBooleanMetricState(metricSelector: string): Promise<DomainStatus> {
+  try {
+    const freshQ = `last_over_time(${metricSelector}[${METRIC_FRESH_WINDOW}])`;
+    const fresh = parseFirstVectorValue(await promQuery(freshQ));
+    if (fresh !== null) {
+      const state = booleanValueToDomain(fresh);
+      return {
+        state,
+        notes:
+          state === "critical"
+            ? "Reported down by the latest metric sample"
+            : undefined
+      };
+    }
+
+    const histQ = `last_over_time(${metricSelector}[${METRIC_HISTORY_WINDOW}])`;
+    const hist = parseFirstVectorValue(await promQuery(histQ));
+    if (hist !== null) {
+      return {
+        state: "critical",
+        notes: `No metrics in the last ${METRIC_FRESH_WINDOW} — collector or link may be down`
+      };
+    }
+
+    return { state: "unknown", notes: "No metrics received yet" };
+  } catch {
+    return { state: "unknown", notes: "Could not query Prometheus" };
+  }
 }
 
-async function querySnmpUpVector(siteId: string) {
-  const query = `snmp_up{site="${siteId}"}`;
-  const data = await promQuery(query);
+async function queryProbeSuccessVector(siteId: string, labelKey: string, labelValue: string) {
+  const selector = `probe_success{site="${siteId}",${labelKey}="${labelValue}"}`;
+  const freshQ = `last_over_time(${selector}[${METRIC_FRESH_WINDOW}])`;
+  const data = await promQuery(freshQ);
   const values = parseVectorToNumericValues(data);
   return { data, values };
 }
@@ -83,50 +130,49 @@ export async function computeSiteStatus(
   siteId: string,
   activeAlerts?: Alert[]
 ): Promise<SiteStatus> {
-  const site = siteList.find((s) => s.id === siteId);
+  const site = getSiteById(siteId);
   if (!site) {
     throw new Error(`Unknown site: ${siteId}`);
   }
 
-  // WAN: require both probes (dns + vps) to be successful.
-  const wanDnsData = await promQuery(
+  const wanDns = await queryBooleanMetricState(
     `probe_success{site="${siteId}",check="wan_dns"}`
   );
-  const wanVpsData = await promQuery(
+  const wanVps = await queryBooleanMetricState(
     `probe_success{site="${siteId}",check="wan_vps"}`
   );
-  const wanDns = parseFirstVectorValue(wanDnsData as any);
-  const wanVps = parseFirstVectorValue(wanVpsData as any);
+  const wan = aggregateProbeStatuses([wanDns, wanVps]);
 
-  const wanStates = [booleanValueToDomain(wanDns), booleanValueToDomain(wanVps)];
-  let wan: DomainStatus = { state: "unknown" };
-  const wanWorst = wanStates.reduce((acc, cur) => worst(acc, cur), "unknown");
-  if (wanWorst === "unknown") {
-    wan = { state: "unknown", notes: "WAN probes missing from Prometheus" };
-  } else {
-    wan = { state: wanWorst };
-  }
-
-  // Websites: worst of all website probes.
   const websiteVector = await queryProbeSuccessVector(siteId, "check", "website");
-  const websites = domainFromProbeVector(websiteVector.values);
-  if (websites.state !== "unknown" && websiteVector.values.length === 0) {
-    websites.notes = "No website probe series found";
+  let websites: DomainStatus = { state: stateFromBooleanSeries(websiteVector.values) };
+  if (websiteVector.values.length === 0) {
+    const histQ = `last_over_time(probe_success{site="${siteId}",check="website"}[${METRIC_HISTORY_WINDOW}])`;
+    const hadWebsites = parseFirstVectorValue(await promQuery(histQ));
+    websites =
+      hadWebsites !== null
+        ? {
+            state: "critical",
+            notes: `Website probes silent for ${METRIC_FRESH_WINDOW}`
+          }
+        : { state: "unknown", notes: "No website targets configured or probed" };
   }
 
-  // LAN/SNMP: optional. If no snmp_up metrics exist yet, we treat as unknown.
-  let lan: DomainStatus = { state: "unknown", notes: "SNMP not configured yet" };
-  try {
-    const snmp = await querySnmpUpVector(siteId);
-    lan = domainFromProbeVector(snmp.values);
-    if (lan.state === "unknown") {
-      lan = { state: "unknown", notes: "No SNMP metrics found" };
+  let lan: DomainStatus = { state: "unknown", notes: "No devices configured" };
+  const devices = site.devices ?? [];
+  if (devices.length > 0) {
+    const deviceStatuses: DomainStatus[] = [];
+    for (const d of devices) {
+      const kind = d.kind ?? "network";
+      const metricId = kind === "server" ? d.hostMetricId || d.id : d.id;
+      const selector =
+        kind === "server"
+          ? `up{job="site_host",site="${siteId}",device="${metricId}"}`
+          : `snmp_up{site="${siteId}",device="${metricId}"}`;
+      deviceStatuses.push(await queryBooleanMetricState(selector));
     }
-  } catch {
-    // Prometheus may not have the metric yet.
+    lan = aggregateProbeStatuses(deviceStatuses);
   }
 
-  // Alerts: if any firing alert for the site, overall becomes critical.
   const alerts = activeAlerts ?? (await getActiveAlerts());
   const relevant = alerts.filter((a) => (a.labels?.site ?? "") === siteId);
   const firing = relevant.filter((a) => a.status === "firing").length;
@@ -146,12 +192,20 @@ export async function computeSiteStatus(
   };
 }
 
-export async function computeAllSitesStatus(): Promise<SiteStatus[]> {
+export async function computeAllSitesStatus(): Promise<{
+  statuses: SiteStatus[];
+  meta: StatusMeta;
+}> {
   const activeAlerts = await getActiveAlerts();
-  const results: SiteStatus[] = [];
+  const statuses: SiteStatus[] = [];
   for (const s of siteList) {
-    results.push(await computeSiteStatus(s.id, activeAlerts));
+    statuses.push(await computeSiteStatus(s.id, activeAlerts));
   }
-  return results;
+  return {
+    statuses,
+    meta: {
+      ...STATUS_META,
+      checkedAt: new Date().toISOString()
+    }
+  };
 }
-

@@ -8,7 +8,10 @@ export type WidgetType =
   | "mini_map"
   | "website_summary"
   | "site_card"
-  | "grafana_panel";
+  | "grafana_panel"
+  | "device_metric_chart"
+  | "device_stat_gauge"
+  | "device_detail";
 
 export type DashboardWidget = {
   i: string;

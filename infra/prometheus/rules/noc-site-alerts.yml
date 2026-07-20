@@ -22,6 +22,16 @@ groups:
         annotations:
           summary: "Website check failing (site={{ $labels.site }}, target={{ $labels.instance }})"
 
+      - alert: SiteHostDown
+        expr: up{job="site_host"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          site: "{{ $labels.site }}"
+          device: "{{ $labels.device }}"
+        annotations:
+          summary: "Site NUC/host metrics down (site={{ $labels.site }}, device={{ $labels.device }})"
+
       - alert: SiteSNMPDown
         expr: snmp_up{site=~".+"} == 0
         for: 5m

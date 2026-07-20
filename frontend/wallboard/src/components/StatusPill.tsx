@@ -1,6 +1,12 @@
 import type { DomainState } from "../types";
 
-export function StatusPill({ state }: { state: DomainState | string }) {
+export function StatusPill({
+  state,
+  notes
+}: {
+  state: DomainState | string;
+  notes?: string;
+}) {
   const s = String(state);
   const cls =
     s === "healthy"
@@ -10,5 +16,10 @@ export function StatusPill({ state }: { state: DomainState | string }) {
         : s === "critical"
           ? "pill pillCritical"
           : "pill pillUnknown";
-  return <span className={cls}>{s.toUpperCase()}</span>;
+  const label = s === "critical" ? "DOWN" : s.toUpperCase();
+  return (
+    <span className={cls} title={notes}>
+      {label}
+    </span>
+  );
 }

@@ -279,6 +279,46 @@ input {
   display: flex;
   gap: 8px;
   margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.widgetConfig {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  display: grid;
+  gap: 6px;
+}
+
+.widgetConfig select,
+.widgetConfig input {
+  width: 100%;
+}
+
+.gaugeWidget {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  justify-content: center;
+}
+
+.gaugeValue {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.gaugeBar {
+  height: 8px;
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.gaugeFill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #f59e0b);
+  border-radius: 999px;
 }
 
 .dashboardHost {

@@ -1,7 +1,7 @@
 [
   { "id": "site-1", "name": "Digital Penang Office" },
-  { "id": "site-2", "name": "Digital Library 1" },
-  { "id": "site-3", "name": "Digital Library 2" },
+  { "id": "site-2", "name": "Penang Digital Library 1" },
+  { "id": "site-3", "name": "Penang Digital Library 2" },
   { "id": "site-4", "name": "Butterworth Digital Library" },
   { "id": "site-5", "name": "Batu Maung Digital Library" }
 ]

@@ -15,7 +15,10 @@ const widgetSchema = z.object({
     "mini_map",
     "website_summary",
     "site_card",
-    "grafana_panel"
+    "grafana_panel",
+    "device_metric_chart",
+    "device_stat_gauge",
+    "device_detail"
   ]),
   x: z.number().int().min(0),
   y: z.number().int().min(0),

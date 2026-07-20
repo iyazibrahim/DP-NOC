@@ -2,6 +2,12 @@ import type { ActiveAlert, DeviceRow, Site, SiteStatus, WidgetType } from "../ty
 import { StatusPill } from "./StatusPill";
 import { SitesLeafletMap } from "./SitesLeafletMap";
 import { TopDevicesTable } from "./TopDevicesTable";
+import {
+  DeviceDetailPanel,
+  DeviceMetricChart,
+  DeviceStatGauge,
+  useMetricPresets
+} from "./DeviceMetricWidgets";
 
 export const WIDGET_CATALOG: Array<{ type: WidgetType; label: string; defaultW: number; defaultH: number }> = [
   { type: "site_status_grid", label: "Site status grid", defaultW: 6, defaultH: 6 },
@@ -10,6 +16,9 @@ export const WIDGET_CATALOG: Array<{ type: WidgetType; label: string; defaultW: 
   { type: "mini_map", label: "Mini map", defaultW: 6, defaultH: 6 },
   { type: "website_summary", label: "Website summary", defaultW: 6, defaultH: 4 },
   { type: "site_card", label: "Single site card", defaultW: 4, defaultH: 4 },
+  { type: "device_metric_chart", label: "Device metric chart", defaultW: 6, defaultH: 5 },
+  { type: "device_stat_gauge", label: "Device stat gauge", defaultW: 3, defaultH: 4 },
+  { type: "device_detail", label: "Device detail", defaultW: 4, defaultH: 4 },
   { type: "grafana_panel", label: "Grafana panel", defaultW: 6, defaultH: 6 }
 ];
 
@@ -30,6 +39,12 @@ export function WidgetBody({
   devices: DeviceRow[];
   grafanaUrl: string;
 }) {
+  const presets = useMetricPresets();
+  const siteId = config?.siteId ?? sites[0]?.id ?? "";
+  const site = sites.find((s) => s.id === siteId);
+  const deviceId = config?.deviceId ?? site?.devices?.[0]?.id ?? "";
+  const metric = config?.metric ?? "cpu_pct";
+
   if (type === "site_status_grid") {
     return (
       <div className="widgetInner">
@@ -40,7 +55,7 @@ export function WidgetBody({
             return (
               <div key={s.id} className="statusTile">
                 <div className="statusTileName">{s.name}</div>
-                <StatusPill state={st?.overall ?? "unknown"} />
+                <StatusPill state={st?.overall ?? "unknown"} notes={st?.wan.notes} />
               </div>
             );
           })}
@@ -102,18 +117,48 @@ export function WidgetBody({
   }
 
   if (type === "site_card") {
-    const siteId = config?.siteId ?? sites[0]?.id;
-    const site = sites.find((s) => s.id === siteId);
-    const st = statuses.find((x) => x.siteId === siteId);
+    const cardSiteId = config?.siteId ?? sites[0]?.id;
+    const cardSite = sites.find((s) => s.id === cardSiteId);
+    const st = statuses.find((x) => x.siteId === cardSiteId);
     return (
       <div className="widgetInner">
-        <div className="widgetTitle">{site?.name ?? siteId ?? "Site"}</div>
+        <div className="widgetTitle">{cardSite?.name ?? cardSiteId ?? "Site"}</div>
         <div className="kvList">
           <div>WAN: {st?.wan.state ?? "unknown"}</div>
           <div>LAN: {st?.lan.state ?? "unknown"}</div>
           <div>Web: {st?.websites.state ?? "unknown"}</div>
         </div>
-        <StatusPill state={st?.overall ?? "unknown"} />
+        <StatusPill state={st?.overall ?? "unknown"} notes={st?.wan.notes} />
+      </div>
+    );
+  }
+
+  if (type === "device_metric_chart") {
+    return (
+      <div className="widgetInner">
+        <DeviceMetricChart
+          siteId={siteId}
+          deviceId={deviceId}
+          metric={metric}
+          presets={presets}
+        />
+      </div>
+    );
+  }
+
+  if (type === "device_stat_gauge") {
+    return (
+      <div className="widgetInner">
+        <DeviceStatGauge siteId={siteId} deviceId={deviceId} metric={metric} presets={presets} />
+      </div>
+    );
+  }
+
+  if (type === "device_detail") {
+    return (
+      <div className="widgetInner">
+        <div className="widgetTitle">Device</div>
+        <DeviceDetailPanel site={site} deviceId={deviceId} />
       </div>
     );
   }

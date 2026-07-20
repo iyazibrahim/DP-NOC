@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
-import { getAllSiteStatuses, getSites, getTopDevices } from "../api";
+import { getAllSiteStatuses, getSites, getTopDevices, STATUS_POLL_MS } from "../api";
 import type { DeviceRow, Site, SiteStatus } from "../types";
 import { SitesLeafletMap } from "../components/SitesLeafletMap";
 import { TopDevicesTable } from "../components/TopDevicesTable";
@@ -32,7 +32,7 @@ export function MapsPage() {
       }
     };
     load();
-    const t = setInterval(load, 15000);
+    const t = setInterval(load, STATUS_POLL_MS);
     return () => {
       cancelled = true;
       clearInterval(t);
