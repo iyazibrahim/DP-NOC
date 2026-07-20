@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import { syncWebsiteProbes } from "../services/websiteProbes";
 
 export type DeviceKind = "server" | "network";
 
@@ -119,6 +120,7 @@ function persist() {
   }
   fs.writeFileSync(sitesFile, JSON.stringify(siteList, null, 2) + "\n", "utf8");
   syncSiteCatalog();
+  syncWebsiteProbes();
 }
 
 function syncSiteCatalog() {
@@ -293,4 +295,58 @@ export function exportNetworkDevicesJson(siteId: string): Array<{
       snmpIp: d.snmpIp!,
       vendor: d.vendor
     }));
+}
+
+export function addWebsite(
+  siteId: string,
+  target: { name: string; url: string }
+): Site | null {
+  const site = getSiteById(siteId);
+  if (!site) return null;
+  const url = target.url.trim();
+  const name = target.name.trim() || url;
+  if (!url) throw new Error("url is required");
+  if (!/^https?:\/\//i.test(url)) throw new Error("url must start with http:// or https://");
+  if (!site.websiteTargets) site.websiteTargets = [];
+  if (site.websiteTargets.some((w) => w.url === url)) {
+    throw new Error("Website URL already exists on this site");
+  }
+  site.websiteTargets.push({ name, url });
+  persist();
+  return site;
+}
+
+export function updateWebsite(
+  siteId: string,
+  url: string,
+  patch: { name?: string; url?: string }
+): Site | null {
+  const site = getSiteById(siteId);
+  if (!site) return null;
+  const idx = (site.websiteTargets ?? []).findIndex((w) => w.url === url);
+  if (idx < 0) return null;
+  const current = site.websiteTargets[idx];
+  const nextUrl = patch.url?.trim() || current.url;
+  if (patch.url && !/^https?:\/\//i.test(nextUrl)) {
+    throw new Error("url must start with http:// or https://");
+  }
+  if (patch.url && nextUrl !== url && site.websiteTargets.some((w) => w.url === nextUrl)) {
+    throw new Error("Website URL already exists on this site");
+  }
+  site.websiteTargets[idx] = {
+    name: patch.name?.trim() || current.name,
+    url: nextUrl
+  };
+  persist();
+  return site;
+}
+
+export function removeWebsite(siteId: string, url: string): Site | null {
+  const site = getSiteById(siteId);
+  if (!site) return null;
+  const before = site.websiteTargets?.length ?? 0;
+  site.websiteTargets = (site.websiteTargets ?? []).filter((w) => w.url !== url);
+  if ((site.websiteTargets?.length ?? 0) === before) return null;
+  persist();
+  return site;
 }

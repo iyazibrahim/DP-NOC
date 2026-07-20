@@ -18,6 +18,13 @@ export type SiteStatus = {
 
 export type DeviceKind = "server" | "network";
 
+export type DeviceTypeDef = {
+  id: string;
+  label: string;
+  kind: DeviceKind;
+  icon?: string;
+};
+
 export type SiteDevice = {
   id: string;
   name: string;

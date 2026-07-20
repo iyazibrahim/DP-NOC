@@ -11,7 +11,9 @@ import type {
   SiteStatus,
   StatusMeta,
   NotificationsConfig,
-  StatusTimingInfo
+  StatusTimingInfo,
+  DeviceKind,
+  DeviceTypeDef
 } from "./types";
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL?.toString() ?? "").replace(/\/$/, "");
@@ -150,6 +152,62 @@ export async function downloadSiteDevicesJson(token: string, siteId: string) {
     throw new Error(`Download failed: ${res.status} ${body}`);
   }
   return res.blob();
+}
+
+export async function getDeviceTypes(token: string) {
+  return fetchJson<{ types: DeviceTypeDef[] }>("/api/device-types", {
+    headers: authHeaders(token)
+  });
+}
+
+export async function addDeviceType(
+  token: string,
+  input: { label: string; kind: DeviceKind; id?: string }
+) {
+  return fetchJson<{ type: DeviceTypeDef; types: DeviceTypeDef[] }>("/api/device-types", {
+    method: "POST",
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify(input)
+  });
+}
+
+export async function addSiteWebsite(
+  token: string,
+  siteId: string,
+  website: { name: string; url: string }
+) {
+  return fetchJson<{ site: Site }>(`/api/sites/${siteId}/websites`, {
+    method: "POST",
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify(website)
+  });
+}
+
+export async function updateSiteWebsite(
+  token: string,
+  siteId: string,
+  payload: { url: string; name?: string; newUrl?: string }
+) {
+  return fetchJson<{ site: Site }>(`/api/sites/${siteId}/websites`, {
+    method: "PATCH",
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteSiteWebsite(token: string, siteId: string, url: string) {
+  return fetchJson<{ site: Site }>(`/api/sites/${siteId}/websites`, {
+    method: "DELETE",
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify({ url })
+  });
+}
+
+export async function applyWebsiteProbes(token: string, siteId: string) {
+  return fetchJson<{ ok: boolean; message: string }>(
+    `/api/sites/${siteId}/websites/apply-probes`,
+    { method: "POST", headers: authHeaders(token) }
+  );
 }
 
 export async function getAllSiteStatuses(token: string) {

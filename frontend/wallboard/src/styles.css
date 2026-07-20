@@ -321,6 +321,62 @@ input {
   border-radius: 999px;
 }
 
+.deviceTypePicker {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.typeChipGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.typeChipGrid.compact .typeChip {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.typeChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(15, 22, 32, 0.8);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.typeChip:hover {
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+.typeChip.active {
+  border-color: var(--accent);
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.typeChipIcon {
+  font-size: 14px;
+}
+
+.customTypeRow {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .customTypeRow {
+    grid-template-columns: 1fr;
+  }
+}
+
 .dashboardHost {
   width: 100%;
   min-height: 600px;

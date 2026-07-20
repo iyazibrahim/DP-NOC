@@ -2,20 +2,26 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import {
+  addDeviceType,
   addSiteDevice,
+  addSiteWebsite,
+  applyWebsiteProbes,
   createSite,
   deleteSite,
   deleteSiteDevice,
+  deleteSiteWebsite,
   downloadSiteDevicesJson,
   getAllSiteStatuses,
   getSite,
   getSites,
   updateSite,
-  updateSiteDevice
+  updateSiteDevice,
+  updateSiteWebsite
 } from "../api";
 import type { DeviceKind, Site, SiteDevice, SiteStatus } from "../types";
 import { StatusPill } from "../components/StatusPill";
 import { SiteLocationPicker } from "../components/SiteLocationPicker";
+import { DeviceTypePicker, useDeviceTypes, type DeviceTypeOption } from "../components/DeviceTypePicker";
 
 export function SitesPage() {
   const { token } = useAuth();
@@ -161,6 +167,10 @@ export function SiteDetailPage() {
   const [siteForm, setSiteForm] = useState({ name: "", address: "", notes: "", lat: 0, lng: 0 });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { types: deviceTypes, setTypes: setDeviceTypes } = useDeviceTypes(token);
+  const [websiteForm, setWebsiteForm] = useState({ name: "", url: "" });
+  const [editingWebsiteUrl, setEditingWebsiteUrl] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
   async function reload() {
     if (!token || !id) return;
@@ -193,6 +203,32 @@ export function SiteDetailPage() {
       vendor: d.vendor
     });
     setError(null);
+  }
+
+  function suggestDeviceId(typeId: string, kind: DeviceKind) {
+    if (kind === "server" && (typeId === "nuc" || typeId === "server")) {
+      return `${site?.id ?? "site"}-nuc`;
+    }
+    const suffix = typeId === "switch" ? "sw1" : typeId === "router" ? "rt1" : typeId === "ap" ? "ap1" : `${typeId}1`;
+    return `${site?.id ?? "site"}-${suffix}`;
+  }
+
+  function onSelectDeviceType(type: DeviceTypeOption) {
+    const suggestedId = !editingId ? suggestDeviceId(type.id, type.kind) : form.id;
+    setForm((f) => ({
+      ...f,
+      type: type.id,
+      kind: type.kind,
+      id: suggestedId,
+      hostMetricId: type.kind === "server" ? suggestedId : f.hostMetricId
+    }));
+  }
+
+  async function onAddCustomType(label: string, kind: DeviceKind) {
+    if (!token) return;
+    const res = await addDeviceType(token, { label, kind });
+    setDeviceTypes(res.types);
+    onSelectDeviceType(res.type);
   }
 
   function cancelEdit() {
@@ -288,6 +324,63 @@ export function SiteDetailPage() {
     }
   }
 
+  async function onWebsiteSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!token || !id) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (editingWebsiteUrl) {
+        await updateSiteWebsite(token, id, {
+          url: editingWebsiteUrl,
+          name: websiteForm.name,
+          newUrl: websiteForm.url !== editingWebsiteUrl ? websiteForm.url : undefined
+        });
+      } else {
+        await addSiteWebsite(token, id, websiteForm);
+      }
+      setWebsiteForm({ name: "", url: "" });
+      setEditingWebsiteUrl(null);
+      setMsg("Website saved. Click Apply probes to start HTTP checks.");
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Website save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDeleteWebsite(url: string) {
+    if (!token || !id) return;
+    if (!confirm(`Remove website ${url}?`)) return;
+    setBusy(true);
+    try {
+      await deleteSiteWebsite(token, id, url);
+      if (editingWebsiteUrl === url) {
+        setEditingWebsiteUrl(null);
+        setWebsiteForm({ name: "", url: "" });
+      }
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onApplyProbes() {
+    if (!token || !id) return;
+    setBusy(true);
+    try {
+      const res = await applyWebsiteProbes(token, id);
+      setMsg(res.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Apply failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!site) return <div className="page">Loading…</div>;
 
   return (
@@ -301,6 +394,7 @@ export function SiteDetailPage() {
       </div>
 
       {error ? <div className="bannerError">{error}</div> : null}
+      {msg ? <p className="muted">{msg}</p> : null}
 
       <div className="detailGrid">
         <div className="tableCard">
@@ -351,6 +445,92 @@ export function SiteDetailPage() {
         </div>
 
         <div className="tableCard">
+          <div className="tableTitle">Websites</div>
+          <p className="muted">
+            Public URLs probed from the central VPS via Blackbox HTTP. Add here, then{" "}
+            <strong>Apply probes</strong> to register in Prometheus.
+          </p>
+          <div className="formActions" style={{ marginBottom: 12 }}>
+            <button type="button" onClick={onApplyProbes} disabled={busy}>
+              Apply probes to Prometheus
+            </button>
+          </div>
+          <table className="dataTable">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>URL</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {(site.websiteTargets ?? []).length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="muted">
+                    No websites — add one below (e.g. https://digitalpenang.gov.my)
+                  </td>
+                </tr>
+              ) : (
+                (site.websiteTargets ?? []).map((w) => (
+                  <tr key={w.url}>
+                    <td>{w.name}</td>
+                    <td>{w.url}</td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingWebsiteUrl(w.url);
+                          setWebsiteForm({ name: w.name, url: w.url });
+                        }}
+                        disabled={busy}
+                      >
+                        Edit
+                      </button>{" "}
+                      <button type="button" onClick={() => onDeleteWebsite(w.url)} disabled={busy}>
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+          <form className="deviceForm" onSubmit={onWebsiteSubmit}>
+            <div className="tableTitle">{editingWebsiteUrl ? "Edit website" : "Add website"}</div>
+            <label className="label">Display name</label>
+            <input
+              value={websiteForm.name}
+              onChange={(e) => setWebsiteForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Main website"
+            />
+            <label className="label">URL</label>
+            <input
+              value={websiteForm.url}
+              onChange={(e) => setWebsiteForm((f) => ({ ...f, url: e.target.value }))}
+              placeholder="https://example.com"
+              required
+            />
+            <div className="formActions">
+              <button className="primary" type="submit" disabled={busy}>
+                {editingWebsiteUrl ? "Save website" : "Add website"}
+              </button>
+              {editingWebsiteUrl ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingWebsiteUrl(null);
+                    setWebsiteForm({ name: "", url: "" });
+                  }}
+                  disabled={busy}
+                >
+                  Cancel
+                </button>
+              ) : null}
+            </div>
+          </form>
+        </div>
+
+        <div className="tableCard">
           <div className="tableTitle">Devices</div>
           <p className="muted">
             Network devices export to Alloy <code>devices.json</code>. Server/NUC devices use host
@@ -366,6 +546,7 @@ export function SiteDetailPage() {
               <tr>
                 <th>Name</th>
                 <th>Kind</th>
+                <th>Type</th>
                 <th>Target</th>
                 <th></th>
               </tr>
@@ -373,7 +554,7 @@ export function SiteDetailPage() {
             <tbody>
               {(site.devices ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="muted">
+                  <td colSpan={5} className="muted">
                     No devices yet — add one below.
                   </td>
                 </tr>
@@ -385,6 +566,9 @@ export function SiteDetailPage() {
                       <div className="muted">{d.id}</div>
                     </td>
                     <td>{d.kind}</td>
+                    <td>
+                      {deviceTypes.find((t) => t.id === d.type)?.label ?? d.type}
+                    </td>
                     <td>{d.kind === "server" ? d.hostMetricId ?? d.id : d.snmpIp}</td>
                     <td>
                       <button type="button" onClick={() => startEdit(d)} disabled={busy}>
@@ -402,45 +586,32 @@ export function SiteDetailPage() {
 
           <form className="deviceForm" onSubmit={onSubmit}>
             <div className="tableTitle">{editingId ? `Edit ${editingId}` : "Add device"}</div>
-            <label className="label">Kind</label>
-            <select
-              value={form.kind}
-              onChange={(e) => {
-                const kind = e.target.value as DeviceKind;
-                setForm((f) => ({
-                  ...f,
-                  kind,
-                  type: kind === "server" ? "server" : f.type,
-                  id: f.id || (kind === "server" ? `${site.id}-nuc` : f.id),
-                  hostMetricId: kind === "server" ? f.hostMetricId || `${site.id}-nuc` : f.hostMetricId
-                }));
-              }}
-            >
-              <option value="server">Server / NUC</option>
-              <option value="network">Network (SNMP)</option>
-            </select>
+
+            <DeviceTypePicker
+              types={deviceTypes}
+              selectedTypeId={form.type}
+              onSelectType={onSelectDeviceType}
+              vendor={form.vendor}
+              onVendorChange={(vendor) => setForm((f) => ({ ...f, vendor }))}
+              onAddCustomType={onAddCustomType}
+            />
+
             {!editingId ? (
               <>
                 <label className="label">ID</label>
                 <input
                   value={form.id}
                   onChange={(e) => setForm((f) => ({ ...f, id: e.target.value }))}
-                  placeholder={form.kind === "server" ? `${site.id}-nuc` : `${site.id}-sw1`}
+                  placeholder={`${site.id}-sw1`}
                   required
                 />
               </>
             ) : null}
-            <label className="label">Name</label>
+            <label className="label">Display name</label>
             <input
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              required
-            />
-            <label className="label">Type</label>
-            <input
-              value={form.type}
-              onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-              placeholder={form.kind === "server" ? "server" : "switch / router / firewall"}
+              placeholder="Core switch"
               required
             />
             {form.kind === "network" ? (
@@ -464,12 +635,6 @@ export function SiteDetailPage() {
                 />
               </>
             )}
-            <label className="label">Vendor</label>
-            <input
-              value={form.vendor}
-              onChange={(e) => setForm((f) => ({ ...f, vendor: e.target.value }))}
-              required
-            />
             <div className="formActions">
               <button className="primary" type="submit" disabled={busy}>
                 {editingId ? "Save" : "Add device"}

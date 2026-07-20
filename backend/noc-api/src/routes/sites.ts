@@ -13,11 +13,15 @@ import {
   updateDevice,
   removeDevice,
   exportNetworkDevicesJson,
+  addWebsite,
+  updateWebsite,
+  removeWebsite,
   type SiteDevice,
   type DeviceKind,
   type Site
 } from "../data/sites";
 import { computeSiteStatus, computeAllSitesStatus } from "../services/status";
+import { applyWebsiteProbes } from "../services/websiteProbes";
 
 export const sitesRouter = express.Router();
 
@@ -112,6 +116,62 @@ sitesRouter.get("/:id/export/devices.json", requireJwt(["operator"]), (req, res)
   res.setHeader("content-type", "application/json");
   res.setHeader("content-disposition", `attachment; filename="${siteId}-devices.json"`);
   return res.send(JSON.stringify(devices, null, 2) + "\n");
+});
+
+sitesRouter.post("/:id/websites/apply-probes", requireJwt(["operator"]), async (req, res) => {
+  if (!getSiteById(req.params.id)) {
+    return res.status(404).json({ error: "Site not found" });
+  }
+  const result = await applyWebsiteProbes();
+  return res.json(result);
+});
+
+sitesRouter.post("/:id/websites", requireJwt(["operator"]), (req, res) => {
+  const siteId = req.params.id;
+  if (!getSiteById(siteId)) {
+    return res.status(404).json({ error: "Site not found" });
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const name = typeof body.name === "string" ? body.name : "";
+  const url = typeof body.url === "string" ? body.url : "";
+  try {
+    const site = addWebsite(siteId, { name, url });
+    return res.status(201).json({ site });
+  } catch (e) {
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Add failed" });
+  }
+});
+
+sitesRouter.patch("/:id/websites", requireJwt(["operator"]), (req, res) => {
+  const siteId = req.params.id;
+  if (!getSiteById(siteId)) {
+    return res.status(404).json({ error: "Site not found" });
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const currentUrl = typeof body.url === "string" ? body.url : "";
+  if (!currentUrl) return res.status(400).json({ error: "url (current) is required" });
+  try {
+    const site = updateWebsite(siteId, currentUrl, {
+      name: typeof body.name === "string" ? body.name : undefined,
+      url: typeof body.newUrl === "string" ? body.newUrl : undefined
+    });
+    if (!site) return res.status(404).json({ error: "Website not found" });
+    return res.json({ site });
+  } catch (e) {
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Update failed" });
+  }
+});
+
+sitesRouter.delete("/:id/websites", requireJwt(["operator"]), (req, res) => {
+  const siteId = req.params.id;
+  if (!getSiteById(siteId)) {
+    return res.status(404).json({ error: "Site not found" });
+  }
+  const url = typeof req.body?.url === "string" ? req.body.url : typeof req.query.url === "string" ? req.query.url : "";
+  if (!url) return res.status(400).json({ error: "url is required" });
+  const site = removeWebsite(siteId, url);
+  if (!site) return res.status(404).json({ error: "Website not found" });
+  return res.json({ site });
 });
 
 sitesRouter.patch("/:id", requireJwt(["operator"]), async (req: Request, res: Response) => {

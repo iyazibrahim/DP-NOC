@@ -1,0 +1,12 @@
+[
+  { "id": "server", "label": "Server", "kind": "server", "icon": "🖥️" },
+  { "id": "nuc", "label": "NUC / Site box", "kind": "server", "icon": "📦" },
+  { "id": "pc", "label": "PC / Workstation", "kind": "server", "icon": "💻" },
+  { "id": "router", "label": "Router", "kind": "network", "icon": "🔀" },
+  { "id": "switch", "label": "Switch", "kind": "network", "icon": "🔗" },
+  { "id": "ap", "label": "Access Point", "kind": "network", "icon": "📡" },
+  { "id": "firewall", "label": "Firewall", "kind": "network", "icon": "🛡️" },
+  { "id": "nas", "label": "NAS / Storage", "kind": "server", "icon": "💾" },
+  { "id": "printer", "label": "Printer", "kind": "network", "icon": "🖨️" },
+  { "id": "camera", "label": "IP Camera", "kind": "network", "icon": "📷" }
+]

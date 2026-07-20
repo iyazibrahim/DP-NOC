@@ -13,6 +13,7 @@ import { websitesRouter } from "./routes/websites";
 import { settingsRouter } from "./routes/settings";
 import { metricsRouter } from "./routes/metrics";
 import { exportsRouter } from "./routes/exports";
+import { deviceTypesRouter } from "./routes/deviceTypes";
 
 function resolvePublicDir() {
   if (env.PUBLIC_DIR && fs.existsSync(env.PUBLIC_DIR)) {
@@ -78,6 +79,7 @@ export function createApp() {
   app.use("/api/settings", settingsRouter);
   app.use("/api/metrics", metricsRouter);
   app.use("/api/exports", exportsRouter);
+  app.use("/api/device-types", deviceTypesRouter);
 
   if (hasUi && publicDir) {
     app.use(express.static(publicDir, { index: false }));
