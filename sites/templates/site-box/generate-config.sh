@@ -31,7 +31,8 @@ prometheus.remote_write "central" {
 }
 
 prometheus.exporter.blackbox "icmp_probe" {
-  config = "{ modules: { icmp: { prober: icmp, timeout: 5s, preferred_ip_protocol: \"ip4\" } } }"
+  // preferred_ip_protocol must be nested under icmp: (blackbox_exporter module schema)
+  config = "{ modules: { icmp: { prober: icmp, timeout: 5s, icmp: { preferred_ip_protocol: \"ip4\" } } } }"
 
   target {
     name    = "ping_dns"
