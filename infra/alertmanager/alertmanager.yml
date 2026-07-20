@@ -1,3 +1,8 @@
+# Valid Alertmanager 0.28 config.
+# Default receiver is a no-op so the stack starts without Telegram/SMTP secrets.
+# When ready, uncomment telegram/email blocks and set real values
+# (Telegram chat_id must be a number, e.g. -1001234567890).
+
 global:
   resolve_timeout: 5m
 
@@ -7,26 +12,23 @@ route:
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 3h
-  # v1: we will send resolved notifications too, so the wallboard has
-  # a complete operational story.
-  send_resolved: true
 
 receivers:
   - name: default
-    telegram_configs:
-      - bot_token: "CHANGE_ME_TELEGRAM_BOT_TOKEN"
-        chat_id: "CHANGE_ME_TELEGRAM_CHAT_ID"
-        send_resolved: true
-        parse_mode: "HTML"
-
-    email_configs:
-      - to: "CHANGE_ME_ALERT_EMAIL_TO"
-        from: "alertmanager@noc.local"
-        smarthost: "CHANGE_ME_SMARTHOST:587"
-        send_resolved: true
-        auth_username: "CHANGE_ME_SMARTHOST_USERNAME"
-        auth_password: "CHANGE_ME_SMARTHOST_PASSWORD"
-
+    # Uncomment and fill when you have credentials:
+    #
+    # telegram_configs:
+    #   - bot_token: "123456:ABC-DEF"
+    #     chat_id: -1001234567890
+    #     send_resolved: true
+    #     parse_mode: "HTML"
+    #
+    # email_configs:
+    #   - to: "ops@example.com"
+    #     from: "alertmanager@noc.local"
+    #     smarthost: "smtp.example.com:587"
+    #     auth_username: "user"
+    #     auth_password: "pass"
+    #     send_resolved: true
 
 inhibit_rules: []
-
