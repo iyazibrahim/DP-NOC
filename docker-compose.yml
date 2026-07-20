@@ -39,8 +39,10 @@ services:
     image: grafana/grafana:11.3.0
     container_name: noc_grafana
     restart: unless-stopped
+    # Host 3000 is often taken (other Grafana/Node apps). Map to 3001 locally.
+    # Dokploy should target container port 3000 on the internal network.
     ports:
-      - "3000:3000"
+      - "3001:3000"
     volumes:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
@@ -84,7 +86,7 @@ services:
       - OPERATOR_PASSWORD=admin
       - PROMETHEUS_BASE_URL=http://prometheus:9090
       - ALERTMANAGER_BASE_URL=http://alertmanager:9093
-      - GRAFANA_PUBLIC_URL=http://localhost:3000
+      - GRAFANA_PUBLIC_URL=http://localhost:3001
     volumes:
       - noc_layouts:/app/data/layouts
     networks:

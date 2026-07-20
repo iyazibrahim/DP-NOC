@@ -24,7 +24,7 @@ export function DashboardPage() {
   const [statuses, setStatuses] = useState<SiteStatus[]>([]);
   const [alerts, setAlerts] = useState<ActiveAlert[]>([]);
   const [devices, setDevices] = useState<DeviceRow[]>([]);
-  const [grafanaUrl, setGrafanaUrl] = useState("http://localhost:3000");
+  const [grafanaUrl, setGrafanaUrl] = useState("http://localhost:3001");
   const [width, setWidth] = useState(1200);
   const [error, setError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);

@@ -16,7 +16,7 @@ const envSchema = z.object({
 
   PROMETHEUS_BASE_URL: z.string().default("http://localhost:9090"),
   ALERTMANAGER_BASE_URL: z.string().default("http://localhost:9093"),
-  GRAFANA_PUBLIC_URL: z.string().default("http://localhost:3000"),
+  GRAFANA_PUBLIC_URL: z.string().default("http://localhost:3001"),
   PUBLIC_DIR: z.string().optional()
 });
 

@@ -26,7 +26,7 @@ docker compose up -d --build
 Open:
 
 - NOC app: `http://localhost:8080` (login `admin` / `admin`)
-- Grafana: `http://localhost:3000` (admin / admin)
+- Grafana: `http://localhost:3001` (admin / admin) — host port `3001` avoids conflicts with apps already on `3000`
 
 Prometheus / Alertmanager / Blackbox are bound to `127.0.0.1` only.
 

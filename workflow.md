@@ -22,7 +22,7 @@ Multisite NOC for WAN connectivity, mixed-vendor SNMP, and website checks — cu
 1. `docker compose up -d --build`
 2. Open `http://localhost:8080` — login `admin` / `admin`
 3. Edit Dashboard layout, open Maps / Sites / Devices
-4. Grafana at `http://localhost:3000`
+4. Grafana at `http://localhost:3001` (mapped from container port 3000)
 
 ## Dokploy notes
 - Publish `noc-app:8080` and optionally `grafana:3000`
