@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import {
   addSiteWebsite,
@@ -14,6 +14,7 @@ import type { Site } from "../types";
 
 export function WebsitesPage() {
   const { token } = useAuth();
+  const [searchParams] = useSearchParams();
   const [rows, setRows] = useState<
     Array<{ siteId: string; siteName: string; name: string; url: string; state: string }>
   >([]);
@@ -29,14 +30,17 @@ export function WebsitesPage() {
     const [w, s] = await Promise.all([getWebsites(token), getSites(token)]);
     setRows(w.websites);
     setSites(s.sites);
-    if (!form.siteId && s.sites[0]) {
-      setForm((f) => ({ ...f, siteId: s.sites[0].id }));
-    }
+    const querySiteId = searchParams.get("siteId");
+    const preferred =
+      querySiteId && s.sites.some((site) => site.id === querySiteId)
+        ? querySiteId
+        : s.sites[0]?.id ?? "";
+    setForm((f) => ({ ...f, siteId: f.siteId || preferred }));
   }
 
   useEffect(() => {
     reload().catch((e) => setError(e instanceof Error ? e.message : "Load failed"));
-  }, [token]);
+  }, [token, searchParams]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -119,6 +123,10 @@ export function WebsitesPage() {
                 </option>
               ))}
             </select>
+            <p className="muted fieldHint">
+              Websites are monitored per site — probes run from the central VPS and roll up into that
+              site&apos;s health status and alerts.
+            </p>
             <label className="label">Display name</label>
             <input
               value={form.name}

@@ -28,6 +28,10 @@ Multisite NOC for WAN connectivity, mixed-vendor SNMP, host metrics, and website
 - [x] **Weekly/monthly exports** (cron + manual CSV/JSON download in Settings)
 - [x] **Notifications UI** (Telegram, SMTP, webhook → Alertmanager YAML)
 - [x] **Status detection fix** — stale metrics show critical (down), not unknown; 10s dashboard poll
+- [x] **Dashboard layout fix** — widgets no longer disappear while editing (layout poll skips unsaved state)
+- [x] **Device auto-discovery** — `GET /api/sites/:id/discovered-devices` from Prometheus + Register UI on site detail
+- [x] **UI polish** — dark-themed selects, chart time ranges/tooltips, Grafana widget hints, website site helper text
+- [x] **LAN status hint** — warning when NUC metrics exist but no devices registered
 
 ## Local Validation
 1. `docker compose up -d --build`

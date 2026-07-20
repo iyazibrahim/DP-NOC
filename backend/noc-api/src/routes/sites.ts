@@ -22,6 +22,7 @@ import {
 } from "../data/sites";
 import { computeSiteStatus, computeAllSitesStatus } from "../services/status";
 import { applyWebsiteProbes } from "../services/websiteProbes";
+import { discoverDevicesForSite } from "../services/deviceDiscovery";
 
 export const sitesRouter = express.Router();
 
@@ -105,6 +106,21 @@ sitesRouter.get("/:id/status", requireJwt(["operator", "wallboard"]), async (req
   }
   const status = await computeSiteStatus(id);
   return res.json({ status });
+});
+
+sitesRouter.get("/:id/discovered-devices", requireJwt(["operator", "wallboard"]), async (req, res) => {
+  const siteId = req.params.id;
+  if (!getSiteById(siteId)) {
+    return res.status(404).json({ error: "Site not found" });
+  }
+  try {
+    const devices = await discoverDevicesForSite(siteId);
+    return res.json({ devices });
+  } catch (e) {
+    return res.status(502).json({
+      error: e instanceof Error ? e.message : "Discovery failed"
+    });
+  }
 });
 
 sitesRouter.get("/:id/export/devices.json", requireJwt(["operator"]), (req, res) => {

@@ -161,3 +161,12 @@ export type PromQueryResult = {
   resultType: string;
   result: unknown;
 };
+
+export type DiscoveredDevice = {
+  deviceId: string;
+  kind: DeviceKind;
+  lastSeen: string | null;
+  alreadyRegistered: boolean;
+  suggestedName: string;
+  suggestedType: string;
+};

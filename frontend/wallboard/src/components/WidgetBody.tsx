@@ -9,17 +9,70 @@ import {
   useMetricPresets
 } from "./DeviceMetricWidgets";
 
-export const WIDGET_CATALOG: Array<{ type: WidgetType; label: string; defaultW: number; defaultH: number }> = [
+export type WidgetCatalogEntry = {
+  type: WidgetType;
+  label: string;
+  description?: string;
+  defaultW: number;
+  defaultH: number;
+};
+
+export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   { type: "site_status_grid", label: "Site status grid", defaultW: 6, defaultH: 6 },
   { type: "alerts_table", label: "Active alerts", defaultW: 6, defaultH: 4 },
   { type: "top_devices", label: "Top devices", defaultW: 6, defaultH: 4 },
   { type: "mini_map", label: "Mini map", defaultW: 6, defaultH: 6 },
   { type: "website_summary", label: "Website summary", defaultW: 6, defaultH: 4 },
   { type: "site_card", label: "Single site card", defaultW: 4, defaultH: 4 },
-  { type: "device_metric_chart", label: "Device metric chart", defaultW: 6, defaultH: 5 },
-  { type: "device_stat_gauge", label: "Device stat gauge", defaultW: 3, defaultH: 4 },
-  { type: "device_detail", label: "Device detail", defaultW: 4, defaultH: 4 },
-  { type: "grafana_panel", label: "Grafana panel", defaultW: 6, defaultH: 6 }
+  {
+    type: "device_metric_chart",
+    label: "Device metric chart",
+    description: "Time-series graph (CPU, memory, SNMP)",
+    defaultW: 6,
+    defaultH: 5
+  },
+  {
+    type: "device_stat_gauge",
+    label: "Device stat gauge",
+    description: "Single metric gauge",
+    defaultW: 3,
+    defaultH: 4
+  },
+  {
+    type: "grafana_panel",
+    label: "Grafana panel",
+    description: "Embed a Grafana dashboard or panel",
+    defaultW: 6,
+    defaultH: 6
+  },
+  {
+    type: "device_detail",
+    label: "Device info",
+    description: "Metadata only — no chart",
+    defaultW: 4,
+    defaultH: 4
+  }
+];
+
+export const WIDGET_GROUPS: Array<{ label: string; widgets: WidgetCatalogEntry[] }> = [
+  {
+    label: "Overview",
+    widgets: WIDGET_CATALOG.filter((w) =>
+      ["site_status_grid", "alerts_table", "top_devices", "mini_map", "website_summary", "site_card"].includes(
+        w.type
+      )
+    )
+  },
+  {
+    label: "Charts",
+    widgets: WIDGET_CATALOG.filter((w) =>
+      ["device_metric_chart", "device_stat_gauge", "grafana_panel"].includes(w.type)
+    )
+  },
+  {
+    label: "Info",
+    widgets: WIDGET_CATALOG.filter((w) => w.type === "device_detail")
+  }
 ];
 
 export function WidgetBody({
@@ -157,14 +210,14 @@ export function WidgetBody({
   if (type === "device_detail") {
     return (
       <div className="widgetInner">
-        <div className="widgetTitle">Device</div>
+        <div className="widgetTitle">Device info</div>
         <DeviceDetailPanel site={site} deviceId={deviceId} />
       </div>
     );
   }
 
   if (type === "grafana_panel") {
-    const src = config?.embedUrl || `${grafanaUrl}/`;
+    const src = config?.embedUrl || `${grafanaUrl.replace(/\/$/, "")}/`;
     return (
       <div className="widgetInner flush">
         <iframe title="grafana" src={src} className="grafanaFrame" />

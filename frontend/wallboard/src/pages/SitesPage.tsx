@@ -12,13 +12,14 @@ import {
   deleteSiteWebsite,
   downloadSiteDevicesJson,
   getAllSiteStatuses,
+  getDiscoveredDevices,
   getSite,
   getSites,
   updateSite,
   updateSiteDevice,
   updateSiteWebsite
 } from "../api";
-import type { DeviceKind, Site, SiteDevice, SiteStatus } from "../types";
+import type { DeviceKind, DiscoveredDevice, Site, SiteDevice, SiteStatus } from "../types";
 import { StatusPill } from "../components/StatusPill";
 import { SiteLocationPicker } from "../components/SiteLocationPicker";
 import { DeviceTypePicker, useDeviceTypes, type DeviceTypeOption } from "../components/DeviceTypePicker";
@@ -171,10 +172,15 @@ export function SiteDetailPage() {
   const [websiteForm, setWebsiteForm] = useState({ name: "", url: "" });
   const [editingWebsiteUrl, setEditingWebsiteUrl] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [discovered, setDiscovered] = useState<DiscoveredDevice[]>([]);
 
   async function reload() {
     if (!token || !id) return;
-    const [s, st] = await Promise.all([getSite(token, id), getAllSiteStatuses(token)]);
+    const [s, st, disc] = await Promise.all([
+      getSite(token, id),
+      getAllSiteStatuses(token),
+      getDiscoveredDevices(token, id).catch(() => ({ devices: [] as DiscoveredDevice[] }))
+    ]);
     setSite(s.site);
     setSiteForm({
       name: s.site.name,
@@ -184,6 +190,7 @@ export function SiteDetailPage() {
       lng: s.site.lng
     });
     setStatus(st.statuses.find((x) => x.siteId === id) ?? null);
+    setDiscovered(disc.devices);
   }
 
   useEffect(() => {
@@ -261,6 +268,42 @@ export function SiteDetailPage() {
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRegisterDiscovered(d: DiscoveredDevice) {
+    if (!token || !id) return;
+    if (d.kind === "network") {
+      setEditingId(null);
+      setForm({
+        id: d.deviceId,
+        name: d.suggestedName,
+        type: d.suggestedType,
+        kind: "network",
+        snmpIp: "",
+        hostMetricId: "",
+        vendor: "generic"
+      });
+      setMsg(`Discovered ${d.deviceId} — enter SNMP IP below and click Add device.`);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await addSiteDevice(token, id, {
+        id: d.deviceId,
+        name: d.suggestedName,
+        type: d.suggestedType,
+        kind: d.kind,
+        vendor: "generic",
+        hostMetricId: d.deviceId
+      });
+      setMsg(`Registered ${d.deviceId}. LAN status should update on the next refresh.`);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Register failed");
     } finally {
       setBusy(false);
     }
@@ -536,11 +579,43 @@ export function SiteDetailPage() {
             Network devices export to Alloy <code>devices.json</code>. Server/NUC devices use host
             metrics — set <code>HOST_DEVICE_ID</code> on the NUC to match.
           </p>
+
+          {discovered.filter((d) => !d.alreadyRegistered).length > 0 ? (
+            <div className="discoveryBanner">
+              <div className="discoveryBannerTitle">Discovered from Prometheus (not registered)</div>
+              {discovered
+                .filter((d) => !d.alreadyRegistered)
+                .map((d) => (
+                  <div key={d.deviceId} className="discoveryRow">
+                    <div>
+                      <strong>{d.suggestedName}</strong>
+                      <div className="muted">
+                        {d.deviceId} · {d.kind}
+                        {d.lastSeen ? ` · seen ${new Date(d.lastSeen).toLocaleString()}` : ""}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => onRegisterDiscovered(d)}
+                      disabled={busy}
+                    >
+                      {d.kind === "server" ? "Register" : "Add details"}
+                    </button>
+                  </div>
+                ))}
+            </div>
+          ) : null}
+
           <div className="pageActions" style={{ marginBottom: 12 }}>
             <button type="button" onClick={onDownloadDevices}>
               Download devices.json (SNMP)
             </button>
           </div>
+          <p className="muted" style={{ marginBottom: 12 }}>
+            After adding SNMP devices, download <code>devices.json</code>, copy it to the NUC, then
+            run <code>generate-config.sh</code> and restart Alloy.
+          </p>
           <table className="dataTable">
             <thead>
               <tr>
@@ -555,7 +630,7 @@ export function SiteDetailPage() {
               {(site.devices ?? []).length === 0 ? (
                 <tr>
                   <td colSpan={5} className="muted">
-                    No devices yet — add one below.
+                    No devices yet — use Discover above or add one below.
                   </td>
                 </tr>
               ) : (

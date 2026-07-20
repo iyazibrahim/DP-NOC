@@ -13,7 +13,8 @@ import type {
   NotificationsConfig,
   StatusTimingInfo,
   DeviceKind,
-  DeviceTypeDef
+  DeviceTypeDef,
+  DiscoveredDevice
 } from "./types";
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL?.toString() ?? "").replace(/\/$/, "");
@@ -141,6 +142,13 @@ export async function deleteSiteDevice(token: string, siteId: string, deviceId: 
     method: "DELETE",
     headers: authHeaders(token)
   });
+}
+
+export async function getDiscoveredDevices(token: string, siteId: string) {
+  return fetchJson<{ devices: DiscoveredDevice[] }>(
+    `/api/sites/${siteId}/discovered-devices`,
+    { headers: authHeaders(token) }
+  );
 }
 
 export async function downloadSiteDevicesJson(token: string, siteId: string) {

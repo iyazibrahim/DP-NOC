@@ -1,6 +1,7 @@
 import { getSiteById, siteList } from "../data/sites";
 import { promQuery, parseFirstVectorValue, parseVectorToNumericValues } from "./prometheus";
 import { getActiveAlerts, type Alert } from "./alertmanager";
+import { hasUnregisteredHostMetrics } from "./deviceDiscovery";
 
 export type DomainState = "healthy" | "warning" | "critical" | "unknown";
 
@@ -171,6 +172,11 @@ export async function computeSiteStatus(
       deviceStatuses.push(await queryBooleanMetricState(selector));
     }
     lan = aggregateProbeStatuses(deviceStatuses);
+  } else if (await hasUnregisteredHostMetrics(siteId)) {
+    lan = {
+      state: "warning",
+      notes: "NUC reporting metrics but no devices registered — register in Sites"
+    };
   }
 
   const alerts = activeAlerts ?? (await getActiveAlerts());

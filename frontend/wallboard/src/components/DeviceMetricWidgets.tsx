@@ -1,7 +1,9 @@
+import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
+  CartesianGrid,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -11,12 +13,24 @@ import { useAuth } from "../auth/AuthContext";
 import { getMetricInstant, getMetricRange, getMetricPresets } from "../api";
 import type { MetricPreset, PromQueryResult, Site } from "../types";
 
-function parseMatrix(data: PromQueryResult) {
+const TIME_RANGES = [
+  { hours: 1, label: "1h" },
+  { hours: 6, label: "6h" },
+  { hours: 24, label: "24h" },
+  { hours: 168, label: "7d" }
+] as const;
+
+function parseMatrix(data: PromQueryResult, hours: number) {
   if (data.resultType !== "matrix" || !Array.isArray(data.result)) return [];
   const row = data.result[0] as { values?: [number, string][] } | undefined;
   if (!row?.values) return [];
+  const fmt =
+    hours >= 24
+      ? { month: "short" as const, day: "numeric" as const, hour: "2-digit" as const }
+      : { hour: "2-digit" as const, minute: "2-digit" as const };
   return row.values.map(([ts, val]) => ({
-    t: new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    ts,
+    t: new Date(ts * 1000).toLocaleString([], fmt),
     v: Number(val)
   }));
 }
@@ -27,6 +41,42 @@ function parseInstant(data: PromQueryResult): number | null {
   const v = row?.value?.[1];
   const n = typeof v === "string" ? Number(v) : NaN;
   return Number.isFinite(n) ? n : null;
+}
+
+function formatYAxis(value: number, unit?: string) {
+  if (unit === "%") return `${Math.round(value)}%`;
+  return String(value);
+}
+
+function ChartTooltip({
+  active,
+  payload,
+  unit
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: { t: string; v: number } }>;
+  unit?: string;
+}) {
+  if (!active || !payload?.[0]?.payload) return null;
+  const { t, v } = payload[0].payload;
+  return (
+    <div className="chartTooltip">
+      <div className="chartTooltipTime">{t}</div>
+      <div className="chartTooltipValue">
+        {Number.isFinite(v) ? v.toFixed(2) : "—"}
+        {unit ?? ""}
+      </div>
+    </div>
+  );
+}
+
+function NoDeviceHint() {
+  return (
+    <div className="muted">
+      No devices —{" "}
+      <Link to="/sites">register NUC in Sites</Link> or use Discover on the site page.
+    </div>
+  );
 }
 
 export function DeviceMetricChart({
@@ -41,21 +91,28 @@ export function DeviceMetricChart({
   presets: MetricPreset[];
 }) {
   const { token } = useAuth();
-  const [points, setPoints] = useState<Array<{ t: string; v: number }>>([]);
+  const [points, setPoints] = useState<Array<{ t: string; v: number; ts: number }>>([]);
   const [error, setError] = useState<string | null>(null);
-  const label = presets.find((p) => p.id === metric)?.label ?? metric;
+  const [loading, setLoading] = useState(false);
+  const [hours, setHours] = useState<number>(1);
+  const preset = presets.find((p) => p.id === metric);
+  const label = preset?.label ?? metric;
+  const unit = preset?.unit ?? "";
 
   useEffect(() => {
     if (!token || !siteId || !deviceId || !metric) return;
     let cancelled = false;
     const load = async () => {
+      setLoading(true);
       try {
-        const res = await getMetricRange(token, { preset: metric, siteId, deviceId, hours: 1 });
+        const res = await getMetricRange(token, { preset: metric, siteId, deviceId, hours });
         if (cancelled) return;
-        setPoints(parseMatrix(res.data));
+        setPoints(parseMatrix(res.data, hours));
         setError(null);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Query failed");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
     load();
@@ -64,25 +121,56 @@ export function DeviceMetricChart({
       cancelled = true;
       clearInterval(t);
     };
-  }, [token, siteId, deviceId, metric]);
+  }, [token, siteId, deviceId, metric, hours]);
 
   if (!siteId || !deviceId || !metric) {
     return <div className="muted">Configure site, device, and metric in edit mode.</div>;
   }
-  if (error) return <div className="muted">{error}</div>;
-  if (points.length === 0) return <div className="muted">No data yet for {label}</div>;
+  if (!deviceId) return <NoDeviceHint />;
+  if (error) {
+    return (
+      <div className="muted">
+        {error}. Check Prometheus and device registration in <Link to="/sites">Sites</Link>.
+      </div>
+    );
+  }
 
   return (
-    <div style={{ width: "100%", height: "100%", minHeight: 140 }}>
-      <div className="widgetTitle">{label}</div>
-      <ResponsiveContainer width="100%" height="85%">
-        <AreaChart data={points}>
-          <XAxis dataKey="t" tick={{ fill: "#94a3b8", fontSize: 10 }} />
-          <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} width={36} />
-          <Tooltip contentStyle={{ background: "#111827", border: "1px solid #334155" }} />
-          <Area type="monotone" dataKey="v" stroke="#f59e0b" fill="#f59e0b33" strokeWidth={2} />
-        </AreaChart>
-      </ResponsiveContainer>
+    <div className="metricChartWidget">
+      <div className="metricChartHeader">
+        <div className="widgetTitle">{label}</div>
+        <div className="timeRangePicker">
+          {TIME_RANGES.map((r) => (
+            <button
+              key={r.hours}
+              type="button"
+              className={hours === r.hours ? "timeRangeBtn active" : "timeRangeBtn"}
+              onClick={() => setHours(r.hours)}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {loading && points.length === 0 ? (
+        <div className="chartSkeleton" aria-hidden />
+      ) : points.length === 0 ? (
+        <div className="muted">No data yet for {label}</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={160}>
+          <AreaChart data={points}>
+            <CartesianGrid stroke="rgba(148,163,184,0.12)" strokeDasharray="3 3" />
+            <XAxis dataKey="t" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" />
+            <YAxis
+              tick={{ fill: "#94a3b8", fontSize: 10 }}
+              width={40}
+              tickFormatter={(v) => formatYAxis(v, unit)}
+            />
+            <Tooltip content={<ChartTooltip unit={unit} />} />
+            <Area type="monotone" dataKey="v" stroke="#f59e0b" fill="#f59e0b33" strokeWidth={2} />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }
@@ -101,6 +189,7 @@ export function DeviceStatGauge({
   const { token } = useAuth();
   const [value, setValue] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const preset = presets.find((p) => p.id === metric);
   const unit = preset?.unit ?? "";
 
@@ -108,6 +197,7 @@ export function DeviceStatGauge({
     if (!token || !siteId || !deviceId || !metric) return;
     let cancelled = false;
     const load = async () => {
+      setLoading(true);
       try {
         const res = await getMetricInstant(token, { preset: metric, siteId, deviceId });
         if (cancelled) return;
@@ -115,6 +205,8 @@ export function DeviceStatGauge({
         setError(null);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Query failed");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
     load();
@@ -128,6 +220,7 @@ export function DeviceStatGauge({
   if (!siteId || !deviceId || !metric) {
     return <div className="muted">Configure site, device, and metric in edit mode.</div>;
   }
+  if (!deviceId) return <NoDeviceHint />;
   if (error) return <div className="muted">{error}</div>;
 
   const pct = value != null && unit === "%" ? Math.max(0, Math.min(100, value)) : null;
@@ -135,14 +228,20 @@ export function DeviceStatGauge({
   return (
     <div className="gaugeWidget">
       <div className="widgetTitle">{preset?.label ?? metric}</div>
-      <div className="gaugeValue">
-        {value != null ? `${value.toFixed(1)}${unit}` : "—"}
-      </div>
-      {pct != null ? (
-        <div className="gaugeBar">
-          <div className="gaugeFill" style={{ width: `${pct}%` }} />
-        </div>
-      ) : null}
+      {loading && value == null ? (
+        <div className="chartSkeleton gaugeSkeleton" aria-hidden />
+      ) : (
+        <>
+          <div className="gaugeValue">
+            {value != null ? `${value.toFixed(1)}${unit}` : "—"}
+          </div>
+          {pct != null ? (
+            <div className="gaugeBar">
+              <div className="gaugeFill" style={{ width: `${pct}%` }} />
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }
@@ -152,8 +251,11 @@ export function DeviceDetailPanel({ site, deviceId }: { site: Site | undefined; 
     () => site?.devices?.find((d) => d.id === deviceId),
     [site, deviceId]
   );
-  if (!site || !device) {
-    return <div className="muted">Pick a site and device in edit mode.</div>;
+  if (!site) {
+    return <div className="muted">Pick a site in edit mode.</div>;
+  }
+  if (!deviceId || !device) {
+    return <NoDeviceHint />;
   }
   return (
     <div className="kvList">

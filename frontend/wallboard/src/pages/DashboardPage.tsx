@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import GridLayout, { type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -15,13 +15,33 @@ import {
   STATUS_POLL_MS
 } from "../api";
 import type { ActiveAlert, DashboardLayout, DashboardWidget, DeviceRow, Site, SiteStatus } from "../types";
-import { WidgetBody, WIDGET_CATALOG } from "../components/WidgetBody";
+import { WidgetBody, WIDGET_GROUPS } from "../components/WidgetBody";
 import { WidgetConfigEditor } from "../components/WidgetConfigEditor";
 import { useMetricPresets } from "../components/DeviceMetricWidgets";
+
+function normalizeLayoutForSave(layout: DashboardLayout): DashboardLayout {
+  let maxBottom = 0;
+  for (const w of layout.widgets) {
+    const y = Number.isFinite(w.y) && w.y >= 0 ? w.y : 0;
+    maxBottom = Math.max(maxBottom, y + w.h);
+  }
+  return {
+    ...layout,
+    widgets: layout.widgets.map((w, i) => {
+      const y =
+        !Number.isFinite(w.y) || w.y === Infinity || w.y < 0
+          ? maxBottom + i * 2
+          : Math.floor(w.y);
+      return { ...w, y, x: Math.floor(w.x), w: Math.floor(w.w), h: Math.floor(w.h) };
+    })
+  };
+}
 
 export function DashboardPage() {
   const { token } = useAuth();
   const [editing, setEditing] = useState(false);
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
   const [layout, setLayout] = useState<DashboardLayout | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [statuses, setStatuses] = useState<SiteStatus[]>([]);
@@ -42,34 +62,64 @@ export function DashboardPage() {
     return () => ro.disconnect();
   }, []);
 
-  const refresh = useCallback(async () => {
+  const refreshLayout = useCallback(async () => {
     if (!token) return;
-    try {
-      const [layoutRes, sitesRes, stRes, alertsRes, topRes, settings] = await Promise.all([
-        getDashboardLayout(token),
-        getSites(token),
-        getAllSiteStatuses(token),
-        getRecentAlerts(token, 30),
-        getTopDevices(token),
-        getSettings()
-      ]);
-      setLayout(layoutRes.layout);
-      setSites(sitesRes.sites);
-      setStatuses(stRes.statuses);
-      setAlerts(alertsRes.alerts);
-      setDevices(topRes.devices);
-      setGrafanaUrl(settings.grafanaPublicUrl);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+    const layoutRes = await getDashboardLayout(token);
+    setLayout(layoutRes.layout);
   }, [token]);
 
+  const refreshData = useCallback(
+    async (includeLayout: boolean) => {
+      if (!token) return;
+      try {
+        const dataFetches = Promise.all([
+          getSites(token),
+          getAllSiteStatuses(token),
+          getRecentAlerts(token, 30),
+          getTopDevices(token),
+          getSettings()
+        ]);
+
+        if (includeLayout) {
+          const [layoutRes, sitesRes, stRes, alertsRes, topRes, settings] = await Promise.all([
+            getDashboardLayout(token),
+            getSites(token),
+            getAllSiteStatuses(token),
+            getRecentAlerts(token, 30),
+            getTopDevices(token),
+            getSettings()
+          ]);
+          setLayout(layoutRes.layout);
+          setSites(sitesRes.sites);
+          setStatuses(stRes.statuses);
+          setAlerts(alertsRes.alerts);
+          setDevices(topRes.devices);
+          setGrafanaUrl(settings.grafanaPublicUrl);
+        } else {
+          const [sitesRes, stRes, alertsRes, topRes, settings] = await dataFetches;
+          if (!editingRef.current) {
+            const layoutRes = await getDashboardLayout(token);
+            setLayout(layoutRes.layout);
+          }
+          setSites(sitesRes.sites);
+          setStatuses(stRes.statuses);
+          setAlerts(alertsRes.alerts);
+          setDevices(topRes.devices);
+          setGrafanaUrl(settings.grafanaPublicUrl);
+        }
+        setError(null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [token]
+  );
+
   useEffect(() => {
-    refresh();
-    const t = setInterval(refresh, STATUS_POLL_MS);
+    refreshData(true);
+    const t = setInterval(() => refreshData(false), STATUS_POLL_MS);
     return () => clearInterval(t);
-  }, [refresh]);
+  }, [refreshData]);
 
   const gridLayout: Layout[] = useMemo(
     () =>
@@ -97,20 +147,22 @@ export function DashboardPage() {
 
   const persist = async () => {
     if (!token || !layout) return;
-    await saveDashboardLayout(token, layout);
+    const normalized = normalizeLayoutForSave(layout);
+    setLayout(normalized);
+    await saveDashboardLayout(token, normalized);
     setEditing(false);
     setDrawerOpen(false);
   };
 
   const addWidget = (type: DashboardWidget["type"]) => {
     if (!layout) return;
-    const meta = WIDGET_CATALOG.find((c) => c.type === type)!;
+    const meta = WIDGET_GROUPS.flatMap((g) => g.widgets).find((c) => c.type === type)!;
     const id = `${type}-${Date.now()}`;
     const firstSite = sites[0];
     const firstDevice = firstSite?.devices?.[0];
     let config: Record<string, string> | undefined;
     if (type === "grafana_panel") {
-      config = { embedUrl: `${grafanaUrl}/` };
+      config = { embedUrl: `${grafanaUrl.replace(/\/$/, "")}/` };
     } else if (type === "site_card") {
       config = { siteId: firstSite?.id ?? "" };
     } else if (
@@ -156,6 +208,12 @@ export function DashboardPage() {
     setLayout(r.layout);
   };
 
+  const cancelEdit = async () => {
+    setEditing(false);
+    setDrawerOpen(false);
+    await refreshLayout();
+  };
+
   if (!layout) {
     return <div className="page">{error ? `Error: ${error}` : "Loading dashboard…"}</div>;
   }
@@ -176,7 +234,7 @@ export function DashboardPage() {
               <button type="button" className="primary" onClick={persist}>
                 Save layout
               </button>
-              <button type="button" onClick={() => { setEditing(false); refresh(); }}>
+              <button type="button" onClick={cancelEdit}>
                 Cancel
               </button>
             </>
@@ -192,6 +250,13 @@ export function DashboardPage() {
           )}
         </div>
       </div>
+
+      {editing ? (
+        <div className="bannerHint">
+          Unsaved changes — click <strong>Save layout</strong> to keep new widgets. Live data still
+          refreshes every {STATUS_POLL_MS / 1000}s.
+        </div>
+      ) : null}
 
       {error && <div className="bannerError">{error}</div>}
 
@@ -212,7 +277,10 @@ export function DashboardPage() {
             <div key={w.i} className="dashWidget">
               <div className="widgetChrome">
                 {editing && <span className="widgetDrag">⋮⋮</span>}
-                <span className="widgetTypeLabel">{w.type}</span>
+                <span className="widgetTypeLabel">
+                  {WIDGET_GROUPS.flatMap((g) => g.widgets).find((c) => c.type === w.type)?.label ??
+                    w.type}
+                </span>
                 {editing && (
                   <button type="button" className="iconBtn" onClick={() => removeWidget(w.i)}>
                     ×
@@ -224,6 +292,7 @@ export function DashboardPage() {
                   widget={w}
                   sites={sites}
                   presets={presets}
+                  grafanaUrl={grafanaUrl}
                   onChange={(config) => updateWidgetConfig(w.i, config)}
                 />
               ) : null}
@@ -244,18 +313,26 @@ export function DashboardPage() {
       {drawerOpen && (
         <div className="drawer">
           <div className="drawerTitle">Add widget</div>
-          {WIDGET_CATALOG.map((c) => (
-            <button
-              key={c.type}
-              type="button"
-              className="drawerItem"
-              onClick={() => {
-                addWidget(c.type);
-                setDrawerOpen(false);
-              }}
-            >
-              {c.label}
-            </button>
+          {WIDGET_GROUPS.map((group) => (
+            <div key={group.label} className="drawerGroup">
+              <div className="drawerGroupLabel">{group.label}</div>
+              {group.widgets.map((c) => (
+                <button
+                  key={c.type}
+                  type="button"
+                  className="drawerItem"
+                  onClick={() => {
+                    addWidget(c.type);
+                    setDrawerOpen(false);
+                  }}
+                >
+                  <span className="drawerItemLabel">{c.label}</span>
+                  {c.description ? (
+                    <span className="drawerItemDesc">{c.description}</span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
           ))}
           <button type="button" onClick={() => setDrawerOpen(false)}>
             Close

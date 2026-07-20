@@ -141,7 +141,9 @@ button.primary {
   border-color: rgba(245, 158, 11, 0.5);
 }
 
-input {
+input,
+select,
+textarea {
   width: 100%;
   padding: 10px 12px;
   border-radius: 10px;
@@ -149,6 +151,26 @@ input {
   background: rgba(2, 6, 23, 0.35);
   color: var(--text);
   margin-bottom: 10px;
+  font: inherit;
+}
+
+select {
+  appearance: none;
+  cursor: pointer;
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+select option {
+  background: var(--panel);
+  color: var(--text);
+}
+
+textarea {
+  min-height: 80px;
+  resize: vertical;
 }
 
 .label {
@@ -171,6 +193,43 @@ input {
   padding: 10px 12px;
   border-radius: 10px;
   margin-bottom: 12px;
+}
+
+.bannerHint {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fde68a;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.discoveryBanner {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.discoveryBannerTitle {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.discoveryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.discoveryRow:first-of-type {
+  border-top: none;
+  padding-top: 0;
 }
 
 .pill {
@@ -501,6 +560,121 @@ input {
 
 .drawerItem {
   text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.drawerGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.drawerGroupLabel {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+}
+
+.drawerItemLabel {
+  font-weight: 700;
+}
+
+.drawerItemDesc {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.widgetConfigHint {
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+
+.fieldHint {
+  margin: -4px 0 10px;
+  font-size: 12px;
+}
+
+.metricChartWidget {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+.metricChartHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.timeRangePicker {
+  display: flex;
+  gap: 4px;
+}
+
+.timeRangeBtn {
+  padding: 4px 8px;
+  font-size: 11px;
+  margin-bottom: 0;
+}
+
+.timeRangeBtn.active {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.55);
+}
+
+.chartTooltip {
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.chartTooltipTime {
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.chartTooltipValue {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.chartSkeleton {
+  height: 140px;
+  border-radius: 10px;
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.08) 25%,
+    rgba(148, 163, 184, 0.16) 50%,
+    rgba(148, 163, 184, 0.08) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+
+.gaugeSkeleton {
+  height: 48px;
+  width: 80%;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .loginScreen {

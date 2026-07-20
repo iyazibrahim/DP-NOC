@@ -24,7 +24,9 @@ export function TopDevicesTable({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={4}>No devices</td>
+              <td colSpan={4} className="muted">
+                No devices — register NUC in Sites or use Discover on the site page.
+              </td>
             </tr>
           ) : (
             rows.map((d) => (

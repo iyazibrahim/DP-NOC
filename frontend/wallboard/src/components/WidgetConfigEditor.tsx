@@ -4,11 +4,13 @@ export function WidgetConfigEditor({
   widget,
   sites,
   presets,
+  grafanaUrl,
   onChange
 }: {
   widget: DashboardWidget;
   sites: Site[];
   presets: MetricPreset[];
+  grafanaUrl: string;
   onChange: (config: Record<string, string>) => void;
 }) {
   const config = widget.config ?? {};
@@ -42,13 +44,17 @@ export function WidgetConfigEditor({
   }
 
   if (widget.type === "grafana_panel") {
+    const base = grafanaUrl.replace(/\/$/, "");
     return (
       <div className="widgetConfig">
+        <p className="muted widgetConfigHint">
+          For Zabbix/Grafana-style dashboards, paste a panel embed URL from Grafana (Share → Embed).
+        </p>
         <label className="label">Embed URL</label>
         <input
-          value={config.embedUrl ?? ""}
+          value={config.embedUrl ?? `${base}/`}
           onChange={(e) => onChange({ ...config, embedUrl: e.target.value })}
-          placeholder="https://grafana.example.com/..."
+          placeholder={`${base}/d/uid/dashboard?orgId=1&viewPanel=1`}
         />
       </div>
     );
@@ -88,7 +94,7 @@ export function WidgetConfigEditor({
         onChange={(e) => onChange({ ...config, siteId, deviceId: e.target.value })}
       >
         {devices.length === 0 ? (
-          <option value="">No devices</option>
+          <option value="">No devices — register in Sites</option>
         ) : (
           devices.map((d) => (
             <option key={d.id} value={d.id}>
