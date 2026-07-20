@@ -576,8 +576,13 @@ export function SiteDetailPage() {
         <div className="tableCard">
           <div className="tableTitle">Devices</div>
           <p className="muted">
-            Network devices export to Alloy <code>devices.json</code>. Server/NUC devices use host
-            metrics — set <code>HOST_DEVICE_ID</code> on the NUC to match.
+            Network devices export to Alloy <code>devices.json</code>. Server/collector devices use
+            host metrics — set <code>HOST_DEVICE_ID</code> on the collector so Grafana series are
+            labeled with <code>device=&quot;&lt;HOST_DEVICE_ID&gt;&quot;</code>.
+            <span className="muted" style={{ display: "block", marginTop: 6 }}>
+              Example:{" "}
+              <code>{`up{job="site_host",site="site-1",device="site-1-nuc"}`}</code>
+            </span>
           </p>
 
           {discovered.filter((d) => !d.alreadyRegistered).length > 0 ? (
@@ -613,8 +618,8 @@ export function SiteDetailPage() {
             </button>
           </div>
           <p className="muted" style={{ marginBottom: 12 }}>
-            After adding SNMP devices, download <code>devices.json</code>, copy it to the NUC, then
-            run <code>generate-config.sh</code> and restart Alloy.
+            After adding SNMP devices, download <code>devices.json</code>, copy it to the collector
+            host, then run <code>generate-config.sh</code> and restart Alloy.
           </p>
           <table className="dataTable">
             <thead>

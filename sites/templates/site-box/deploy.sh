@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# NUC / site-box Alloy deployer (one site at a time).
+# Site collector (NUC today) / site-box Alloy deployer (one site at a time).
 # 1) Checks Docker
 # 2) Lets you pick a catalog site
 # 3) Collects CF Access + optional SNMP devices
@@ -161,6 +161,65 @@ echo
 echo "Starting Alloy..."
 "${COMPOSE[@]}" up -d
 
+# --- 6) Optional: register this collector host in NOC inventory ---
+HOST_DEVICE_ID="${SITE_ID}-nuc"
+if [[ -n "${NOC_API_URL:-}" ]]; then
+  NOC_API_URL="${NOC_API_URL%/}"
+  echo
+  echo "NOC inventory sync: attempting to register ${HOST_DEVICE_ID}..."
+
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "  WARNING: curl not found; skipping NOC registration."
+  else
+    NOC_TOKEN="${NOC_OPERATOR_TOKEN:-}"
+    if [[ -z "$NOC_TOKEN" ]]; then
+      NOC_USER="${NOC_OPERATOR_USERNAME:-admin}"
+      NOC_PASS="${NOC_OPERATOR_PASSWORD:-admin}"
+      if [[ -z "${NOC_OPERATOR_USERNAME:-}" ]]; then
+        read -r -p "NOC operator username [admin]: " NOC_USER
+        NOC_USER="${NOC_USER:-admin}"
+      fi
+      if [[ -z "${NOC_OPERATOR_PASSWORD:-}" ]]; then
+        read -r -s -p "NOC operator password [admin]: " NOC_PASS
+        echo
+        NOC_PASS="${NOC_PASS:-admin}"
+      fi
+
+      LOGIN_RESP="$(curl -sS -X POST "${NOC_API_URL}/api/auth/login" \
+        -H "content-type: application/json" \
+        -d "{\"username\":\"${NOC_USER}\",\"password\":\"${NOC_PASS}\"}")"
+      NOC_TOKEN="$(python3 -c "import json,sys; print(json.loads(sys.stdin.read()).get('token',''))" <<< "$LOGIN_RESP")"
+    fi
+
+    if [[ -z "$NOC_TOKEN" ]]; then
+      echo "  WARNING: could not obtain NOC JWT token; skipping."
+    else
+      REGISTER_BODY="$(python3 -c "import json; print(json.dumps({
+        'id': '${HOST_DEVICE_ID}',
+        'name': '${SITE_NAME_LABEL} collector',
+        'type': 'server',
+        'kind': 'server',
+        'hostMetricId': '${HOST_DEVICE_ID}',
+        'vendor': 'generic'
+      }))")"
+
+      HTTP_CODE="$(curl -sS -o /dev/null -w "%{http_code}" \
+        -X POST "${NOC_API_URL}/api/sites/${SITE_ID}/devices" \
+        -H "authorization: Bearer ${NOC_TOKEN}" \
+        -H "content-type: application/json" \
+        -d "${REGISTER_BODY}")"
+
+      if [[ "$HTTP_CODE" == "201" ]]; then
+        echo "  Registered collector host successfully."
+      elif [[ "$HTTP_CODE" == "409" ]]; then
+        echo "  Already registered (409)."
+      else
+        echo "  NOC registration failed (HTTP ${HTTP_CODE})."
+      fi
+    fi
+  fi
+fi
+
 echo
 echo "=== Done ==="
 echo "Site:    $SITE_NAME_LABEL ($SITE_ID)"
@@ -169,8 +228,8 @@ echo "Compose: ${COMPOSE[*]} -f $SCRIPT_DIR/docker-compose.yml"
 echo
 echo "Next:"
 echo "  1) Ensure metrics. tunnel → http://127.0.0.1:9090 on the VPS + Access token works (curl 200)."
-echo "  2) Mirror these devices in NOC UI (Sites → $SITE_NAME_LABEL) if not already there."
-echo "     Add host as device id ${SITE_ID}-nuc (type server) for inventory."
+echo "  2) If host inventory is missing: register this collector host in NOC UI."
+echo "     Device id is ${SITE_ID}-nuc (type server)."
 echo "  3) Logs: docker logs -f noc_site_alloy"
 echo
 echo "Dokploy: create an app from this folder's docker-compose.yml after .env exists."

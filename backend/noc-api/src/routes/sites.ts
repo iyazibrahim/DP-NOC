@@ -23,8 +23,24 @@ import {
 import { computeSiteStatus, computeAllSitesStatus } from "../services/status";
 import { applyWebsiteProbes } from "../services/websiteProbes";
 import { discoverDevicesForSite } from "../services/deviceDiscovery";
+import { addGlobalWebsite, removeGlobalWebsite, updateGlobalWebsite, getGlobalWebsites } from "../data/globalWebsites";
 
 export const sitesRouter = express.Router();
+
+function asGlobalSite(siteId: "global"): Site {
+  return {
+    id: siteId,
+    name: "Global / Central",
+    lat: 0,
+    lng: 0,
+    devices: [],
+    wan: { dnsTarget: "1.1.1.1", vpsTarget: "139.99.88.174" },
+    websiteTargets: getGlobalWebsites(),
+    address: undefined,
+    notes: undefined,
+    createdAt: new Date().toISOString()
+  };
+}
 
 function parseDeviceBody(body: unknown): SiteDevice | { error: string } {
   if (!body || typeof body !== "object") return { error: "Invalid body" };
@@ -135,7 +151,8 @@ sitesRouter.get("/:id/export/devices.json", requireJwt(["operator"]), (req, res)
 });
 
 sitesRouter.post("/:id/websites/apply-probes", requireJwt(["operator"]), async (req, res) => {
-  if (!getSiteById(req.params.id)) {
+  const siteId = req.params.id;
+  if (siteId !== "global" && !getSiteById(siteId)) {
     return res.status(404).json({ error: "Site not found" });
   }
   const result = await applyWebsiteProbes();
@@ -144,13 +161,17 @@ sitesRouter.post("/:id/websites/apply-probes", requireJwt(["operator"]), async (
 
 sitesRouter.post("/:id/websites", requireJwt(["operator"]), (req, res) => {
   const siteId = req.params.id;
-  if (!getSiteById(siteId)) {
+  if (siteId !== "global" && !getSiteById(siteId)) {
     return res.status(404).json({ error: "Site not found" });
   }
   const body = (req.body ?? {}) as Record<string, unknown>;
   const name = typeof body.name === "string" ? body.name : "";
   const url = typeof body.url === "string" ? body.url : "";
   try {
+    if (siteId === "global") {
+      addGlobalWebsite({ name, url });
+      return res.status(201).json({ site: asGlobalSite("global") });
+    }
     const site = addWebsite(siteId, { name, url });
     return res.status(201).json({ site });
   } catch (e) {
@@ -160,13 +181,20 @@ sitesRouter.post("/:id/websites", requireJwt(["operator"]), (req, res) => {
 
 sitesRouter.patch("/:id/websites", requireJwt(["operator"]), (req, res) => {
   const siteId = req.params.id;
-  if (!getSiteById(siteId)) {
+  if (siteId !== "global" && !getSiteById(siteId)) {
     return res.status(404).json({ error: "Site not found" });
   }
   const body = (req.body ?? {}) as Record<string, unknown>;
   const currentUrl = typeof body.url === "string" ? body.url : "";
   if (!currentUrl) return res.status(400).json({ error: "url (current) is required" });
   try {
+    if (siteId === "global") {
+      updateGlobalWebsite(currentUrl, {
+        name: typeof body.name === "string" ? body.name : undefined,
+        newUrl: typeof body.newUrl === "string" ? body.newUrl : undefined
+      });
+      return res.json({ site: asGlobalSite("global") });
+    }
     const site = updateWebsite(siteId, currentUrl, {
       name: typeof body.name === "string" ? body.name : undefined,
       url: typeof body.newUrl === "string" ? body.newUrl : undefined
@@ -180,11 +208,15 @@ sitesRouter.patch("/:id/websites", requireJwt(["operator"]), (req, res) => {
 
 sitesRouter.delete("/:id/websites", requireJwt(["operator"]), (req, res) => {
   const siteId = req.params.id;
-  if (!getSiteById(siteId)) {
+  if (siteId !== "global" && !getSiteById(siteId)) {
     return res.status(404).json({ error: "Site not found" });
   }
   const url = typeof req.body?.url === "string" ? req.body.url : typeof req.query.url === "string" ? req.query.url : "";
   if (!url) return res.status(400).json({ error: "url is required" });
+  if (siteId === "global") {
+    removeGlobalWebsite(url);
+    return res.json({ site: asGlobalSite("global") });
+  }
   const site = removeWebsite(siteId, url);
   if (!site) return res.status(404).json({ error: "Website not found" });
   return res.json({ site });

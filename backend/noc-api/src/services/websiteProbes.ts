@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { env } from "../env";
+import { getGlobalWebsites } from "../data/globalWebsites";
 
 function resolveRuntimeDir(): string {
   const candidates = [
@@ -32,6 +33,11 @@ export function syncWebsiteProbes(): string {
         targets.push({ url: w.url.trim(), site: site.id, name: w.name?.trim() || w.url });
       }
     }
+  }
+
+  for (const w of getGlobalWebsites()) {
+    if (!w.url?.trim()) continue;
+    targets.push({ url: w.url.trim(), site: "global", name: w.name?.trim() || w.url });
   }
 
   if (targets.length === 0) {
@@ -93,7 +99,7 @@ export async function applyWebsiteProbes(): Promise<{ ok: boolean; message: stri
   const file = syncWebsiteProbes();
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { getSiteList } = require("../data/sites") as typeof import("../data/sites");
-  const count = getSiteList().flatMap((s) => s.websiteTargets ?? []).length;
+  const count = getSiteList().flatMap((s) => s.websiteTargets ?? []).length + getGlobalWebsites().length;
   const reload = await reloadPrometheusScrapeConfigs();
   return {
     ok: reload.ok,

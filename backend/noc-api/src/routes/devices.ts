@@ -3,6 +3,7 @@ import express from "express";
 import { requireJwt } from "../middleware/auth";
 import { getAllDevices, siteList } from "../data/sites";
 import { getActiveAlerts } from "../services/alertmanager";
+import { discoverDevicesForSite, getDiscoveryDiagnostics } from "../services/deviceDiscovery";
 
 export const devicesRouter = express.Router();
 
@@ -55,5 +56,22 @@ devicesRouter.get(
       devices: byDevice,
       sites: siteRows.sort((a, b) => b.alertCount - a.alertCount)
     });
+  }
+);
+
+devicesRouter.get(
+  "/discovered",
+  requireJwt(["operator", "wallboard"]),
+  async (_req, res: Response) => {
+    const allDiscovered = await Promise.all(
+      siteList.map(async (s) => {
+        const devices = await discoverDevicesForSite(s.id);
+        return devices.map((d) => ({ ...d, siteId: s.id }));
+      })
+    );
+
+    const flattened = allDiscovered.flat();
+    const diagnostics = await getDiscoveryDiagnostics();
+    return res.json({ devices: flattened, diagnostics });
   }
 );

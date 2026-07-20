@@ -25,7 +25,7 @@ export function TopDevicesTable({
           {rows.length === 0 ? (
             <tr>
               <td colSpan={4} className="muted">
-                No devices — register NUC in Sites or use Discover on the site page.
+                No devices — register collector host in Sites or use Discover on the site page.
               </td>
             </tr>
           ) : (

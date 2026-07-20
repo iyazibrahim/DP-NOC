@@ -1,6 +1,7 @@
 import { getSiteById } from "../data/sites";
 import type { DeviceKind } from "../data/sites";
 import { promQuery, type PromQueryResult } from "./prometheus";
+import { siteList } from "../data/sites";
 
 export type DiscoveredDevice = {
   deviceId: string;
@@ -9,6 +10,13 @@ export type DiscoveredDevice = {
   alreadyRegistered: boolean;
   suggestedName: string;
   suggestedType: string;
+};
+
+export type DiscoveryDiagnostics = {
+  prometheusReachable: boolean;
+  rawUpLabels: Array<{ site: string; device: string }>;
+  rawSnmpLabels: Array<{ site: string; device: string }>;
+  labelMismatchHints: string[];
 };
 
 type VectorRow = {
@@ -90,6 +98,78 @@ export async function discoverDevicesForSite(siteId: string): Promise<Discovered
     }
     return a.deviceId.localeCompare(b.deviceId);
   });
+}
+
+function dedupePairs(pairs: Array<{ site: string; device: string }>) {
+  const seen = new Set<string>();
+  const out: Array<{ site: string; device: string }> = [];
+  for (const p of pairs) {
+    const key = `${p.site}::${p.device}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+  }
+  return out;
+}
+
+function extractSiteDevicePairs(data: PromQueryResult): Array<{ site: string; device: string }> {
+  if (data.resultType !== "vector" || !Array.isArray(data.result)) return [];
+  const rows = data.result as Array<{ metric: Record<string, string>; value?: [number, string] }>;
+  return rows
+    .map((r) => ({
+      site: (r.metric?.site ?? "").trim(),
+      device: (r.metric?.device ?? "").trim()
+    }))
+    .filter((r) => r.site && r.device);
+}
+
+function buildLabelMismatchHints(rawUp: Array<{ site: string; device: string }>): string[] {
+  const hints: string[] = [];
+  const rawSiteLabels = [...new Set(rawUp.map((r) => r.site))];
+
+  const ids = new Set(siteList.map((s) => s.id));
+  const names = siteList.map((s) => ({ id: s.id, name: s.name }));
+
+  // If Prometheus uses site labels that match the *site name* but not the *site id*,
+  // it's a strong sign that SITE_NAME in the collector is set to a human name.
+  for (const rawSite of rawSiteLabels) {
+    if (ids.has(rawSite)) continue;
+    const hit = names.find((n) => n.name === rawSite);
+    if (hit) {
+      hints.push(
+        `Prometheus has host metrics under site="${rawSite}", but your registry uses id="${hit.id}". ` +
+          `Make collector SITE_NAME match the site id (e.g. "${hit.id}"), not the display name.`
+      );
+    }
+  }
+
+  return hints;
+}
+
+export async function getDiscoveryDiagnostics(): Promise<DiscoveryDiagnostics> {
+  try {
+    const [upData, snmpData] = await Promise.all([
+      promQuery(`up{job="site_host"}`),
+      promQuery(`snmp_up`)
+    ]);
+
+    const rawUpLabels = dedupePairs(extractSiteDevicePairs(upData));
+    const rawSnmpLabels = dedupePairs(extractSiteDevicePairs(snmpData));
+
+    return {
+      prometheusReachable: true,
+      rawUpLabels,
+      rawSnmpLabels,
+      labelMismatchHints: buildLabelMismatchHints(rawUpLabels)
+    };
+  } catch (e) {
+    return {
+      prometheusReachable: false,
+      rawUpLabels: [],
+      rawSnmpLabels: [],
+      labelMismatchHints: e instanceof Error ? [e.message] : ["Prometheus unreachable"]
+    };
+  }
 }
 
 export async function hasUnregisteredHostMetrics(siteId: string): Promise<boolean> {

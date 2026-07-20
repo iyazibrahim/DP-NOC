@@ -3,6 +3,7 @@ import { env } from "./env";
 import cron from "node-cron";
 import { loadRetentionConfig, enforceStorageCap } from "./services/retention";
 import { runExport } from "./services/exports";
+import { syncDevicesFromPrometheus } from "./services/deviceSync";
 
 async function main() {
   const app = createApp();
@@ -50,6 +51,21 @@ async function main() {
       // eslint-disable-next-line no-console
       console.error("[cron] retention enforcement failed:", e);
     });
+  });
+
+  // Auto-sync discovered hosts/devices from Prometheus inventory.
+  // Uses 1-minute granularity (server-side) to avoid missing series entirely.
+  cron.schedule("*/1 * * * *", () => {
+    syncDevicesFromPrometheus().catch((e) => {
+      // eslint-disable-next-line no-console
+      console.error("[cron] auto-sync devices failed:", e);
+    });
+  });
+
+  // Run once on startup so the inventory is populated quickly on first boot.
+  syncDevicesFromPrometheus().catch((e) => {
+    // eslint-disable-next-line no-console
+    console.error("[startup] auto-sync devices failed:", e);
   });
 }
 

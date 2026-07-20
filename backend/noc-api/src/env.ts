@@ -21,7 +21,11 @@ const envSchema = z.object({
   PROMETHEUS_APPLY_CMD: z.string().optional(),
   ALERTMANAGER_APPLY_CMD: z.string().optional(),
   STATUS_DASHBOARD_REFRESH_SEC: z.coerce.number().default(10),
-  STATUS_METRIC_FRESH_SEC: z.coerce.number().default(180)
+  STATUS_METRIC_FRESH_SEC: z.coerce.number().default(180),
+
+  // Auto-register devices/collector hosts discovered in Prometheus `up` series.
+  AUTO_SYNC_DEVICES: z.coerce.boolean().default(true),
+  AUTO_SYNC_NETWORK_DEVICES: z.coerce.boolean().default(false)
 });
 
 export const env = envSchema.parse(process.env);

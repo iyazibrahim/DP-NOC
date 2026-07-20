@@ -12,6 +12,7 @@ export type SiteStatus = {
   wan: DomainStatus;
   websites: DomainStatus;
   lan: DomainStatus;
+  websiteTargetCount?: number;
   alerts: { firing: number; resolved: number };
   overall: DomainState;
 };
@@ -163,10 +164,16 @@ export type PromQueryResult = {
 };
 
 export type DiscoveredDevice = {
+  siteId?: string;
   deviceId: string;
   kind: DeviceKind;
   lastSeen: string | null;
   alreadyRegistered: boolean;
   suggestedName: string;
   suggestedType: string;
+};
+
+export type DiscoveryDiagnostics = {
+  prometheusReachable: boolean;
+  labelMismatchHints: string[];
 };

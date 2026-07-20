@@ -2,6 +2,7 @@ import { getSiteById, siteList } from "../data/sites";
 import { promQuery, parseFirstVectorValue, parseVectorToNumericValues } from "./prometheus";
 import { getActiveAlerts, type Alert } from "./alertmanager";
 import { hasUnregisteredHostMetrics } from "./deviceDiscovery";
+import { getGlobalWebsites } from "../data/globalWebsites";
 
 export type DomainState = "healthy" | "warning" | "critical" | "unknown";
 
@@ -15,6 +16,7 @@ export type SiteStatus = {
   wan: DomainStatus;
   websites: DomainStatus;
   lan: DomainStatus;
+  websiteTargetCount: number;
   alerts: {
     firing: number;
     resolved: number;
@@ -131,6 +133,38 @@ export async function computeSiteStatus(
   siteId: string,
   activeAlerts?: Alert[]
 ): Promise<SiteStatus> {
+  if (siteId === "global") {
+    const globalTargets = getGlobalWebsites();
+    const websiteVector = await queryProbeSuccessVector(siteId, "check", "website");
+    let websites: DomainStatus = { state: stateFromBooleanSeries(websiteVector.values) };
+
+    if (websiteVector.values.length === 0) {
+      websites =
+        globalTargets.length > 0
+          ? {
+              state: "unknown",
+              notes: "Global website probes silent for the configured targets"
+            }
+          : { state: "unknown", notes: "No global website targets configured" };
+    }
+
+    const alerts = activeAlerts ?? (await getActiveAlerts());
+    const relevant = alerts.filter((a) => (a.labels?.site ?? "") === siteId);
+    const firing = relevant.filter((a) => a.status === "firing").length;
+    const resolved = relevant.filter((a) => a.status === "resolved").length;
+
+    return {
+      siteId,
+      wan: { state: "unknown", notes: "Not applicable" },
+      websites,
+      lan: { state: "unknown", notes: "Not applicable" },
+      alerts: { firing, resolved },
+      // For global mode, overall should reflect websites health.
+      websiteTargetCount: globalTargets.length,
+      overall: websites.state
+    };
+  }
+
   const site = getSiteById(siteId);
   if (!site) {
     throw new Error(`Unknown site: ${siteId}`);
@@ -193,6 +227,7 @@ export async function computeSiteStatus(
     wan,
     websites,
     lan,
+    websiteTargetCount: site.websiteTargets?.length ?? 0,
     alerts: { firing, resolved },
     overall
   };
@@ -206,6 +241,12 @@ export async function computeAllSitesStatus(): Promise<{
   const statuses: SiteStatus[] = [];
   for (const s of siteList) {
     statuses.push(await computeSiteStatus(s.id, activeAlerts));
+  }
+
+  // Only include the synthetic "global" status if there are global websites configured.
+  const globalTargets = getGlobalWebsites();
+  if (globalTargets.length > 0) {
+    statuses.push(await computeSiteStatus("global", activeAlerts));
   }
   return {
     statuses,

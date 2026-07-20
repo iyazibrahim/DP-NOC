@@ -32,9 +32,11 @@ export function WebsitesPage() {
     setSites(s.sites);
     const querySiteId = searchParams.get("siteId");
     const preferred =
-      querySiteId && s.sites.some((site) => site.id === querySiteId)
-        ? querySiteId
-        : s.sites[0]?.id ?? "";
+      querySiteId === "global"
+        ? "global"
+        : querySiteId && s.sites.some((site) => site.id === querySiteId)
+          ? querySiteId
+          : "global";
     setForm((f) => ({ ...f, siteId: f.siteId || preferred }));
   }
 
@@ -117,6 +119,7 @@ export function WebsitesPage() {
               onChange={(e) => setForm((f) => ({ ...f, siteId: e.target.value }))}
               required
             >
+              <option value="global">Global (no physical site)</option>
               {sites.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -187,7 +190,7 @@ export function WebsitesPage() {
             rows.map((r) => (
               <tr key={`${r.siteId}-${r.url}`}>
                 <td>
-                  <Link to={`/sites/${r.siteId}`}>{r.siteName}</Link>
+                  {r.siteId === "global" ? <span>{r.siteName}</span> : <Link to={`/sites/${r.siteId}`}>{r.siteName}</Link>}
                 </td>
                 <td>{r.name}</td>
                 <td>{r.url}</td>

@@ -151,6 +151,8 @@ node_memory_MemAvailable_bytes{site="site-1",device="site-1-nuc"} / node_memory_
 
 Add `site-1-nuc` as a **server** device in the NOC UI for inventory (LAN status still uses SNMP; host health is in Grafana).
 
+Optional: if you set `NOC_API_URL` (and optionally `NOC_OPERATOR_TOKEN` or `NOC_OPERATOR_USERNAME` / `NOC_OPERATOR_PASSWORD`) before running `sites/templates/site-box/deploy.sh`, the script will auto-register this collector host in the NOC inventory.
+
 ---
 
 ## 4. Verify the collector works

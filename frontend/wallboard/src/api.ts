@@ -14,7 +14,8 @@ import type {
   StatusTimingInfo,
   DeviceKind,
   DeviceTypeDef,
-  DiscoveredDevice
+  DiscoveredDevice,
+  DiscoveryDiagnostics
 } from "./types";
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL?.toString() ?? "").replace(/\/$/, "");
@@ -149,6 +150,13 @@ export async function getDiscoveredDevices(token: string, siteId: string) {
     `/api/sites/${siteId}/discovered-devices`,
     { headers: authHeaders(token) }
   );
+}
+
+export async function getDiscoveredDevicesAll(token: string) {
+  return fetchJson<{
+    devices: DiscoveredDevice[];
+    diagnostics: DiscoveryDiagnostics;
+  }>(`/api/devices/discovered`, { headers: authHeaders(token) });
 }
 
 export async function downloadSiteDevicesJson(token: string, siteId: string) {

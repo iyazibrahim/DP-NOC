@@ -74,7 +74,7 @@ function NoDeviceHint() {
   return (
     <div className="muted">
       No devices —{" "}
-      <Link to="/sites">register NUC in Sites</Link> or use Discover on the site page.
+      <Link to="/sites">register collector host in Sites</Link> or use Discover on the site page.
     </div>
   );
 }

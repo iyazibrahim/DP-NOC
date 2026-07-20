@@ -155,7 +155,11 @@ export function WidgetBody({
 
   if (type === "website_summary") {
     const counts = { healthy: 0, warning: 0, critical: 0, unknown: 0 };
-    for (const s of statuses) counts[s.websites.state] += 1;
+    for (const st of statuses) {
+      const n = st.websiteTargetCount ?? 0;
+      if (n <= 0) continue;
+      counts[st.websites.state] += n;
+    }
     return (
       <div className="widgetInner">
         <div className="widgetTitle">Websites</div>
