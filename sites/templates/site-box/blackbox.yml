@@ -1,0 +1,8 @@
+# Blackbox modules for site-box Alloy (ICMP WAN probes).
+# Mounted next to config.alloy — do not put preferred_ip_protocol at module top-level.
+modules:
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: "ip4"

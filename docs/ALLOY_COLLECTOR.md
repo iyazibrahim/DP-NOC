@@ -159,7 +159,7 @@ Open **Sites** → site should leave WAN `unknown` once `probe_success` series e
 | Browser **403** on metrics. | Expected without token |
 | curl + token **502** | Tunnel not → `127.0.0.1:9090`, or DNS A→VPS (no :443) |
 | Alloy 403 | Wrong/missing `CF_ACCESS_*` or Access policy |
-| Alloy crash: `preferred_ip_protocol not found` | Bad ICMP module YAML — nest under `icmp: { preferred_ip_protocol: \"ip4\" }` (fixed in site-box template) |
+| Alloy crash: `preferred_ip_protocol not found` | Old inline blackbox YAML — use `config_file = "blackbox.yml"` (site-box mounts `blackbox.yml`). Redeploy with updated files; Dokploy must not keep a stale `config.alloy`. |
 | `probe_success` missing | ICMP / `NET_RAW` / wrong `PING_TARGET_*` |
 | `snmp_up` missing | Community, UDP 161, empty `devices.json` |
 | Series under wrong site | `SITE_NAME` ≠ seed registry id |

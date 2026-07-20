@@ -25,6 +25,7 @@ Requires: Docker, Docker Compose, python3.
 | `deploy.sh` | Docker check + site/device wizard + `compose up` |
 | `generate-config.sh` | Build `config.alloy` from `devices.json` |
 | `docker-compose.yml` | Grafana Alloy (`host` network + `NET_RAW`) |
+| `blackbox.yml` | ICMP probe module (used via `config_file`) |
 | `devices.json` | SNMP targets for this site |
 | `.env` | Secrets + `SITE_NAME` (gitignored) |
 | `snmp.yml` | SNMPv2c / if_mib module |

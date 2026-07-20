@@ -15,7 +15,9 @@ services:
       - .env
     volumes:
       - ./config.alloy:/etc/alloy/config.alloy:ro
+      - ./blackbox.yml:/etc/alloy/blackbox.yml:ro
       - ./snmp.yml:/etc/alloy/snmp.yml:ro
+    working_dir: /etc/alloy
     command:
       - run
       - /etc/alloy/config.alloy

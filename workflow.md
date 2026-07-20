@@ -19,7 +19,7 @@ Multisite NOC for WAN connectivity, mixed-vendor SNMP, and website checks — cu
 - [x] Alloy CF Access headers + collector docs
 - [x] Penang seed sites (empty devices) + NUC `deploy.sh` / Compose / generate-config
 - [x] Sites JSON persistence + API/UI device CRUD
-- [x] Fix Alloy blackbox ICMP config (`preferred_ip_protocol` nested under `icmp:`)
+- [x] Fix Alloy blackbox ICMP via `blackbox.yml` + `config_file` (no fragile inline preferred_ip_protocol)
 
 ## Local Validation
 1. `docker compose up -d --build`
