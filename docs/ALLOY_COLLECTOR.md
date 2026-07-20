@@ -127,6 +127,28 @@ sudo setcap cap_net_raw+ep "$(command -v alloy)"
 - UDP **161** reachable from the site box
 - Devices come from `devices.json` via `generate-config.sh` (not hardcoded `SNMP_DEVICE_2` blocks)
 
+### NUC host (CPU / memory / disk)
+
+Site-box always scrapes the **NUC itself** via `prometheus.exporter.unix` (labels: `site`, `device=HOST_DEVICE_ID`, `role=site-box`).
+
+Docker Compose must mount host `/proc`, `/sys`, and `/` — see `sites/templates/site-box/docker-compose.yml`.
+
+Verify on the VPS:
+
+```bash
+curl -sS 'http://127.0.0.1:9090/api/v1/query?query=up{job="site_host",site="site-1"}'
+curl -sS 'http://127.0.0.1:9090/api/v1/query?query=node_memory_MemAvailable_bytes{site="site-1"}'
+```
+
+Grafana Explore examples:
+
+```promql
+100 - (avg by (device) (rate(node_cpu_seconds_total{mode="idle",site="site-1",device="site-1-nuc"}[5m])) * 100)
+node_memory_MemAvailable_bytes{site="site-1",device="site-1-nuc"} / node_memory_MemTotal_bytes{site="site-1",device="site-1-nuc"}
+```
+
+Add `site-1-nuc` as a **server** device in the NOC UI for inventory (LAN status still uses SNMP; host health is in Grafana).
+
 ---
 
 ## 4. Verify the collector works
@@ -144,6 +166,7 @@ docker logs -f noc_site_alloy
 curl -sS 'http://127.0.0.1:9090/api/v1/query?query=probe_success'
 curl -sS 'http://127.0.0.1:9090/api/v1/query?query=probe_success{site="site-1"}'
 curl -sS 'http://127.0.0.1:9090/api/v1/query?query=snmp_up{site="site-1"}'
+curl -sS 'http://127.0.0.1:9090/api/v1/query?query=up{job="site_host",site="site-1"}'
 ```
 
 ### In the NOC UI

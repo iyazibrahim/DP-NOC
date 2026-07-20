@@ -5,7 +5,8 @@ Lightweight collector for a NUC / mini-PC at **one** site.
 Responsibilities:
 1. ICMP probes (WAN health)
 2. SNMP polling for local gear (from `devices.json`)
-3. Push metrics to central Prometheus via `remote_write` over **HTTPS + Cloudflare Access Service Token**
+3. **Host metrics** on the NUC itself (CPU, memory, disk via `prometheus.exporter.unix`)
+4. Push metrics to central Prometheus via `remote_write` over **HTTPS + Cloudflare Access Service Token**
 
 Full runbook: [`docs/ALLOY_COLLECTOR.md`](../../../docs/ALLOY_COLLECTOR.md)
 
@@ -29,6 +30,23 @@ Requires: Docker, Docker Compose, python3.
 | `devices.json` | SNMP targets for this site |
 | `.env` | Secrets + `SITE_NAME` (gitignored) |
 | `snmp.yml` | SNMPv2c / if_mib module |
+
+## Host metrics (NUC CPU / RAM / disk)
+
+Alloy collects Linux host metrics with `prometheus.exporter.unix`. Docker must mount the host:
+
+- `/proc` → `/host/proc`
+- `/sys` → `/host/sys`
+- `/` → `/rootfs`
+
+Set `HOST_DEVICE_ID` (default `{SITE_NAME}-nuc`, e.g. `site-1-nuc`) so series are labeled for Grafana:
+
+```promql
+node_cpu_seconds_total{site="site-1", device="site-1-nuc"}
+node_memory_MemAvailable_bytes{site="site-1", device="site-1-nuc"}
+```
+
+Add the same id in NOC UI (Sites → Add device, type `server`) for inventory.
 
 ## Outbound connectivity
 

@@ -6,10 +6,9 @@ services:
     image: grafana/alloy:v1.5.1
     container_name: noc_site_alloy
     restart: unless-stopped
-    # ICMP needs raw sockets
+    pid: host
     cap_add:
       - NET_RAW
-    # Host network so ICMP/SNMP reach LAN devices easily on a NUC
     network_mode: host
     env_file:
       - .env
@@ -17,6 +16,10 @@ services:
       - ./config.alloy:/etc/alloy/config.alloy:ro
       - ./blackbox.yml:/etc/alloy/blackbox.yml:ro
       - ./snmp.yml:/etc/alloy/snmp.yml:ro
+      # Host metrics (prometheus.exporter.unix)
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
     working_dir: /etc/alloy
     command:
       - run

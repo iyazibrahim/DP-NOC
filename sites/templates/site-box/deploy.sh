@@ -149,6 +149,7 @@ CENTRAL_REMOTE_WRITE_URL=$RW_URL
 CF_ACCESS_CLIENT_ID=$CF_ID
 CF_ACCESS_CLIENT_SECRET=$CF_SECRET
 SITE_NAME=$SITE_ID
+HOST_DEVICE_ID=${SITE_ID}-nuc
 PING_TARGET_1=$PING1
 PING_TARGET_2=$PING2
 EOF
@@ -169,6 +170,7 @@ echo
 echo "Next:"
 echo "  1) Ensure metrics. tunnel → http://127.0.0.1:9090 on the VPS + Access token works (curl 200)."
 echo "  2) Mirror these devices in NOC UI (Sites → $SITE_NAME_LABEL) if not already there."
+echo "     Add host as device id ${SITE_ID}-nuc (type server) for inventory."
 echo "  3) Logs: docker logs -f noc_site_alloy"
 echo
 echo "Dokploy: create an app from this folder's docker-compose.yml after .env exists."

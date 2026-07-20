@@ -20,6 +20,7 @@ Multisite NOC for WAN connectivity, mixed-vendor SNMP, and website checks — cu
 - [x] Penang seed sites (empty devices) + NUC `deploy.sh` / Compose / generate-config
 - [x] Sites JSON persistence + API/UI device CRUD
 - [x] Fix Alloy blackbox ICMP via `blackbox.yml` + `config_file` (no fragile inline preferred_ip_protocol)
+- [x] NUC host metrics via `prometheus.exporter.unix` + host proc/sys/rootfs mounts
 
 ## Local Validation
 1. `docker compose up -d --build`
