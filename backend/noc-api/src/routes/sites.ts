@@ -6,8 +6,14 @@ import { computeSiteStatus, computeAllSitesStatus } from "../services/status";
 
 export const sitesRouter = express.Router();
 
-sitesRouter.get("/", requireJwt(["operator"]), async (req: Request, res: Response) => {
-  return res.json({ sites: siteList.map((s) => ({ ...s, lan: s.lan ?? {} })) });
+sitesRouter.get("/", requireJwt(["operator", "wallboard"]), async (_req: Request, res: Response) => {
+  return res.json({ sites: siteList });
+});
+
+// Register before /:id routes
+sitesRouter.get("/status/all", requireJwt(["operator", "wallboard"]), async (_req: Request, res: Response) => {
+  const statuses = await computeAllSitesStatus();
+  return res.json({ statuses });
 });
 
 sitesRouter.get("/:id/status", requireJwt(["operator", "wallboard"]), async (req: Request, res: Response) => {
@@ -20,8 +26,11 @@ sitesRouter.get("/:id/status", requireJwt(["operator", "wallboard"]), async (req
   return res.json({ status });
 });
 
-sitesRouter.get("/status/all", requireJwt(["operator", "wallboard"]), async (_req: Request, res: Response) => {
-  const statuses = await computeAllSitesStatus();
-  return res.json({ statuses });
+sitesRouter.get("/:id", requireJwt(["operator", "wallboard"]), async (req: Request, res: Response) => {
+  const site = getSiteById(req.params.id);
+  if (!site) {
+    return res.status(404).json({ error: "Site not found" });
+  }
+  return res.json({ site });
 });
 

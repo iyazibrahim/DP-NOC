@@ -12,11 +12,16 @@ export type SiteStatus = {
   wan: DomainStatus;
   websites: DomainStatus;
   lan: DomainStatus;
-  alerts: {
-    firing: number;
-    resolved: number;
-  };
+  alerts: { firing: number; resolved: number };
   overall: DomainState;
+};
+
+export type SiteDevice = {
+  id: string;
+  name: string;
+  type: string;
+  snmpIp: string;
+  vendor: string;
 };
 
 export type Site = {
@@ -26,7 +31,7 @@ export type Site = {
   lng: number;
   websiteTargets: Array<{ name: string; url: string }>;
   wan: { dnsTarget: string; vpsTarget: string };
-  lan?: { snmpTargetIp?: string };
+  devices: SiteDevice[];
 };
 
 export type ActiveAlert = {
@@ -37,3 +42,32 @@ export type ActiveAlert = {
   endsAt?: string;
 };
 
+export type WidgetType =
+  | "site_status_grid"
+  | "alerts_table"
+  | "top_devices"
+  | "mini_map"
+  | "website_summary"
+  | "site_card"
+  | "grafana_panel";
+
+export type DashboardWidget = {
+  i: string;
+  type: WidgetType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  config?: Record<string, string>;
+};
+
+export type DashboardLayout = {
+  version: 1;
+  widgets: DashboardWidget[];
+};
+
+export type DeviceRow = SiteDevice & {
+  siteId: string;
+  siteName: string;
+  alertCount?: number;
+};

@@ -1,7 +1,13 @@
 // Alloy config for a site box:
-// - ICMP probes (WAN/local health)
-// - Optional SNMP interface polling (LAN gear)
+// - ICMP probes (WAN health)
+// - Multiple SNMP devices (mixed vendors)
 // - Push metrics to central Prometheus via remote_write
+//
+// Env:
+//   CENTRAL_REMOTE_WRITE_URL, SITE_NAME
+//   PING_TARGET_1, PING_TARGET_2
+//   SNMP_DEVICES = "deviceId|ip|vendor,deviceId|ip|vendor"
+//   Example: "fw1|192.168.10.1|generic,sw1|192.168.10.2|cisco"
 
 prometheus.remote_write "central" {
   endpoint {
@@ -9,7 +15,6 @@ prometheus.remote_write "central" {
   }
 }
 
-// ICMP probing without running a separate blackbox-exporter process.
 prometheus.exporter.blackbox "icmp_probe" {
   config = "{ modules: { icmp: { prober: icmp, timeout: 5s, preferred_ip_protocol: \"ip4\" } } }"
 
@@ -29,26 +34,53 @@ prometheus.exporter.blackbox "icmp_probe" {
 }
 
 prometheus.scrape "icmp_scrape" {
-  targets     = prometheus.exporter.blackbox.icmp_probe.targets
-  forward_to  = [prometheus.remote_write.central.receiver]
-  job_name    = "site_icmp_probe"
+  targets    = prometheus.exporter.blackbox.icmp_probe.targets
+  forward_to = [prometheus.remote_write.central.receiver]
+  job_name   = "site_icmp_probe"
 }
 
-// Optional SNMP polling. If SNMP_TARGET_1_IP is not set, you can comment out this block.
-prometheus.exporter.snmp "snmp_ifaces" {
+// --- SNMP device 1 (required if SNMP_DEVICE_1_* set) ---
+prometheus.exporter.snmp "snmp_device_1" {
   config_file = "snmp.yml"
 
-  target "lan_device_1" {
-    address = sys.env("SNMP_TARGET_1_IP")
+  target "device_1" {
+    address = sys.env("SNMP_DEVICE_1_IP")
     module  = "if_mib"
     auth    = "public_v2"
-    labels  = { site = sys.env("SITE_NAME") }
+    labels  = {
+      site   = sys.env("SITE_NAME"),
+      device = sys.env("SNMP_DEVICE_1_ID"),
+      vendor = sys.env("SNMP_DEVICE_1_VENDOR"),
+    }
   }
 }
 
-prometheus.scrape "snmp_scrape" {
-  targets    = prometheus.exporter.snmp.snmp_ifaces.targets
+prometheus.scrape "snmp_scrape_1" {
+  targets    = prometheus.exporter.snmp.snmp_device_1.targets
   forward_to = [prometheus.remote_write.central.receiver]
   job_name   = "site_snmp_if_mib"
 }
 
+// --- SNMP device 2 (optional: comment out if unused) ---
+prometheus.exporter.snmp "snmp_device_2" {
+  config_file = "snmp.yml"
+
+  target "device_2" {
+    address = sys.env("SNMP_DEVICE_2_IP")
+    module  = "if_mib"
+    auth    = "public_v2"
+    labels  = {
+      site   = sys.env("SITE_NAME"),
+      device = sys.env("SNMP_DEVICE_2_ID"),
+      vendor = sys.env("SNMP_DEVICE_2_VENDOR"),
+    }
+  }
+}
+
+prometheus.scrape "snmp_scrape_2" {
+  targets    = prometheus.exporter.snmp.snmp_device_2.targets
+  forward_to = [prometheus.remote_write.central.receiver]
+  job_name   = "site_snmp_if_mib"
+}
+
+// Add snmp_device_3+ by copying the device_2 blocks and env vars.

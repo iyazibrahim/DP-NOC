@@ -1,16 +1,14 @@
 import type { DomainState } from "../types";
 
-export function StatusPill({ state }: { state: DomainState }) {
+export function StatusPill({ state }: { state: DomainState | string }) {
+  const s = String(state);
   const cls =
-    state === "healthy"
+    s === "healthy"
       ? "pill pillHealthy"
-      : state === "warning"
+      : s === "warning"
         ? "pill pillWarning"
-        : state === "critical"
+        : s === "critical"
           ? "pill pillCritical"
           : "pill pillUnknown";
-
-  const label = state === "healthy" ? "GREEN" : state === "warning" ? "AMBER" : state === "critical" ? "RED" : "GRAY";
-  return <span className={cls}>{label}</span>;
+  return <span className={cls}>{s.toUpperCase()}</span>;
 }
-

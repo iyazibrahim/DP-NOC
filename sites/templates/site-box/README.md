@@ -15,15 +15,18 @@ ICMP probing requires raw socket access. On Linux you typically need:
 - grant `cap_net_raw` to the Alloy binary/container, or run with appropriate capabilities
 
 ## Environment variables
-Edit the `config.alloy` template by replacing env vars or exporting them before Alloy starts.
+Export these before starting Alloy (see `sites/site-*/env.example`):
 
-- `CENTRAL_REMOTE_WRITE_URL`: e.g. `http://<VPS_IP>:9090/api/v1/write`
-- `SITE_NAME`: used as a label in metrics
-- `PING_TARGET_1`: typically a DNS server (e.g. `1.1.1.1`)
-- `PING_TARGET_2`: typically the central VPS public IP (or a reliable upstream)
-- `SNMP_TARGET_1_IP`: optional, e.g. `192.168.10.1`
+- `CENTRAL_REMOTE_WRITE_URL`: e.g. `http://<VPS_IP>:9090/api/v1/write` (prefer HTTPS via Dokploy in production)
+- `SITE_NAME`: site id label (must match NOC seed registry)
+- `PING_TARGET_1` / `PING_TARGET_2`: WAN ICMP targets
+- Per device (repeat `_2`, `_3`, …):
+  - `SNMP_DEVICE_N_ID`, `SNMP_DEVICE_N_IP`, `SNMP_DEVICE_N_VENDOR`
+
+Labels pushed with SNMP metrics: `site`, `device`, `vendor`.
 
 ## SNMP notes
-- Default SNMP auth in this template: SNMPv2c community `public`.
-- You must update `snmp.yml` if your devices differ.
+- Default auth: SNMPv2c community `public` (`public_v2` in `snmp.yml`).
+- Cross-vendor module: minimal `if_mib` (interface status/traffic).
+- Comment out unused `snmp_device_N` blocks in `config.alloy` if a site has fewer devices.
 

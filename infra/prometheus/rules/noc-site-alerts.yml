@@ -28,6 +28,7 @@ groups:
         labels:
           severity: warning
           site: "{{ $labels.site }}"
+          device: "{{ $labels.device }}"
         annotations:
-          summary: "SNMP polling failing (site={{ $labels.site }})"
+          summary: "SNMP polling failing (site={{ $labels.site }}, device={{ $labels.device }})"
 

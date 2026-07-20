@@ -1,17 +1,2 @@
-FROM node:20-alpine
-
-WORKDIR /app
-
-COPY package.json package-lock.json* ./
-RUN npm ci || npm install
-
-COPY tsconfig.json ./
-COPY src ./src
-
-RUN npm run build
-
-ENV NODE_ENV=production
-
-EXPOSE 8080
-CMD ["npm", "run", "start"]
-
+# Deprecated — use the repo-root Dockerfile (multi-stage noc-app build).
+# See ../../Dockerfile and docker-compose.yml service `noc-app`.

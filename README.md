@@ -1,147 +1,80 @@
 # Multisite NOC System
 
-A lightweight Network Operations Center for monitoring connectivity, network devices, and public websites across multiple sites.
+Lightweight NOC for multisite WAN health, mixed-vendor SNMP devices, and public website probes.
 
-The system uses small Grafana Alloy agents at supported sites, a central Prometheus stack on a VPS, Grafana for detailed investigation, and a custom React wallboard for at-a-glance operations.
+- **Site boxes:** Grafana Alloy pushes ICMP + SNMP metrics to Prometheus (`remote_write`)
+- **Central stack:** Prometheus, Alertmanager, Blackbox, Grafana, unified **noc-app** (API + React UI)
+- **Deploy:** Dokploy reverse proxy (no Traefik)
 
 ## Architecture
 
 ```text
-Remote site boxes
-  ├─ ICMP probes for WAN health
-  ├─ SNMP polling for LAN equipment
-  └─ Prometheus remote_write
-             │
-             ▼
-Central VPS
-  ├─ Prometheus
-  ├─ Blackbox Exporter
-  ├─ Alertmanager
-  ├─ Grafana
-  ├─ Node/Express NOC API
-  ├─ React wallboard
-  └─ Traefik
+Site Alloy (SNMP/ICMP) --remote_write--> Prometheus
+                                         ├─ Alertmanager
+                                         ├─ Grafana (charts)
+                                         └─ noc-app (Express API + React UI)
+Dokploy --> noc.example.com  (noc-app)
+Dokploy --> grafana.example.com  (optional)
 ```
 
-Sites without an agent can still receive public website monitoring from the central VPS. Internal LAN and SNMP visibility requires a site box or a future VPN connection.
-
-## Repository structure
-
-```text
-backend/noc-api/           JWT-protected status and alert API
-frontend/wallboard/        React and TypeScript NOC wallboard
-infra/                     Prometheus, Grafana, Alertmanager, Blackbox configs
-sites/                     Site templates and five example site configurations
-docker-compose.yml         Central VPS services
-workflow.md                Project status and operational notes
-```
-
-## Requirements
-
-- Docker Engine with Docker Compose
-- Node.js 20 or newer for running the wallboard outside Docker
-- A Linux site box for each location requiring local ICMP or SNMP monitoring
-
-## Start the central services
+## Quick start (local)
 
 ```powershell
 docker compose up -d --build
 ```
 
-Default local endpoints:
+Open:
 
-- Prometheus: `http://localhost:9090`
-- Alertmanager: `http://localhost:9093`
-- Grafana: `http://localhost:3000`
-- NOC API health: `http://localhost:8080/health`
+- NOC app: `http://localhost:8080` (login `admin` / `admin`)
+- Grafana: `http://localhost:3000` (admin / admin)
 
-Development credentials currently configured in Compose:
+Prometheus / Alertmanager / Blackbox are bound to `127.0.0.1` only.
 
-- NOC API: `admin` / `admin`
-- Grafana: `admin` / `admin`
+## Dokploy
 
-These credentials and the JWT secret must be changed before deployment.
+1. Deploy this Compose stack (or equivalent) on your VPS.
+2. Point Dokploy domains:
+   - `noc.example.com` → container `noc_app` port `8080`
+   - `grafana.example.com` → container `noc_grafana` port `3000` (optional)
+3. Do **not** publish Prometheus publicly. Prefer authenticating remote_write later (HTTPS + token).
+4. Set env on `noc-app`:
+   - `GRAFANA_PUBLIC_URL=https://grafana.example.com`
+   - Strong `JWT_SECRET`, `OPERATOR_PASSWORD`
 
-## Start the wallboard
+## Local UI development
 
 ```powershell
+# Terminal 1 — API
+cd backend\noc-api
+npm install
+npm run dev
+
+# Terminal 2 — Vite (proxies /api → :8080)
 cd frontend\wallboard
 npm install
-$env:VITE_API_BASE_URL = "http://localhost:8080"
-$env:VITE_GRAFANA_DASHBOARD_URL = "http://localhost:3000"
 npm run dev
 ```
 
-Open the URL printed by Vite and log in with the NOC API credentials.
+## NOC UI
 
-Do not place production passwords in `VITE_*` variables. Vite embeds these values into browser assets. Use the interactive login until a secure kiosk-token flow is implemented.
+Sidebar:
 
-## Configure the five sites
+| Page | Purpose |
+|---|---|
+| Dashboard | Drag-and-drop widgets (`react-grid-layout`) + Grafana panel embeds |
+| Maps | Leaflet map + top devices by alerts |
+| Sites | Site list and detail (WAN / LAN / websites / devices) |
+| Devices | Inventory + alert ranking |
+| Alerts | Alertmanager feed |
+| Websites | Blackbox probe status |
+| Settings | Grafana URL display + layout reset |
 
-The example registry is stored at:
+## Site agents
 
-```text
-backend/noc-api/data/seed-sites.json
-```
+See [`sites/templates/site-box/README.md`](sites/templates/site-box/README.md) and `sites/site-*/env.example`.
 
-Replace the placeholder site names, coordinates, public addresses, SNMP targets, and website URLs.
+Labels: `site`, `device`, `vendor` on SNMP metrics.
 
-Central website probes are configured separately in:
+## Security
 
-```text
-infra/prometheus/prometheus.yml
-```
-
-The site IDs and website URLs must remain aligned between these two files.
-
-For a site box:
-
-1. Copy `sites/templates/site-box/config.alloy`.
-2. Copy `sites/templates/site-box/snmp.yml` when SNMP is required.
-3. Use the corresponding `sites/site-*/env.example` as a template.
-4. Set a real central remote-write URL and target addresses.
-5. Grant Alloy the Linux raw-socket capability required for ICMP probes.
-
-## Alerts
-
-Prometheus alert rules are located at:
-
-```text
-infra/prometheus/rules/noc-site-alerts.yml
-```
-
-Configure real Telegram and SMTP values in:
-
-```text
-infra/alertmanager/alertmanager.yml
-```
-
-The checked-in values are placeholders and must not be used in production.
-
-## Reverse proxy
-
-Traefik defines these development host rules:
-
-- `grafana.noc.local` routes to Grafana.
-- `api.noc.local` routes to the NOC API.
-
-Add both names to the local hosts file if you want to use those routes. Direct service ports remain available during development.
-
-## Production security requirements
-
-The current repository is a development scaffold. Before exposing it publicly:
-
-- Put remote write behind HTTPS and authentication.
-- Do not expose Prometheus, Alertmanager, or Blackbox Exporter directly.
-- Replace all default credentials and JWT secrets.
-- Store notification credentials outside Git.
-- Add TLS to Traefik.
-- Restrict API CORS origins.
-- Create a limited wallboard or kiosk identity.
-- Set real site coordinates so map markers do not overlap.
-- Validate retention, backups, and recovery procedures.
-
-## Development files
-
-The root `.gitignore` excludes dependencies, build output, environment secrets, editor metadata, caches, logs, test reports, temporary files, and local Docker data. Example environment files remain trackable.
-
+Change default credentials before production. Do not expose Prometheus write without TLS/auth.
