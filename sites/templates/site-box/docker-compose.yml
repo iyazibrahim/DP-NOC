@@ -16,9 +16,7 @@ services:
       - ./config.alloy:/etc/alloy/config.alloy:ro
       - ./blackbox.yml:/etc/alloy/blackbox.yml:ro
       - ./snmp.yml:/etc/alloy/snmp.yml:ro
-      # Host metrics (prometheus.exporter.unix)
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
+      # Host metrics — REQUIRED for CPU/RAM/disk (one mount is enough)
       - /:/rootfs:ro
     working_dir: /etc/alloy
     command:

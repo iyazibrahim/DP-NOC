@@ -33,11 +33,15 @@ Requires: Docker, Docker Compose, python3.
 
 ## Host metrics (NUC CPU / RAM / disk)
 
-Alloy collects Linux host metrics with `prometheus.exporter.unix`. Docker must mount the host:
+Alloy collects Linux host metrics with `prometheus.exporter.unix`. **You must bind-mount the NUC root filesystem** into the container:
 
-- `/proc` → `/host/proc`
-- `/sys` → `/host/sys`
-- `/` → `/rootfs`
+| Host path | Container path | Mode |
+|---|---|---|
+| `/` | `/rootfs` | read-only |
+
+In Dokploy: add a **volume** on the alloy service: ` /:/rootfs:ro `
+
+Without this mount you will see: `stat /rootfs/proc: no such file or directory`.
 
 Set `HOST_DEVICE_ID` (default `{SITE_NAME}-nuc`, e.g. `site-1-nuc`) so series are labeled for Grafana:
 

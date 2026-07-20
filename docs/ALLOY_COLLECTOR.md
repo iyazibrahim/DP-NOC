@@ -131,7 +131,9 @@ sudo setcap cap_net_raw+ep "$(command -v alloy)"
 
 Site-box always scrapes the **NUC itself** via `prometheus.exporter.unix` (labels: `site`, `device=HOST_DEVICE_ID`, `role=site-box`).
 
-Docker Compose must mount host `/proc`, `/sys`, and `/` — see `sites/templates/site-box/docker-compose.yml`.
+Docker Compose must mount host `/` at `/rootfs` (read-only) — see `sites/templates/site-box/docker-compose.yml`.
+
+**Dokploy:** add volume ` /:/rootfs:ro ` on the alloy service, then redeploy.
 
 Verify on the VPS:
 
@@ -185,6 +187,7 @@ Open **Sites** → site should leave WAN `unknown` once `probe_success` series e
 | Alloy crash: `preferred_ip_protocol not found` | Old inline blackbox YAML — use `config_file = "blackbox.yml"` (site-box mounts `blackbox.yml`). Redeploy with updated files; Dokploy must not keep a stale `config.alloy`. |
 | `probe_success` missing | ICMP / `NET_RAW` / wrong `PING_TARGET_*` |
 | `snmp_up` missing | Community, UDP 161, empty `devices.json` |
+| `stat /rootfs/proc: no such file` | Missing host volume `/:/rootfs:ro` on alloy (Dokploy) |
 | Series under wrong site | `SITE_NAME` ≠ seed registry id |
 | Writing to noc. domain | Wrong URL — use `metrics.` + `/api/v1/write` |
 

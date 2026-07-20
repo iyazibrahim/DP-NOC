@@ -8,7 +8,7 @@
 //   SITE_NAME, PING_TARGET_1, PING_TARGET_2, HOST_DEVICE_ID
 //
 // Companion files (must be mounted): blackbox.yml, snmp.yml
-// Host mounts: /host/proc, /host/sys, /rootfs (see docker-compose.yml)
+// Host mount required: host / → /rootfs (see docker-compose.yml)
 
 prometheus.remote_write "central" {
   endpoint {
@@ -47,8 +47,9 @@ prometheus.scrape "icmp_scrape" {
 
 // NUC / site-box host metrics (CPU, memory, disk, network)
 prometheus.exporter.unix "nuc_host" {
-  procfs_path = "/host/proc"
-  sysfs_path  = "/host/sys"
+  // Single bind mount: host / → /rootfs (Dokploy: add volume /:/rootfs:ro)
+  procfs_path = "/rootfs/proc"
+  sysfs_path  = "/rootfs/sys"
   rootfs_path = "/rootfs"
 
   disable_collectors = ["ipvs", "btrfs", "infiniband", "xfs", "zfs"]

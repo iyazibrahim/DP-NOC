@@ -53,8 +53,8 @@ prometheus.scrape "icmp_scrape" {
 }
 
 prometheus.exporter.unix "nuc_host" {
-  procfs_path = "/host/proc"
-  sysfs_path  = "/host/sys"
+  procfs_path = "/rootfs/proc"
+  sysfs_path  = "/rootfs/sys"
   rootfs_path = "/rootfs"
 
   disable_collectors = ["ipvs", "btrfs", "infiniband", "xfs", "zfs"]
