@@ -49,6 +49,44 @@ export async function getSite(token: string, id: string) {
   });
 }
 
+export async function addSiteDevice(
+  token: string,
+  siteId: string,
+  device: {
+    id: string;
+    name: string;
+    type: string;
+    snmpIp: string;
+    vendor: string;
+  }
+) {
+  return fetchJson<{ site: Site }>(`/api/sites/${siteId}/devices`, {
+    method: "POST",
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify(device)
+  });
+}
+
+export async function updateSiteDevice(
+  token: string,
+  siteId: string,
+  deviceId: string,
+  patch: Partial<{ name: string; type: string; snmpIp: string; vendor: string }>
+) {
+  return fetchJson<{ site: Site }>(`/api/sites/${siteId}/devices/${deviceId}`, {
+    method: "PATCH",
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify(patch)
+  });
+}
+
+export async function deleteSiteDevice(token: string, siteId: string, deviceId: string) {
+  return fetchJson<{ site: Site }>(`/api/sites/${siteId}/devices/${deviceId}`, {
+    method: "DELETE",
+    headers: authHeaders(token)
+  });
+}
+
 export async function getAllSiteStatuses(token: string) {
   return fetchJson<{ statuses: SiteStatus[] }>("/api/sites/status/all", {
     headers: authHeaders(token)

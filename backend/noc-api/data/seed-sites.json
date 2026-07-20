@@ -1,133 +1,62 @@
 [
   {
     "id": "site-1",
-    "name": "KL Gateway",
-    "lat": 3.139,
-    "lng": 101.6869,
+    "name": "Digital Penang Office",
+    "lat": 5.4192,
+    "lng": 100.3298,
     "wan": {
       "dnsTarget": "1.1.1.1",
-      "vpsTarget": "203.0.113.10"
+      "vpsTarget": "139.99.88.174"
     },
-    "devices": [
-      {
-        "id": "site-1-fw",
-        "name": "Edge Firewall",
-        "type": "firewall",
-        "snmpIp": "192.168.10.1",
-        "vendor": "generic"
-      },
-      {
-        "id": "site-1-sw",
-        "name": "Core Switch",
-        "type": "switch",
-        "snmpIp": "192.168.10.2",
-        "vendor": "cisco"
-      }
-    ],
-    "websiteTargets": [
-      { "name": "Primary", "url": "https://example.com" }
-    ]
+    "devices": [],
+    "websiteTargets": []
   },
   {
     "id": "site-2",
-    "name": "Penang Hub",
-    "lat": 5.4164,
-    "lng": 100.3327,
+    "name": "Digital Library 1",
+    "lat": 5.4145,
+    "lng": 100.3291,
     "wan": {
       "dnsTarget": "1.1.1.1",
-      "vpsTarget": "203.0.113.10"
+      "vpsTarget": "139.99.88.174"
     },
-    "devices": [
-      {
-        "id": "site-2-rt",
-        "name": "Site Router",
-        "type": "router",
-        "snmpIp": "192.168.20.1",
-        "vendor": "mikrotik"
-      },
-      {
-        "id": "site-2-ap",
-        "name": "Lobby AP",
-        "type": "ap",
-        "snmpIp": "192.168.20.10",
-        "vendor": "ubiquiti"
-      }
-    ],
-    "websiteTargets": [
-      { "name": "Primary", "url": "https://example.org" }
-    ]
+    "devices": [],
+    "websiteTargets": []
   },
   {
     "id": "site-3",
-    "name": "Johor Edge",
-    "lat": 1.4927,
-    "lng": 103.7414,
+    "name": "Digital Library 2",
+    "lat": 5.4012,
+    "lng": 100.3187,
     "wan": {
       "dnsTarget": "1.1.1.1",
-      "vpsTarget": "203.0.113.10"
+      "vpsTarget": "139.99.88.174"
     },
-    "devices": [
-      {
-        "id": "site-3-sw",
-        "name": "Access Switch",
-        "type": "switch",
-        "snmpIp": "192.168.30.1",
-        "vendor": "generic"
-      }
-    ],
-    "websiteTargets": [
-      { "name": "Primary", "url": "https://example.net" }
-    ]
+    "devices": [],
+    "websiteTargets": []
   },
   {
     "id": "site-4",
-    "name": "Ipoh Branch",
-    "lat": 4.5975,
-    "lng": 101.0901,
+    "name": "Butterworth Digital Library",
+    "lat": 5.3991,
+    "lng": 100.3638,
     "wan": {
       "dnsTarget": "1.1.1.1",
-      "vpsTarget": "203.0.113.10"
+      "vpsTarget": "139.99.88.174"
     },
-    "devices": [
-      {
-        "id": "site-4-fw",
-        "name": "Branch Firewall",
-        "type": "firewall",
-        "snmpIp": "192.168.40.1",
-        "vendor": "generic"
-      },
-      {
-        "id": "site-4-sw",
-        "name": "Floor Switch",
-        "type": "switch",
-        "snmpIp": "192.168.40.2",
-        "vendor": "cisco"
-      }
-    ],
-    "websiteTargets": [
-      { "name": "Primary", "url": "https://www.iana.org/domains/reserved" }
-    ]
+    "devices": [],
+    "websiteTargets": []
   },
   {
     "id": "site-5",
-    "name": "Kota Kinabalu",
-    "lat": 5.9804,
-    "lng": 116.0735,
+    "name": "Batu Maung Digital Library",
+    "lat": 5.2835,
+    "lng": 100.2872,
     "wan": {
       "dnsTarget": "1.1.1.1",
-      "vpsTarget": "203.0.113.10"
+      "vpsTarget": "139.99.88.174"
     },
-    "devices": [
-      {
-        "id": "site-5-rt",
-        "name": "WAN Router",
-        "type": "router",
-        "snmpIp": "192.168.50.1",
-        "vendor": "mikrotik"
-      }
-    ],
-    "websiteTargets": [
-      { "name": "Primary", "url": "https://www.cloudflare.com/" }
-    ]
+    "devices": [],
+    "websiteTargets": []
   }
 ]

@@ -1,32 +1,44 @@
 # Site box (Alloy) template
 
-This template is for a small always-on device at each site (Raspberry Pi / mini-PC).
+Lightweight collector for a NUC / mini-PC at **one** site.
 
 Responsibilities:
-1. Probe local & WAN health (ICMP ping)
-2. Optional: poll local network gear via SNMP
-3. Push metrics to the central VPS via Prometheus `remote_write` (HTTPS recommended, HTTP for local testing)
+1. ICMP probes (WAN health)
+2. SNMP polling for local gear (from `devices.json`)
+3. Push metrics to central Prometheus via `remote_write` over **HTTPS + Cloudflare Access Service Token**
 
-## Required outbound connectivity
-- TCP 443 (or your remote_write HTTP port) from site box to the central VPS
+Full runbook: [`docs/ALLOY_COLLECTOR.md`](../../../docs/ALLOY_COLLECTOR.md)
 
-## Required permissions for ICMP
-ICMP probing requires raw socket access. On Linux you typically need:
-- grant `cap_net_raw` to the Alloy binary/container, or run with appropriate capabilities
+## Quick deploy (NUC)
 
-## Environment variables
-Export these before starting Alloy (see `sites/site-*/env.example`):
+```bash
+chmod +x deploy.sh generate-config.sh
+./deploy.sh
+```
 
-- `CENTRAL_REMOTE_WRITE_URL`: e.g. `http://<VPS_IP>:9090/api/v1/write` (prefer HTTPS via Dokploy in production)
-- `SITE_NAME`: site id label (must match NOC seed registry)
-- `PING_TARGET_1` / `PING_TARGET_2`: WAN ICMP targets
-- Per device (repeat `_2`, `_3`, …):
-  - `SNMP_DEVICE_N_ID`, `SNMP_DEVICE_N_IP`, `SNMP_DEVICE_N_VENDOR`
+Requires: Docker, Docker Compose, python3.
 
-Labels pushed with SNMP metrics: `site`, `device`, `vendor`.
+## Files
 
-## SNMP notes
-- Default auth: SNMPv2c community `public` (`public_v2` in `snmp.yml`).
-- Cross-vendor module: minimal `if_mib` (interface status/traffic).
-- Comment out unused `snmp_device_N` blocks in `config.alloy` if a site has fewer devices.
+| File | Role |
+|---|---|
+| `deploy.sh` | Docker check + site/device wizard + `compose up` |
+| `generate-config.sh` | Build `config.alloy` from `devices.json` |
+| `docker-compose.yml` | Grafana Alloy (`host` network + `NET_RAW`) |
+| `devices.json` | SNMP targets for this site |
+| `.env` | Secrets + `SITE_NAME` (gitignored) |
+| `snmp.yml` | SNMPv2c / if_mib module |
 
+## Outbound connectivity
+
+- HTTPS **443** to `metrics.<your-domain>` (Cloudflare Tunnel)
+- No inbound ports required on the site
+
+## After UI device changes
+
+NOC UI device CRUD updates the central registry only. Re-sync the collector:
+
+1. Edit `devices.json` (or re-run `deploy.sh`)
+2. `./generate-config.sh && docker compose up -d --force-recreate`
+
+**Never commit real Access token secrets.**

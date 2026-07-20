@@ -9,12 +9,15 @@ Lightweight NOC for multisite WAN health, mixed-vendor SNMP devices, and public 
 ## Architecture
 
 ```text
-Site Alloy (SNMP/ICMP) --remote_write--> Prometheus
+Site Alloy (SNMP/ICMP)
+  --HTTPS + CF Access Service Token-->
+metrics.example.com → Tunnel → Prometheus :9090
                                          ├─ Alertmanager
                                          ├─ Grafana (charts)
                                          └─ noc-app (Express API + React UI)
-Dokploy --> noc.example.com  (noc-app)
-Dokploy --> grafana.example.com  (optional)
+Dokploy/Tunnel --> noc.example.com      (noc-app :8080)
+Dokploy/Tunnel --> metrics.example.com  (Prometheus :9090 + Access)
+Dokploy/Tunnel --> grafana.example.com  (optional)
 ```
 
 ## Quick start (local)
@@ -30,16 +33,30 @@ Open:
 
 Prometheus / Alertmanager / Blackbox are bound to `127.0.0.1` only.
 
-## Dokploy
+## Dokploy + Cloudflare Tunnel
 
-1. Deploy this Compose stack (or equivalent) on your VPS.
-2. Point Dokploy domains:
-   - `noc.example.com` → container `noc_app` port `8080`
-   - `grafana.example.com` → container `noc_grafana` port `3000` (optional)
-3. Do **not** publish Prometheus publicly. Prefer authenticating remote_write later (HTTPS + token).
-4. Set env on `noc-app`:
-   - `GRAFANA_PUBLIC_URL=https://grafana.example.com`
-   - Strong `JWT_SECRET`, `OPERATOR_PASSWORD`
+See [`docs/DOKPLOY_CLOUDFLARE.md`](docs/DOKPLOY_CLOUDFLARE.md).
+
+Quick rules:
+
+- `noc.` → **noc-app** port **8080**
+- `metrics.` → **Prometheus** `127.0.0.1:9090` + **Access Service Token** (for Alloy)
+- Optional Grafana domain
+- Rebuild from **repo root** Dockerfile so UI is included (`/health` should show `"ui":true`)
+
+## Site Alloy collectors
+
+See [`docs/ALLOY_COLLECTOR.md`](docs/ALLOY_COLLECTOR.md).
+
+Summary:
+
+1. Cloudflare Tunnel: `metrics.` CNAME → tunnel → `http://127.0.0.1:9090` + Access Service Token
+2. On a NUC: `cd sites/templates/site-box && ./deploy.sh` (checks Docker, picks one site, adds devices)
+3. Or Dokploy on the NUC: deploy that folder’s `docker-compose.yml` after `.env` exists
+4. Verify: `probe_success{site="site-N"}` in Prometheus
+
+Seed sites: Digital Penang Office, Digital Library 1 & 2, Butterworth, Batu Maung (devices empty until you add them in UI / deploy wizard).
+
 
 ## Local UI development
 

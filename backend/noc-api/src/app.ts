@@ -18,16 +18,28 @@ function resolvePublicDir() {
   const candidates = [
     path.join(process.cwd(), "public"),
     path.join(__dirname, "../public"),
+    path.join(__dirname, "../../public"),
     path.join(process.cwd(), "../../frontend/wallboard/dist")
   ];
   for (const dir of candidates) {
-    if (fs.existsSync(dir)) return dir;
+    if (fs.existsSync(path.join(dir, "index.html")) || fs.existsSync(dir)) {
+      if (fs.existsSync(path.join(dir, "index.html"))) return dir;
+    }
   }
   return null;
 }
 
 export function createApp() {
   const app = express();
+  const publicDir = resolvePublicDir();
+  const hasUi = Boolean(publicDir && fs.existsSync(path.join(publicDir, "index.html")));
+
+  // eslint-disable-next-line no-console
+  console.log(
+    hasUi
+      ? `Serving UI from ${publicDir}`
+      : "WARNING: No UI build found (public/index.html missing). / will not serve the React app."
+  );
 
   app.use(
     helmet({
@@ -39,7 +51,13 @@ export function createApp() {
   app.use(express.json({ limit: "2mb" }));
 
   app.get("/health", (_req, res) => {
-    return res.json({ ok: true, service: "noc-app", port: env.PORT });
+    return res.json({
+      ok: true,
+      service: "noc-app",
+      port: env.PORT,
+      ui: hasUi,
+      publicDir: publicDir ?? null
+    });
   });
 
   app.get("/api/settings", (_req, res) => {
@@ -55,20 +73,38 @@ export function createApp() {
   app.use("/api/devices", devicesRouter);
   app.use("/api/websites", websitesRouter);
 
-  const publicDir = resolvePublicDir();
-  if (publicDir) {
-    app.use(express.static(publicDir));
-    app.get("*", (req, res, next) => {
-      if (req.path.startsWith("/api") || req.path === "/health") {
-        return next();
-      }
-      const index = path.join(publicDir, "index.html");
-      if (fs.existsSync(index)) {
-        return res.sendFile(index);
-      }
-      return next();
+  if (hasUi && publicDir) {
+    app.use(express.static(publicDir, { index: false }));
+
+    // SPA fallback for client-side routes (Express 4-safe)
+    app.get(["/", "/maps", "/sites", "/sites/*", "/devices", "/alerts", "/websites", "/settings"], (_req, res) => {
+      return res.sendFile(path.join(publicDir, "index.html"));
+    });
+
+    app.use((req, res, next) => {
+      if (req.method !== "GET" && req.method !== "HEAD") return next();
+      if (req.path.startsWith("/api") || req.path === "/health") return next();
+      if (path.extname(req.path)) return next();
+      return res.sendFile(path.join(publicDir!, "index.html"));
+    });
+  } else {
+    app.get("/", (_req, res) => {
+      return res.status(503).type("html").send(`<!doctype html>
+<html><body style="font-family:sans-serif;padding:2rem;background:#0b1215;color:#e5e7eb">
+  <h1>noc-app is running (API only)</h1>
+  <p>UI build is missing. Rebuild the image with the repo-root <code>Dockerfile</code> (multi-stage) so <code>public/index.html</code> is included.</p>
+  <p>Check <a href="/health" style="color:#f59e0b">/health</a> — <code>ui</code> should be <code>true</code>.</p>
+</body></html>`);
     });
   }
+
+  app.use((req, res) => {
+    res.status(404).json({
+      error: "Not found",
+      path: req.path,
+      hint: "If this is the public domain, confirm Dokploy/Cloudflare route to noc-app:8080. Try /health"
+    });
+  });
 
   return app;
 }

@@ -1,0 +1,23 @@
+# Alloy site collector for NUC / site box (one site at a time).
+# Configure via deploy.sh (writes .env + devices.json + config.alloy).
+
+services:
+  alloy:
+    image: grafana/alloy:v1.5.1
+    container_name: noc_site_alloy
+    restart: unless-stopped
+    # ICMP needs raw sockets
+    cap_add:
+      - NET_RAW
+    # Host network so ICMP/SNMP reach LAN devices easily on a NUC
+    network_mode: host
+    env_file:
+      - .env
+    volumes:
+      - ./config.alloy:/etc/alloy/config.alloy:ro
+      - ./snmp.yml:/etc/alloy/snmp.yml:ro
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=127.0.0.1:12345

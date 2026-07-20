@@ -1,8 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { getAllSiteStatuses, getSite, getSites } from "../api";
-import type { Site, SiteStatus } from "../types";
+import {
+  addSiteDevice,
+  deleteSiteDevice,
+  getAllSiteStatuses,
+  getSite,
+  getSites,
+  updateSiteDevice
+} from "../api";
+import type { Site, SiteDevice, SiteStatus } from "../types";
 import { StatusPill } from "../components/StatusPill";
 
 export function SitesPage() {
@@ -61,19 +68,100 @@ export function SitesPage() {
   );
 }
 
+const emptyForm = {
+  id: "",
+  name: "",
+  type: "switch",
+  snmpIp: "",
+  vendor: "generic"
+};
+
 export function SiteDetailPage() {
   const { id = "" } = useParams();
   const { token } = useAuth();
   const [site, setSite] = useState<Site | null>(null);
   const [status, setStatus] = useState<SiteStatus | null>(null);
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function reload() {
+    if (!token || !id) return;
+    const [s, st] = await Promise.all([getSite(token, id), getAllSiteStatuses(token)]);
+    setSite(s.site);
+    setStatus(st.statuses.find((x) => x.siteId === id) ?? null);
+  }
 
   useEffect(() => {
     if (!token || !id) return;
-    Promise.all([getSite(token, id), getAllSiteStatuses(token)]).then(([s, st]) => {
-      setSite(s.site);
-      setStatus(st.statuses.find((x) => x.siteId === id) ?? null);
-    });
+    reload().catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
   }, [token, id]);
+
+  function startEdit(d: SiteDevice) {
+    setEditingId(d.id);
+    setForm({
+      id: d.id,
+      name: d.name,
+      type: d.type,
+      snmpIp: d.snmpIp,
+      vendor: d.vendor
+    });
+    setError(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm(emptyForm);
+    setError(null);
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!token || !id) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (editingId) {
+        await updateSiteDevice(token, id, editingId, {
+          name: form.name,
+          type: form.type,
+          snmpIp: form.snmpIp,
+          vendor: form.vendor
+        });
+      } else {
+        await addSiteDevice(token, id, {
+          id: form.id,
+          name: form.name,
+          type: form.type,
+          snmpIp: form.snmpIp,
+          vendor: form.vendor
+        });
+      }
+      cancelEdit();
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDelete(deviceId: string) {
+    if (!token || !id) return;
+    if (!confirm(`Remove device ${deviceId}?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteSiteDevice(token, id, deviceId);
+      if (editingId === deviceId) cancelEdit();
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (!site) return <div className="page">Loading…</div>;
 
@@ -100,6 +188,12 @@ export function SiteDetailPage() {
         </div>
         <div className="tableCard">
           <div className="tableTitle">Devices</div>
+          <p className="muted">
+            Registry for the NOC UI. After changes, update the site Alloy{" "}
+            <code>devices.json</code> and re-run <code>generate-config.sh</code> /{" "}
+            <code>deploy.sh</code> on the NUC.
+          </p>
+          {error ? <div className="bannerError">{error}</div> : null}
           <table className="dataTable">
             <thead>
               <tr>
@@ -107,29 +201,105 @@ export function SiteDetailPage() {
                 <th>Type</th>
                 <th>IP</th>
                 <th>Vendor</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              {(site.devices ?? []).map((d) => (
-                <tr key={d.id}>
-                  <td>{d.name}</td>
-                  <td>{d.type}</td>
-                  <td>{d.snmpIp}</td>
-                  <td>{d.vendor}</td>
+              {(site.devices ?? []).length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="muted">
+                    No devices yet — add one below.
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                (site.devices ?? []).map((d) => (
+                  <tr key={d.id}>
+                    <td>
+                      {d.name}
+                      <div className="muted">{d.id}</div>
+                    </td>
+                    <td>{d.type}</td>
+                    <td>{d.snmpIp}</td>
+                    <td>{d.vendor}</td>
+                    <td>
+                      <button type="button" onClick={() => startEdit(d)} disabled={busy}>
+                        Edit
+                      </button>{" "}
+                      <button type="button" onClick={() => onDelete(d.id)} disabled={busy}>
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
+
+          <form className="deviceForm" onSubmit={onSubmit}>
+            <div className="tableTitle">{editingId ? `Edit ${editingId}` : "Add device"}</div>
+            {!editingId ? (
+              <>
+                <label className="label">ID</label>
+                <input
+                  value={form.id}
+                  onChange={(e) => setForm((f) => ({ ...f, id: e.target.value }))}
+                  placeholder={`${site.id}-sw1`}
+                  required
+                />
+              </>
+            ) : null}
+            <label className="label">Name</label>
+            <input
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              required
+            />
+            <label className="label">Type</label>
+            <input
+              value={form.type}
+              onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+              placeholder="switch / router / firewall / ap"
+              required
+            />
+            <label className="label">SNMP IP</label>
+            <input
+              value={form.snmpIp}
+              onChange={(e) => setForm((f) => ({ ...f, snmpIp: e.target.value }))}
+              placeholder="192.168.1.1"
+              required
+            />
+            <label className="label">Vendor</label>
+            <input
+              value={form.vendor}
+              onChange={(e) => setForm((f) => ({ ...f, vendor: e.target.value }))}
+              placeholder="generic / cisco / mikrotik / ubiquiti"
+              required
+            />
+            <div className="formActions">
+              <button className="primary" type="submit" disabled={busy}>
+                {editingId ? "Save" : "Add device"}
+              </button>
+              {editingId ? (
+                <button type="button" onClick={cancelEdit} disabled={busy}>
+                  Cancel
+                </button>
+              ) : null}
+            </div>
+          </form>
         </div>
         <div className="tableCard">
           <div className="tableTitle">Websites</div>
-          <ul className="alertUl">
-            {site.websiteTargets.map((w) => (
-              <li key={w.url}>
-                {w.name}: {w.url}
-              </li>
-            ))}
-          </ul>
+          {(site.websiteTargets ?? []).length === 0 ? (
+            <p className="muted">No website targets configured.</p>
+          ) : (
+            <ul className="alertUl">
+              {site.websiteTargets.map((w) => (
+                <li key={w.url}>
+                  {w.name}: {w.url}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
       <p>

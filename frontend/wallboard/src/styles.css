@@ -269,6 +269,18 @@ input {
   gap: 14px;
 }
 
+.deviceForm {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.formActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .dashboardHost {
   width: 100%;
   min-height: 600px;

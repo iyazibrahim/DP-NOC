@@ -3,9 +3,9 @@ import { env } from "./env";
 
 async function main() {
   const app = createApp();
-  app.listen(env.PORT, () => {
+  app.listen(env.PORT, "0.0.0.0", () => {
     // eslint-disable-next-line no-console
-    console.log(`noc-api listening on port ${env.PORT}`);
+    console.log(`noc-app listening on 0.0.0.0:${env.PORT}`);
   });
 }
 

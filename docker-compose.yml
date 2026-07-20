@@ -89,6 +89,7 @@ services:
       - GRAFANA_PUBLIC_URL=http://localhost:3001
     volumes:
       - noc_layouts:/app/data/layouts
+      - noc_sites:/app/data/runtime
     networks:
       - noc_net
 
@@ -96,6 +97,7 @@ volumes:
   prometheus_data:
   grafana_data:
   noc_layouts:
+  noc_sites:
 
 networks:
   noc_net:

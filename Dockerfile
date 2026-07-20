@@ -27,7 +27,7 @@ COPY --from=api-build /api/dist ./dist
 COPY --from=api-build /api/data ./data
 COPY --from=ui-build /ui/dist ./public
 
-RUN mkdir -p /app/data/layouts
+RUN mkdir -p /app/data/layouts /app/data/runtime
 
 EXPOSE 8080
 CMD ["node", "dist/index.js"]
