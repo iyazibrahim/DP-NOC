@@ -160,19 +160,21 @@ export function DeviceMetricChart({
       ) : points.length === 0 ? (
         <div className="muted">No data yet for {label}</div>
       ) : (
-        <ResponsiveContainer width="100%" height={160}>
-          <AreaChart data={points}>
-            <CartesianGrid stroke="rgba(148,163,184,0.12)" strokeDasharray="3 3" />
-            <XAxis dataKey="t" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis
-              tick={{ fill: "#94a3b8", fontSize: 10 }}
-              width={40}
-              tickFormatter={(v) => formatYAxis(v, unit)}
-            />
-            <Tooltip content={<ChartTooltip unit={unit} />} />
-            <Area type="monotone" dataKey="v" stroke="#f59e0b" fill="#f59e0b33" strokeWidth={2} />
-          </AreaChart>
-        </ResponsiveContainer>
+        <div className="chartFlexFill">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={points}>
+              <CartesianGrid stroke="rgba(148,163,184,0.12)" strokeDasharray="3 3" />
+              <XAxis dataKey="t" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" />
+              <YAxis
+                tick={{ fill: "#94a3b8", fontSize: 10 }}
+                width={40}
+                tickFormatter={(v) => formatYAxis(v, unit)}
+              />
+              <Tooltip content={<ChartTooltip unit={unit} />} />
+              <Area type="monotone" dataKey="v" stroke="#2dd4bf" fill="#2dd4bf33" strokeWidth={2} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
       )}
     </div>
   );
@@ -247,13 +249,15 @@ export function DeviceStatGauge({
           </div>
           {pieData ? (
             <div className="pieWrap">
-              <ResponsiveContainer width="100%" height={110}>
+              <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={pieData}
                     dataKey="value"
-                    innerRadius={28}
-                    outerRadius={44}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius="55%"
+                    outerRadius="80%"
                     startAngle={90}
                     endAngle={-270}
                     stroke="none"

@@ -201,10 +201,6 @@ a:hover {
   border-bottom: 1px solid rgba(148, 163, 184, 0.1);
 }
 
-.pieWrap {
-  margin-top: 4px;
-}
-
 @media (max-width: 900px) {
   .appShell {
     grid-template-columns: 1fr;
@@ -493,8 +489,8 @@ textarea {
 }
 
 .widgetConfig {
-  padding: 8px 10px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  padding: 0;
+  border-bottom: none;
   display: grid;
   gap: 6px;
 }
@@ -502,20 +498,6 @@ textarea {
 .widgetConfig select,
 .widgetConfig input {
   width: 100%;
-}
-
-.gaugeWidget {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  height: 100%;
-  justify-content: center;
-}
-
-.gaugeValue {
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: var(--accent);
 }
 
 .gaugeBar {
@@ -589,7 +571,19 @@ textarea {
 
 .dashboardHost {
   width: 100%;
-  min-height: 600px;
+  min-height: calc(100vh - 200px);
+  position: relative;
+}
+
+.dashboardHostEditing {
+  background-image:
+    linear-gradient(rgba(45, 212, 191, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(45, 212, 191, 0.04) 1px, transparent 1px);
+  background-size: 12px 36px, calc((100% - 0px) / 12) 12px;
+  background-position: 0 0;
+  border: 1px dashed rgba(45, 212, 191, 0.18);
+  border-radius: 14px;
+  padding-bottom: 48px;
 }
 
 .dashWidget {
@@ -599,6 +593,11 @@ textarea {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  height: 100%;
+}
+
+.dashWidgetConfigOpen {
+  overflow: auto;
 }
 
 .widgetChrome {
@@ -608,6 +607,8 @@ textarea {
   padding: 6px 10px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   background: rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+  z-index: 2;
 }
 
 .widgetDrag {
@@ -618,7 +619,7 @@ textarea {
 }
 
 .widgetTypeLabel {
-  font-family: "IBM Plex Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--muted);
   flex: 1;
@@ -629,21 +630,146 @@ textarea {
   line-height: 1;
 }
 
+.iconBtnActive {
+  background: var(--accent-soft);
+  border-color: rgba(45, 212, 191, 0.45);
+  color: var(--accent);
+}
+
 .widgetInner {
   padding: 10px 12px;
-  flex: 1;
-  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .widgetInner.flush {
   padding: 0;
-  display: flex;
-  flex-direction: column;
 }
 
 .widgetTitle {
   font-weight: 800;
   margin-bottom: 8px;
+}
+
+.widgetConfigPanel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.widgetConfigDone {
+  align-self: flex-start;
+  margin-top: auto;
+}
+
+.widgetConfig {
+  padding: 0;
+  border-bottom: none;
+  display: grid;
+  gap: 6px;
+}
+
+.widgetConfig select,
+.widgetConfig input {
+  width: 100%;
+}
+
+/* Resize handle above Leaflet / chart content */
+.react-grid-item > .react-resizable-handle {
+  z-index: 20;
+  opacity: 0.85;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  border-right-color: var(--accent) !important;
+  border-bottom-color: var(--accent) !important;
+}
+
+.nocMapRoot,
+.nocMapRoot .leaflet-container {
+  height: 100% !important;
+  width: 100%;
+  min-height: 0;
+}
+
+.chartFlexFill {
+  flex: 1 1 auto;
+  min-height: 80px;
+  width: 100%;
+}
+
+.pieWrap {
+  flex: 1 1 auto;
+  min-height: 64px;
+  width: 100%;
+}
+
+.metricChartWidget {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+
+.metricChartWidget .widgetTitle {
+  margin-bottom: 0;
+}
+
+.gaugeWidget {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+  justify-content: flex-start;
+}
+
+.gaugeWidget .widgetTitle {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.gaugeValue {
+  font-size: clamp(1.1rem, 2.5vw, 1.75rem);
+  font-weight: 600;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* Themed scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(45, 212, 191, 0.45) rgba(15, 23, 24, 0.8);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(15, 23, 24, 0.85);
+  border-radius: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(45, 212, 191, 0.4);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(45, 212, 191, 0.65);
+  background-clip: padding-box;
 }
 
 .statusGrid {
@@ -750,13 +876,6 @@ textarea {
 .fieldHint {
   margin: -4px 0 10px;
   font-size: 12px;
-}
-
-.metricChartWidget {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  height: 100%;
 }
 
 .metricChartHeader {

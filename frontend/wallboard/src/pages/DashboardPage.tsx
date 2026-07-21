@@ -37,6 +37,20 @@ function normalizeLayoutForSave(layout: DashboardLayout): DashboardLayout {
   };
 }
 
+function widgetLabel(type: DashboardWidget["type"]) {
+  return WIDGET_GROUPS.flatMap((g) => g.widgets).find((c) => c.type === type)?.label ?? type;
+}
+
+function widgetHasConfig(type: DashboardWidget["type"]) {
+  return (
+    type === "site_card" ||
+    type === "grafana_panel" ||
+    type === "device_metric_chart" ||
+    type === "device_stat_gauge" ||
+    type === "device_detail"
+  );
+}
+
 export function DashboardPage() {
   const { token } = useAuth();
   const [editing, setEditing] = useState(false);
@@ -51,6 +65,8 @@ export function DashboardPage() {
   const [width, setWidth] = useState(1200);
   const [error, setError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  /** Which widget shows the settings panel (edit mode). */
+  const [configOpenId, setConfigOpenId] = useState<string | null>(null);
   const presets = useMetricPresets();
 
   useEffect(() => {
@@ -72,14 +88,6 @@ export function DashboardPage() {
     async (includeLayout: boolean) => {
       if (!token) return;
       try {
-        const dataFetches = Promise.all([
-          getSites(token),
-          getAllSiteStatuses(token),
-          getRecentAlerts(token, 30),
-          getTopDevices(token),
-          getSettings()
-        ]);
-
         if (includeLayout) {
           const [layoutRes, sitesRes, stRes, alertsRes, topRes, settings] = await Promise.all([
             getDashboardLayout(token),
@@ -96,7 +104,13 @@ export function DashboardPage() {
           setDevices(topRes.devices);
           setGrafanaUrl(settings.grafanaPublicUrl);
         } else {
-          const [sitesRes, stRes, alertsRes, topRes, settings] = await dataFetches;
+          const [sitesRes, stRes, alertsRes, topRes, settings] = await Promise.all([
+            getSites(token),
+            getAllSiteStatuses(token),
+            getRecentAlerts(token, 30),
+            getTopDevices(token),
+            getSettings()
+          ]);
           if (!editingRef.current) {
             const layoutRes = await getDashboardLayout(token);
             setLayout(layoutRes.layout);
@@ -130,10 +144,16 @@ export function DashboardPage() {
         w: w.w,
         h: w.h,
         minW: 2,
-        minH: 2
+        minH: w.type === "mini_map" ? 3 : 2
       })),
     [layout]
   );
+
+  /** Extra empty rows so you can drag into the lower part of a large monitor. */
+  const gridMinRows = useMemo(() => {
+    const bottom = (layout?.widgets ?? []).reduce((m, w) => Math.max(m, w.y + w.h), 0);
+    return Math.max(bottom + 8, 22);
+  }, [layout]);
 
   const onLayoutChange = (next: Layout[]) => {
     if (!layout || !editing) return;
@@ -152,6 +172,7 @@ export function DashboardPage() {
     await saveDashboardLayout(token, normalized);
     setEditing(false);
     setDrawerOpen(false);
+    setConfigOpenId(null);
   };
 
   const addWidget = (type: DashboardWidget["type"]) => {
@@ -159,7 +180,8 @@ export function DashboardPage() {
     const meta = WIDGET_GROUPS.flatMap((g) => g.widgets).find((c) => c.type === type)!;
     const id = `${type}-${Date.now()}`;
     const firstSite = sites[0];
-    const firstDevice = firstSite?.devices?.[0];
+    const collectors = (firstSite?.devices ?? []).filter((d) => (d.kind ?? "network") === "server");
+    const firstDevice = collectors[0] ?? firstSite?.devices?.[0];
     let config: Record<string, string> | undefined;
     if (type === "grafana_panel") {
       config = { embedUrl: `${grafanaUrl.replace(/\/$/, "")}/` };
@@ -187,6 +209,7 @@ export function DashboardPage() {
     };
     setLayout({ ...layout, widgets: [...layout.widgets, widget] });
     setEditing(true);
+    if (widgetHasConfig(type)) setConfigOpenId(id);
   };
 
   const updateWidgetConfig = (widgetId: string, config: Record<string, string>) => {
@@ -200,17 +223,20 @@ export function DashboardPage() {
   const removeWidget = (id: string) => {
     if (!layout) return;
     setLayout({ ...layout, widgets: layout.widgets.filter((w) => w.i !== id) });
+    if (configOpenId === id) setConfigOpenId(null);
   };
 
   const doReset = async () => {
     if (!token) return;
     const r = await resetDashboardLayout(token);
     setLayout(r.layout);
+    setConfigOpenId(null);
   };
 
   const cancelEdit = async () => {
     setEditing(false);
     setDrawerOpen(false);
+    setConfigOpenId(null);
     await refreshLayout();
   };
 
@@ -219,13 +245,13 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="page">
+    <div className="page dashboardPage">
       <div className="pageHeader">
         <div>
           <h1>Dashboard</h1>
           <p className="pageSub">
-            Collector health, uplink, and charts — same metrics Grafana uses. Drag widgets in edit
-            mode to customize.
+            Collector health, uplink, and charts — same metrics Grafana uses. In edit mode, drag
+            anywhere on the grid (including empty space below).
           </p>
         </div>
         <div className="pageActions">
@@ -256,60 +282,99 @@ export function DashboardPage() {
 
       {editing ? (
         <div className="bannerHint">
-          Unsaved changes — click <strong>Save layout</strong> to keep new widgets. Live data still
-          refreshes every {STATUS_POLL_MS / 1000}s.
+          Unsaved changes — drag into empty space, resize from the bottom-right corner, use{" "}
+          <strong>Settings</strong> on a widget for options. Click <strong>Save layout</strong> when
+          done.
         </div>
       ) : null}
 
       {error && <div className="bannerError">{error}</div>}
 
-      <div id="dashboard-grid-host" className="dashboardHost">
+      <div
+        id="dashboard-grid-host"
+        className={`dashboardHost${editing ? " dashboardHostEditing" : ""}`}
+        style={{ minHeight: gridMinRows * 36 + 80 }}
+      >
         <GridLayout
           className="layout"
           layout={gridLayout}
           cols={12}
           rowHeight={36}
           width={width}
+          margin={[12, 12]}
+          containerPadding={[0, 0]}
           isDraggable={editing}
           isResizable={editing}
           onLayoutChange={onLayoutChange}
           draggableHandle=".widgetDrag"
-          compactType="vertical"
+          compactType={null}
+          preventCollision={false}
+          useCSSTransforms
+          resizeHandles={["se"]}
         >
-          {layout.widgets.map((w) => (
-            <div key={w.i} className="dashWidget">
-              <div className="widgetChrome">
-                {editing && <span className="widgetDrag">⋮⋮</span>}
-                <span className="widgetTypeLabel">
-                  {WIDGET_GROUPS.flatMap((g) => g.widgets).find((c) => c.type === w.type)?.label ??
-                    w.type}
-                </span>
-                {editing && (
-                  <button type="button" className="iconBtn" onClick={() => removeWidget(w.i)}>
-                    ×
-                  </button>
+          {layout.widgets.map((w) => {
+            const showConfig = editing && configOpenId === w.i && widgetHasConfig(w.type);
+            return (
+              <div key={w.i} className={`dashWidget${showConfig ? " dashWidgetConfigOpen" : ""}`}>
+                <div className="widgetChrome">
+                  {editing && (
+                    <span className="widgetDrag" title="Drag">
+                      ⋮⋮
+                    </span>
+                  )}
+                  <span className="widgetTypeLabel">{widgetLabel(w.type)}</span>
+                  {editing && widgetHasConfig(w.type) ? (
+                    <button
+                      type="button"
+                      className={`iconBtn${showConfig ? " iconBtnActive" : ""}`}
+                      title="Settings"
+                      onClick={() => setConfigOpenId(showConfig ? null : w.i)}
+                    >
+                      ⚙
+                    </button>
+                  ) : null}
+                  {editing && (
+                    <button
+                      type="button"
+                      className="iconBtn"
+                      title="Remove"
+                      onClick={() => removeWidget(w.i)}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                {showConfig ? (
+                  <div className="widgetConfigPanel">
+                    <WidgetConfigEditor
+                      widget={w}
+                      sites={sites}
+                      presets={presets}
+                      grafanaUrl={grafanaUrl}
+                      onChange={(config) => updateWidgetConfig(w.i, config)}
+                    />
+                    <button
+                      type="button"
+                      className="widgetConfigDone"
+                      onClick={() => setConfigOpenId(null)}
+                    >
+                      Done
+                    </button>
+                  </div>
+                ) : (
+                  <WidgetBody
+                    type={w.type}
+                    config={w.config}
+                    sites={sites}
+                    statuses={statuses}
+                    alerts={alerts}
+                    devices={devices}
+                    grafanaUrl={grafanaUrl}
+                  />
                 )}
               </div>
-              {editing ? (
-                <WidgetConfigEditor
-                  widget={w}
-                  sites={sites}
-                  presets={presets}
-                  grafanaUrl={grafanaUrl}
-                  onChange={(config) => updateWidgetConfig(w.i, config)}
-                />
-              ) : null}
-              <WidgetBody
-                type={w.type}
-                config={w.config}
-                sites={sites}
-                statuses={statuses}
-                alerts={alerts}
-                devices={devices}
-                grafanaUrl={grafanaUrl}
-              />
-            </div>
-          ))}
+            );
+          })}
         </GridLayout>
       </div>
 

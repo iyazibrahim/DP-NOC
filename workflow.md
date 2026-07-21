@@ -47,6 +47,12 @@ Collector box → Alloy → Prometheus (central)
   - Default dashboard includes collector CPU chart + memory/disk gauges
   - Grafana provisioned dashboard `noc-collector-uplink` aligned with React presets
   - Alert names/summaries use Collector / Uplink / Local device wording
+  - **Dashboard UX (2026-07-21)**
+    - Free grid placement (`compactType=null`) + taller drop zone so empty monitor space is usable
+    - Map zoom/center persisted in sessionStorage; fit-bounds only once (no reset on 10s poll)
+    - Map resize invalidates Leaflet size; resize handle z-index above map
+    - Widget settings via ⚙ toggle (no need to resize to see options)
+    - Charts/gauges flex-fit without needless scrollbars; themed scrollbars
 
 ## Local Validation
 1. `docker compose up -d --build`
