@@ -9,11 +9,10 @@
 export const HOST_UP_JOB_SELECTOR = 'job=~"site_host|integrations/unix"';
 
 /**
- * Shared freshness for status + gauges.
- * Must stay above the slowest probe scrape (legacy Alloy ICMP often defaults to 60s).
- * With icmp scrape_interval=15s–30s, wall-clock detection is still typically ~1–2 min.
+ * Shared freshness for status + gauges (30–60s detection).
+ * Requires ICMP scrape ≤30s (template uses 15s). A 60s ICMP default will false-down.
  */
-export const METRIC_FRESH_WINDOW = "90s";
+export const METRIC_FRESH_WINDOW = "45s";
 export const METRIC_HISTORY_WINDOW = "30m";
 
 /** Dual-selector: device label OR instance label (legacy integrations Alloy). */

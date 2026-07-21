@@ -64,10 +64,10 @@ settingsRouter.get("/status-timing", requireJwt(["operator", "wallboard"]), (_re
     scrapeIntervalSec: STATUS_META.scrapeIntervalSec,
     notes: [
       "Dashboard polls /api/sites/status/all every ~10s.",
-      "Status and gauges use last_over_time over 90s; missing samples = DOWN for uplink/collector.",
-      "Freshness must exceed ICMP scrape (often 60s on legacy Alloy) to avoid minute-by-minute false downs.",
-      "Set collector icmp scrape_interval to 15s–30s for faster real outage detection.",
-      "Alerts use absent_over_time[90s] with for: 30s (SiteUplinkDown / SiteCollectorDown)."
+      "Status and gauges use last_over_time over 45s; missing samples = DOWN for uplink/collector.",
+      "Target detection is ~30–60s — collector ICMP scrape must be 15s–30s (not the Alloy 60s default).",
+      "If uplink flickers every minute while collector stays healthy, ICMP scrape is still ~60s; fix it on the collector.",
+      "Alerts use absent_over_time[45s] with for: 15s (SiteUplinkDown / SiteCollectorDown)."
     ]
   });
 });

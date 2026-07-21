@@ -463,17 +463,19 @@ export function SettingsPage() {
         <div className="tableCard">
           <div className="tableTitle">Status detection timing</div>
           <p className="muted">
-            How quickly the dashboard reflects outages. Critical = down; unknown = never received
-            metrics for that site. Freshness is set above ICMP scrape so probes do not flicker every
-            minute.
+            Target: uplink / site down or up within ~30–60s. Critical = down; unknown = never
+            received metrics. Collector ICMP must scrape every 15–30s or uplink will flicker.
           </p>
           {statusTiming ? (
             <ul className="alertUl">
               <li>Dashboard refresh: every {statusTiming.dashboardRefreshSec}s</li>
-              <li>Collector scrape interval: ~{statusTiming.scrapeIntervalSec}s (host); ICMP ideally 15–30s</li>
               <li>
-                Typical uplink / collector down detection: ~{statusTiming.typicalDetectionSec}s after
-                silence
+                Required collector ICMP scrape: 15–30s (template default{" "}
+                {statusTiming.scrapeIntervalSec}s)
+              </li>
+              <li>
+                Typical uplink / collector down detection: ~30–60s (about{" "}
+                {statusTiming.typicalDetectionSec}s)
               </li>
               <li>
                 Stale uplink / collector (no metrics): critical after{" "}

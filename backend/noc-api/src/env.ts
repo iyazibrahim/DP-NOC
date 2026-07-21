@@ -21,8 +21,8 @@ const envSchema = z.object({
   PROMETHEUS_APPLY_CMD: z.string().optional(),
   ALERTMANAGER_APPLY_CMD: z.string().optional(),
   STATUS_DASHBOARD_REFRESH_SEC: z.coerce.number().default(10),
-  /** Silence window before uplink/collector treated as DOWN (must exceed ICMP scrape). */
-  STATUS_METRIC_FRESH_SEC: z.coerce.number().default(90),
+  /** Silence window before uplink/collector treated as DOWN (30–60s; needs ICMP ≤30s). */
+  STATUS_METRIC_FRESH_SEC: z.coerce.number().default(45),
 
   // Auto-register devices/collector hosts discovered in Prometheus `up` series.
   AUTO_SYNC_DEVICES: z.coerce.boolean().default(true),

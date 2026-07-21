@@ -2,15 +2,15 @@ groups:
   - name: noc-site-alerts
     rules:
       # Primary: internet / uplink — fires on explicit down OR silence (collector stopped)
-      # Window 90s: legacy ICMP scrapes are often 60s; 45s caused false alarms every minute.
+      # Requires ICMP scrape ≤30s (repo Alloy template: 15s). 60s ICMP + 45s window = false downs.
       - alert: SiteUplinkDown
         expr: |
           (
             (probe_success{check=~"wan_dns|wan_vps"} == 0)
             or
-            absent_over_time(probe_success{check=~"wan_dns|wan_vps"}[90s])
+            absent_over_time(probe_success{check=~"wan_dns|wan_vps"}[45s])
           )
-        for: 30s
+        for: 15s
         labels:
           severity: critical
           site: "{{ $labels.site }}"
@@ -37,11 +37,11 @@ groups:
           (
             (up{job=~"site_host|integrations/unix"} == 0)
             or
-            absent_over_time(up{job=~"site_host|integrations/unix"}[90s])
+            absent_over_time(up{job=~"site_host|integrations/unix"}[45s])
             or
-            absent_over_time(node_memory_MemAvailable_bytes{role="site-box"}[90s])
+            absent_over_time(node_memory_MemAvailable_bytes{role="site-box"}[45s])
           )
-        for: 30s
+        for: 15s
         labels:
           severity: critical
           site: "{{ $labels.site }}"
