@@ -10,6 +10,9 @@ const widgetSchema = z.object({
   i: z.string().min(1),
   type: z.enum([
     "site_status_grid",
+    "site_signal_board",
+    "uplink_status",
+    "collector_status",
     "alerts_table",
     "top_devices",
     "mini_map",
@@ -17,6 +20,7 @@ const widgetSchema = z.object({
     "site_card",
     "grafana_panel",
     "device_metric_chart",
+    "device_metric_bar",
     "device_stat_gauge",
     "device_detail"
   ]),

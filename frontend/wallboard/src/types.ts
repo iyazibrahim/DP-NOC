@@ -64,6 +64,9 @@ export type ActiveAlert = {
 
 export type WidgetType =
   | "site_status_grid"
+  | "site_signal_board"
+  | "uplink_status"
+  | "collector_status"
   | "alerts_table"
   | "top_devices"
   | "mini_map"
@@ -71,6 +74,7 @@ export type WidgetType =
   | "site_card"
   | "grafana_panel"
   | "device_metric_chart"
+  | "device_metric_bar"
   | "device_stat_gauge"
   | "device_detail";
 

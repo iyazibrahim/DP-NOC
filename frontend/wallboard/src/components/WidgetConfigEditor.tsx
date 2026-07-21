@@ -22,10 +22,15 @@ export function WidgetConfigEditor({
 
   const needsDevicePicker =
     widget.type === "device_metric_chart" ||
+    widget.type === "device_metric_bar" ||
     widget.type === "device_stat_gauge" ||
     widget.type === "device_detail";
 
-  if (widget.type === "site_card") {
+  if (
+    widget.type === "site_card" ||
+    widget.type === "uplink_status" ||
+    widget.type === "collector_status"
+  ) {
     return (
       <div className="widgetConfig">
         <label className="label">Site</label>
@@ -48,8 +53,7 @@ export function WidgetConfigEditor({
     return (
       <div className="widgetConfig">
         <p className="muted widgetConfigHint">
-          Optional. This app and Grafana both read the same metrics. Prefer a Collector chart unless
-          you need a specific Grafana panel.
+          Optional. Prefer native Collector charts unless you need a specific Grafana panel.
         </p>
         <label className="label">Embed URL</label>
         <input
@@ -67,7 +71,10 @@ export function WidgetConfigEditor({
     (p) =>
       p.kind === "any" ||
       devices.find((d) => d.id === deviceId)?.kind === p.kind ||
-      !deviceId
+      !deviceId ||
+      // Uplink presets work without a device
+      p.id === "wan_dns" ||
+      p.id === "wan_vps"
   );
 
   return (
@@ -95,7 +102,7 @@ export function WidgetConfigEditor({
         onChange={(e) => onChange({ ...config, siteId, deviceId: e.target.value })}
       >
         {devices.length === 0 ? (
-          <option value="">No collectors yet — wait for auto-add or open Devices</option>
+          <option value="">No collectors yet</option>
         ) : (
           [...devices]
             .sort((a, b) => {
@@ -124,6 +131,10 @@ export function WidgetConfigEditor({
               </option>
             ))}
           </select>
+          <p className="muted fieldHint">
+            Tip: pick “Uplink (DNS)” or “Uplink (central)” for a green/red UP-DOWN card instead of
+            1.0.
+          </p>
         </>
       ) : null}
     </div>

@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
   Pie,
@@ -180,7 +182,7 @@ export function DeviceMetricChart({
   );
 }
 
-export function DeviceStatGauge({
+export function DeviceMetricBar({
   siteId,
   deviceId,
   metric,
@@ -192,10 +194,12 @@ export function DeviceStatGauge({
   presets: MetricPreset[];
 }) {
   const { token } = useAuth();
-  const [value, setValue] = useState<number | null>(null);
+  const [points, setPoints] = useState<Array<{ t: string; v: number; ts: number }>>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [hours, setHours] = useState<number>(1);
   const preset = presets.find((p) => p.id === metric);
+  const label = preset?.label ?? metric;
   const unit = preset?.unit ?? "";
 
   useEffect(() => {
@@ -204,7 +208,113 @@ export function DeviceStatGauge({
     const load = async () => {
       setLoading(true);
       try {
-        const res = await getMetricInstant(token, { preset: metric, siteId, deviceId });
+        const res = await getMetricRange(token, { preset: metric, siteId, deviceId, hours });
+        if (cancelled) return;
+        setPoints(parseMatrix(res.data, hours));
+        setError(null);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Query failed");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    const t = setInterval(load, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [token, siteId, deviceId, metric, hours]);
+
+  if (!siteId || !deviceId || !metric) {
+    return <div className="muted">Configure site, device, and metric in settings (⚙).</div>;
+  }
+  if (!deviceId) return <NoDeviceHint />;
+  if (error) {
+    return (
+      <div className="muted">
+        {error}. Check device registration in <Link to="/sites">Sites</Link>.
+      </div>
+    );
+  }
+
+  return (
+    <div className="metricChartWidget">
+      <div className="metricChartHeader">
+        <div className="widgetTitle">{label}</div>
+        <div className="timeRangePicker">
+          {TIME_RANGES.map((r) => (
+            <button
+              key={r.hours}
+              type="button"
+              className={hours === r.hours ? "timeRangeBtn active" : "timeRangeBtn"}
+              onClick={() => setHours(r.hours)}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {loading && points.length === 0 ? (
+        <div className="chartSkeleton" aria-hidden />
+      ) : points.length === 0 ? (
+        <div className="muted">No data yet for {label}</div>
+      ) : (
+        <div className="chartFlexFill">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={points}>
+              <CartesianGrid stroke="rgba(148,163,184,0.12)" strokeDasharray="3 3" />
+              <XAxis dataKey="t" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" />
+              <YAxis
+                tick={{ fill: "#94a3b8", fontSize: 10 }}
+                width={40}
+                tickFormatter={(v) => formatYAxis(v, unit)}
+              />
+              <Tooltip content={<ChartTooltip unit={unit} />} />
+              <Bar dataKey="v" fill="#2dd4bf" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const BOOLEAN_METRICS = new Set(["host_up", "snmp_up", "wan_dns", "wan_vps"]);
+
+export function DeviceStatGauge({
+  siteId,
+  deviceId,
+  metric,
+  presets,
+  siteName
+}: {
+  siteId: string;
+  deviceId: string;
+  metric: string;
+  presets: MetricPreset[];
+  siteName?: string;
+}) {
+  const { token } = useAuth();
+  const [value, setValue] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const preset = presets.find((p) => p.id === metric);
+  const unit = preset?.unit ?? "";
+  const isBool = BOOLEAN_METRICS.has(metric);
+
+  useEffect(() => {
+    if (!token || !siteId || !metric) return;
+    if (!isBool && !deviceId) return;
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const res = await getMetricInstant(token, {
+          preset: metric,
+          siteId,
+          deviceId: deviceId || "_"
+        });
         if (cancelled) return;
         setValue(parseInstant(res.data));
         setError(null);
@@ -220,13 +330,30 @@ export function DeviceStatGauge({
       cancelled = true;
       clearInterval(t);
     };
-  }, [token, siteId, deviceId, metric]);
+  }, [token, siteId, deviceId, metric, isBool]);
 
-  if (!siteId || !deviceId || !metric) {
-    return <div className="muted">Configure site, device, and metric in edit mode.</div>;
+  if (!siteId || !metric) {
+    return <div className="muted">Configure in settings (⚙).</div>;
   }
-  if (!deviceId) return <NoDeviceHint />;
+  if (!isBool && !deviceId) return <NoDeviceHint />;
   if (error) return <div className="muted">{error}</div>;
+
+  if (isBool) {
+    const up = value != null && value >= 1;
+    const known = value != null;
+    const tone = !known ? "unk" : up ? "ok" : "bad";
+    const label = !known ? "UNKNOWN" : up ? "UP" : "DOWN";
+    return (
+      <div className={`signalCard signalCard--${tone} signalCardCompact`}>
+        <div className="signalCardEyebrow">{preset?.label ?? metric}</div>
+        <div className="signalCardName">{siteName ?? siteId}</div>
+        <div className="signalCardState">{label}</div>
+        <div className="signalCardHint">
+          {up ? "Reachable" : known ? "Not reachable" : "No data yet"}
+        </div>
+      </div>
+    );
+  }
 
   const pct = value != null && unit === "%" ? Math.max(0, Math.min(100, value)) : null;
   const pieData =

@@ -3,6 +3,9 @@ import path from "path";
 
 export type WidgetType =
   | "site_status_grid"
+  | "site_signal_board"
+  | "uplink_status"
+  | "collector_status"
   | "alerts_table"
   | "top_devices"
   | "mini_map"
@@ -10,6 +13,7 @@ export type WidgetType =
   | "site_card"
   | "grafana_panel"
   | "device_metric_chart"
+  | "device_metric_bar"
   | "device_stat_gauge"
   | "device_detail";
 
@@ -31,13 +35,14 @@ export type DashboardLayout = {
 const DEFAULT_LAYOUT: DashboardLayout = {
   version: 1,
   widgets: [
-    { i: "sites", type: "site_status_grid", x: 0, y: 0, w: 6, h: 6 },
-    { i: "alerts", type: "alerts_table", x: 6, y: 0, w: 6, h: 4 },
-    { i: "cpu", type: "device_metric_chart", x: 6, y: 4, w: 6, h: 5, config: { siteId: "site-1", metric: "cpu_pct" } },
-    { i: "mem", type: "device_stat_gauge", x: 0, y: 6, w: 3, h: 4, config: { siteId: "site-1", metric: "mem_pct" } },
-    { i: "disk", type: "device_stat_gauge", x: 3, y: 6, w: 3, h: 4, config: { siteId: "site-1", metric: "disk_pct" } },
-    { i: "map", type: "mini_map", x: 0, y: 10, w: 6, h: 5 },
-    { i: "websites", type: "website_summary", x: 6, y: 9, w: 6, h: 4 }
+    { i: "signals", type: "site_signal_board", x: 0, y: 0, w: 5, h: 8 },
+    { i: "uplink", type: "uplink_status", x: 5, y: 0, w: 3, h: 4, config: { siteId: "site-1" } },
+    { i: "collector", type: "collector_status", x: 8, y: 0, w: 4, h: 4, config: { siteId: "site-1" } },
+    { i: "cpu", type: "device_metric_chart", x: 5, y: 4, w: 7, h: 5, config: { siteId: "site-1", metric: "cpu_pct" } },
+    { i: "mem", type: "device_stat_gauge", x: 0, y: 8, w: 3, h: 4, config: { siteId: "site-1", metric: "mem_pct" } },
+    { i: "disk", type: "device_stat_gauge", x: 3, y: 8, w: 3, h: 4, config: { siteId: "site-1", metric: "disk_pct" } },
+    { i: "map", type: "mini_map", x: 6, y: 9, w: 6, h: 6 },
+    { i: "alerts", type: "alerts_table", x: 0, y: 12, w: 6, h: 4 }
   ]
 };
 

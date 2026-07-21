@@ -46,8 +46,11 @@ function widgetHasConfig(type: DashboardWidget["type"]) {
     type === "site_card" ||
     type === "grafana_panel" ||
     type === "device_metric_chart" ||
+    type === "device_metric_bar" ||
     type === "device_stat_gauge" ||
-    type === "device_detail"
+    type === "device_detail" ||
+    type === "uplink_status" ||
+    type === "collector_status"
   );
 }
 
@@ -67,16 +70,26 @@ export function DashboardPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   /** Which widget shows the settings panel (edit mode). */
   const [configOpenId, setConfigOpenId] = useState<string | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
   const presets = useMetricPresets();
 
+  // Measure AFTER the grid host mounts (layout ready). Stuck width=1200 caused ~70% usable area.
   useEffect(() => {
-    const el = document.getElementById("dashboard-grid-host");
+    const el = hostRef.current ?? document.getElementById("dashboard-grid-host");
     if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth || 1200));
+    const measure = () => {
+      const w = el.clientWidth;
+      if (w > 0) setWidth(w);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setWidth(el.clientWidth || 1200);
-    return () => ro.disconnect();
-  }, []);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [layout]);
 
   const refreshLayout = useCallback(async () => {
     if (!token) return;
@@ -155,12 +168,18 @@ export function DashboardPage() {
     return Math.max(bottom + 8, 22);
   }, [layout]);
 
-  const onLayoutChange = (next: Layout[]) => {
+  const applyLayoutPositions = (next: Layout[]) => {
     if (!layout || !editing) return;
     const widgets = layout.widgets.map((w) => {
       const n = next.find((x) => x.i === w.i);
       if (!n) return w;
-      return { ...w, x: n.x, y: n.y, w: n.w, h: n.h };
+      return {
+        ...w,
+        x: Math.max(0, Math.min(11, Math.floor(n.x))),
+        y: Math.max(0, Math.floor(n.y)),
+        w: Math.max(1, Math.min(12, Math.floor(n.w))),
+        h: Math.max(1, Math.floor(n.h))
+      };
     });
     setLayout({ ...layout, widgets });
   };
@@ -189,6 +208,7 @@ export function DashboardPage() {
       config = { siteId: firstSite?.id ?? "" };
     } else if (
       type === "device_metric_chart" ||
+      type === "device_metric_bar" ||
       type === "device_stat_gauge" ||
       type === "device_detail"
     ) {
@@ -197,6 +217,8 @@ export function DashboardPage() {
         deviceId: firstDevice?.id ?? "",
         metric: firstDevice?.kind === "network" ? "snmp_up" : "cpu_pct"
       };
+    } else if (type === "uplink_status" || type === "collector_status") {
+      config = { siteId: firstSite?.id ?? "" };
     }
     const widget: DashboardWidget = {
       i: id,
@@ -292,6 +314,7 @@ export function DashboardPage() {
 
       <div
         id="dashboard-grid-host"
+        ref={hostRef}
         className={`dashboardHost${editing ? " dashboardHostEditing" : ""}`}
         style={{ minHeight: gridMinRows * 36 + 80 }}
       >
@@ -301,14 +324,16 @@ export function DashboardPage() {
           cols={12}
           rowHeight={36}
           width={width}
-          margin={[12, 12]}
+          margin={[10, 10]}
           containerPadding={[0, 0]}
           isDraggable={editing}
           isResizable={editing}
-          onLayoutChange={onLayoutChange}
+          onDragStop={applyLayoutPositions}
+          onResizeStop={applyLayoutPositions}
           draggableHandle=".widgetDrag"
           compactType={null}
-          preventCollision={false}
+          preventCollision
+          allowOverlap={false}
           useCSSTransforms
           resizeHandles={["se"]}
         >

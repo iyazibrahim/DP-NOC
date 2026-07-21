@@ -577,9 +577,9 @@ textarea {
 
 .dashboardHostEditing {
   background-image:
-    linear-gradient(rgba(45, 212, 191, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(45, 212, 191, 0.04) 1px, transparent 1px);
-  background-size: 12px 36px, calc((100% - 0px) / 12) 12px;
+    linear-gradient(rgba(45, 212, 191, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(45, 212, 191, 0.1) 1px, transparent 1px);
+  background-size: 100% 46px, calc(100% / 12) 100%;
   background-position: 0 0;
   border: 1px dashed rgba(45, 212, 191, 0.18);
   border-radius: 14px;
@@ -645,8 +645,181 @@ textarea {
   flex-direction: column;
 }
 
+.widgetInnerScroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .widgetInner.flush {
   padding: 0;
+}
+
+.statusGridList {
+  grid-template-columns: 1fr;
+  flex: 1;
+  align-content: start;
+}
+
+.dotLine--healthy {
+  color: #34d399;
+}
+.dotLine--critical {
+  color: #f87171;
+}
+.dotLine--warning {
+  color: #fbbf24;
+}
+.dotLine--unknown {
+  color: var(--muted);
+}
+
+.signalCard {
+  height: 100%;
+  min-height: 120px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.signalCardCompact {
+  min-height: 0;
+  padding: 12px 14px;
+}
+
+.signalCard--ok {
+  background: linear-gradient(145deg, rgba(16, 185, 129, 0.28), rgba(6, 78, 59, 0.55));
+  border-color: rgba(52, 211, 153, 0.55);
+}
+
+.signalCard--bad {
+  background: linear-gradient(145deg, rgba(239, 68, 68, 0.32), rgba(127, 29, 29, 0.55));
+  border-color: rgba(248, 113, 113, 0.55);
+}
+
+.signalCard--warn {
+  background: linear-gradient(145deg, rgba(251, 191, 36, 0.22), rgba(120, 53, 15, 0.45));
+  border-color: rgba(251, 191, 36, 0.45);
+}
+
+.signalCard--unk {
+  background: linear-gradient(145deg, rgba(100, 116, 139, 0.2), rgba(30, 41, 59, 0.55));
+}
+
+.signalCardEyebrow {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(226, 232, 240, 0.75);
+  font-family: var(--font-mono);
+}
+
+.signalCardName {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.signalCardSub {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.signalCardState {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  margin-top: 4px;
+}
+
+.signalCard--ok .signalCardState {
+  color: #6ee7b7;
+}
+.signalCard--bad .signalCardState {
+  color: #fca5a5;
+}
+.signalCard--warn .signalCardState {
+  color: #fde68a;
+}
+
+.signalCardNotes,
+.signalCardHint {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.signalBoard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  height: 100%;
+}
+
+.signalBoardList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.signalBoardRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.signalBoardSite {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.signalLeds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.signalLed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 24, 0.5);
+}
+
+.signalLed i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  background: #64748b;
+  box-shadow: 0 0 0 2px rgba(100, 116, 139, 0.25);
+}
+
+.signalLed--ok i {
+  background: #34d399;
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.7);
+}
+.signalLed--bad i {
+  background: #f87171;
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.7);
+}
+.signalLed--warn i {
+  background: #fbbf24;
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.6);
 }
 
 .widgetTitle {

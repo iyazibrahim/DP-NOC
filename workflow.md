@@ -53,6 +53,12 @@ Collector box → Alloy → Prometheus (central)
     - Map resize invalidates Leaflet size; resize handle z-index above map
     - Widget settings via ⚙ toggle (no need to resize to see options)
     - Charts/gauges flex-fit without needless scrollbars; themed scrollbars
+    - **Dashboard UX follow-up**
+      - List widgets scroll again (site overview shows all 5 sites)
+      - Grid width measured after mount (fixes ~70% usable area / stuck 1200px)
+      - Drag/resize apply on stop only + collision prevention (less “watery” spreading)
+      - New widgets: Sites signal board, Uplink status, Collector status, bar chart
+      - Uplink/probe gauges show green UP / red DOWN (not 1.0)
 
 ## Local Validation
 1. `docker compose up -d --build`
