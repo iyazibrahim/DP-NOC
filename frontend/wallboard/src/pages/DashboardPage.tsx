@@ -340,7 +340,12 @@ export function DashboardPage() {
           {layout.widgets.map((w) => {
             const showConfig = editing && configOpenId === w.i && widgetHasConfig(w.type);
             return (
-              <div key={w.i} className={`dashWidget${showConfig ? " dashWidgetConfigOpen" : ""}`}>
+              <div
+                key={w.i}
+                className={`dashWidget${showConfig ? " dashWidgetConfigOpen" : ""}${
+                  w.type === "mini_map" ? " dashWidget--map" : ""
+                }`}
+              >
                 <div className="widgetChrome">
                   {editing && (
                     <span className="widgetDrag" title="Drag">

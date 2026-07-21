@@ -854,15 +854,27 @@ textarea {
   width: 100%;
 }
 
-/* Resize handle above Leaflet / chart content */
+/* Resize handle must sit ABOVE Leaflet (panes ~400–1000) and charts */
 .react-grid-item > .react-resizable-handle {
-  z-index: 20;
-  opacity: 0.85;
+  z-index: 1200 !important;
+  width: 20px;
+  height: 20px;
+  opacity: 1;
+  background: rgba(45, 212, 191, 0.25);
+  border-top-left-radius: 4px;
+}
+
+.react-grid-item > .react-resizable-handle-se {
+  bottom: 0;
+  right: 0;
+  cursor: se-resize;
 }
 
 .react-grid-item > .react-resizable-handle::after {
   border-right-color: var(--accent) !important;
   border-bottom-color: var(--accent) !important;
+  right: 4px !important;
+  bottom: 4px !important;
 }
 
 .nocMapRoot,
@@ -870,6 +882,21 @@ textarea {
   height: 100% !important;
   width: 100%;
   min-height: 0;
+}
+
+/* Keep map from eating the SE resize corner */
+.dashWidget .nocMapRoot .leaflet-container {
+  pointer-events: auto;
+}
+
+.dashWidget .widgetInner.flush {
+  /* leave a hit area for the SE handle over map tiles */
+  clip-path: none;
+}
+
+.dashWidget--map .widgetInner.flush {
+  padding-bottom: 14px;
+  box-sizing: border-box;
 }
 
 .chartFlexFill {
