@@ -34,7 +34,11 @@ function LoginScreen() {
   return (
     <div className="loginScreen">
       <div className="loginBox">
-        <div className="loginTitle">NOC</div>
+        <img
+          src="/digital-penang-logo.png"
+          alt="Digital Penang"
+          className="loginLogoImg"
+        />
         <p className="muted">Sign in to monitor collectors, uplink, and sites</p>
         {shownError && <div className="bannerError">{shownError}</div>}
         <label className="label">Username</label>

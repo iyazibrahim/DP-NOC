@@ -16,6 +16,7 @@ import {
   saveRetentionSettings
 } from "../api";
 import type { ExportRecord, NotificationsConfig, RetentionConfig, StatusTimingInfo } from "../types";
+import { Modal } from "../components/Modal";
 
 function formatBytes(n: number | null) {
   if (n == null) return "—";
@@ -23,7 +24,7 @@ function formatBytes(n: number | null) {
   return gb >= 1 ? `${gb.toFixed(2)} GB` : `${(n / (1024 * 1024)).toFixed(0)} MB`;
 }
 
-type SettingsTab = "notifications" | "storage" | "exports" | "advanced";
+type SettingsModal = "notifications" | "storage" | "exports" | "advanced" | null;
 
 export function SettingsPage() {
   const { token } = useAuth();
@@ -36,7 +37,7 @@ export function SettingsPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<SettingsTab>("notifications");
+  const [modal, setModal] = useState<SettingsModal>(null);
 
   async function reload() {
     if (!token) return;
@@ -75,6 +76,7 @@ export function SettingsPage() {
       setRetention(res.config);
       setStorageBytes(res.storageBytes);
       setMsg("Retention settings saved.");
+      setModal(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -149,6 +151,7 @@ export function SettingsPage() {
       const res = await saveNotificationsSettings(token, notifications);
       setNotifications(res.config);
       setMsg("Notification settings saved.");
+      setModal(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -169,362 +172,406 @@ export function SettingsPage() {
     }
   };
 
-  const tabs: Array<{ id: SettingsTab; label: string }> = [
-    { id: "notifications", label: "Notifications" },
-    { id: "storage", label: "Storage" },
-    { id: "exports", label: "Exports" },
-    { id: "advanced", label: "Advanced" }
-  ];
+  const notifSummary = notifications
+    ? [
+        notifications.telegram.enabled ? "Telegram" : null,
+        notifications.email.enabled ? "Email" : null,
+        notifications.webhook.enabled ? "Webhook" : null
+      ]
+        .filter(Boolean)
+        .join(" · ") || "All channels off"
+    : "Loading…";
 
   return (
     <div className="page">
       <div className="pageHeader">
         <div>
           <h1>Settings</h1>
-          <p className="pageSub">One section at a time — notifications, storage, exports, advanced</p>
+          <p className="pageSub">Open a module to configure — keeps the page clear</p>
         </div>
       </div>
 
       {error ? <div className="bannerError">{error}</div> : null}
       {msg ? <p className="muted">{msg}</p> : null}
 
-      <div className="settingsInfoBanner">
-        <div className="tableTitle">Detection (read-only)</div>
-        <p className="muted" style={{ margin: 0 }}>
-          Dashboard shows outages in ~30–60s. Collector ICMP scrape must be 15–30s.
-        </p>
-        {statusTiming ? (
-          <ul>
-            <li>Refresh every {statusTiming.dashboardRefreshSec}s</li>
-            <li>Down after {statusTiming.metricFreshWindowSec}s of silence</li>
-            <li>Typical detection ~{statusTiming.typicalDetectionSec}s</li>
-          </ul>
-        ) : null}
+      <div className="settingsBento">
+        <section className="settingsBentoCard settingsBentoCard--detection">
+          <div className="settingsBentoEyebrow">Read-only</div>
+          <h2 className="settingsBentoTitle">Detection</h2>
+          <p className="muted settingsBentoBlurb">
+            Outages show in ~30–60s. Collector ICMP scrape must be 15–30s.
+          </p>
+          {statusTiming ? (
+            <ul className="settingsBentoList">
+              <li>Refresh every {statusTiming.dashboardRefreshSec}s</li>
+              <li>Down after {statusTiming.metricFreshWindowSec}s silence</li>
+              <li>Typical detection ~{statusTiming.typicalDetectionSec}s</li>
+            </ul>
+          ) : (
+            <p className="muted">Loading…</p>
+          )}
+        </section>
+
+        <button
+          type="button"
+          className="settingsBentoCard settingsBentoCard--click"
+          onClick={() => setModal("notifications")}
+        >
+          <div className="settingsBentoEyebrow">Alerts</div>
+          <h2 className="settingsBentoTitle">Notifications</h2>
+          <p className="muted settingsBentoBlurb">{notifSummary}</p>
+          <span className="settingsBentoCta">Configure →</span>
+        </button>
+
+        <button
+          type="button"
+          className="settingsBentoCard settingsBentoCard--click"
+          onClick={() => setModal("storage")}
+        >
+          <div className="settingsBentoEyebrow">Prometheus</div>
+          <h2 className="settingsBentoTitle">Storage</h2>
+          <p className="muted settingsBentoBlurb">
+            Retention & scrape · {formatBytes(storageBytes)}
+          </p>
+          <span className="settingsBentoCta">Configure →</span>
+        </button>
+
+        <button
+          type="button"
+          className="settingsBentoCard settingsBentoCard--click"
+          onClick={() => setModal("exports")}
+        >
+          <div className="settingsBentoEyebrow">Reports</div>
+          <h2 className="settingsBentoTitle">Exports</h2>
+          <p className="muted settingsBentoBlurb">
+            {exports.length === 0
+              ? "No exports yet — run weekly or monthly"
+              : `${exports.length} export record(s)`}
+          </p>
+          <span className="settingsBentoCta">Open →</span>
+        </button>
+
+        <button
+          type="button"
+          className="settingsBentoCard settingsBentoCard--click settingsBentoCard--accent"
+          onClick={() => setModal("advanced")}
+        >
+          <div className="settingsBentoEyebrow">System</div>
+          <h2 className="settingsBentoTitle">Advanced</h2>
+          <p className="muted settingsBentoBlurb">Grafana URL, layout reset, seed sites</p>
+          <span className="settingsBentoCta">Open →</span>
+        </button>
       </div>
 
-      <div className="settingsTabs" role="tablist">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            className={`settingsTab${tab === t.id ? " settingsTab--active" : ""}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Modal
+        open={modal === "notifications"}
+        title="Alert notifications"
+        onClose={() => setModal(null)}
+        wide
+      >
+        {notifications ? (
+          <form className="deviceForm" onSubmit={onSaveNotifications}>
+            <p className="muted">Telegram / email / webhook via Alertmanager. Save, then Apply.</p>
+            <div className="tableTitle">Telegram</div>
+            <label className="label">
+              <input
+                type="checkbox"
+                checked={notifications.telegram.enabled}
+                onChange={(e) =>
+                  setNotifications({
+                    ...notifications,
+                    telegram: { ...notifications.telegram, enabled: e.target.checked }
+                  })
+                }
+              />{" "}
+              Enable Telegram
+            </label>
+            <label className="label">Bot token</label>
+            <input
+              type="password"
+              value={notifications.telegram.botToken}
+              placeholder={
+                notifications.telegram.hasToken ? "•••••• (unchanged)" : "123456:ABC..."
+              }
+              onChange={(e) =>
+                setNotifications({
+                  ...notifications,
+                  telegram: { ...notifications.telegram, botToken: e.target.value }
+                })
+              }
+            />
+            <label className="label">Chat ID</label>
+            <input
+              value={notifications.telegram.chatId}
+              placeholder="-1001234567890"
+              onChange={(e) =>
+                setNotifications({
+                  ...notifications,
+                  telegram: { ...notifications.telegram, chatId: e.target.value }
+                })
+              }
+            />
 
-      <div className="settingsStack">
-        {tab === "notifications" ? (
-          <div className="tableCard">
-            <div className="tableTitle">Alert notifications</div>
-            <p className="muted">
-              Telegram / email / webhook via Alertmanager. Save, then Apply.
-            </p>
-            {notifications ? (
-              <form className="deviceForm" onSubmit={onSaveNotifications}>
-                <div className="tableTitle">Telegram</div>
-                <label className="label">
-                  <input
-                    type="checkbox"
-                    checked={notifications.telegram.enabled}
-                    onChange={(e) =>
-                      setNotifications({
-                        ...notifications,
-                        telegram: { ...notifications.telegram, enabled: e.target.checked }
-                      })
-                    }
-                  />{" "}
-                  Enable Telegram
-                </label>
-                <label className="label">Bot token</label>
-                <input
-                  type="password"
-                  value={notifications.telegram.botToken}
-                  placeholder={
-                    notifications.telegram.hasToken ? "•••••• (unchanged)" : "123456:ABC..."
-                  }
-                  onChange={(e) =>
-                    setNotifications({
-                      ...notifications,
-                      telegram: { ...notifications.telegram, botToken: e.target.value }
-                    })
-                  }
-                />
-                <label className="label">Chat ID</label>
-                <input
-                  value={notifications.telegram.chatId}
-                  placeholder="-1001234567890"
-                  onChange={(e) =>
-                    setNotifications({
-                      ...notifications,
-                      telegram: { ...notifications.telegram, chatId: e.target.value }
-                    })
-                  }
-                />
+            <div className="tableTitle">SMTP email</div>
+            <label className="label">
+              <input
+                type="checkbox"
+                checked={notifications.email.enabled}
+                onChange={(e) =>
+                  setNotifications({
+                    ...notifications,
+                    email: { ...notifications.email, enabled: e.target.checked }
+                  })
+                }
+              />{" "}
+              Enable email
+            </label>
+            <label className="label">To</label>
+            <input
+              value={notifications.email.to}
+              onChange={(e) =>
+                setNotifications({
+                  ...notifications,
+                  email: { ...notifications.email, to: e.target.value }
+                })
+              }
+            />
+            <label className="label">From</label>
+            <input
+              value={notifications.email.from}
+              onChange={(e) =>
+                setNotifications({
+                  ...notifications,
+                  email: { ...notifications.email, from: e.target.value }
+                })
+              }
+            />
+            <label className="label">SMTP host:port</label>
+            <input
+              value={notifications.email.smarthost}
+              placeholder="smtp.example.com:587"
+              onChange={(e) =>
+                setNotifications({
+                  ...notifications,
+                  email: { ...notifications.email, smarthost: e.target.value }
+                })
+              }
+            />
+            <label className="label">SMTP username</label>
+            <input
+              value={notifications.email.authUsername}
+              onChange={(e) =>
+                setNotifications({
+                  ...notifications,
+                  email: { ...notifications.email, authUsername: e.target.value }
+                })
+              }
+            />
+            <label className="label">SMTP password</label>
+            <input
+              type="password"
+              value={notifications.email.authPassword}
+              placeholder={notifications.email.hasPassword ? "•••••• (unchanged)" : ""}
+              onChange={(e) =>
+                setNotifications({
+                  ...notifications,
+                  email: { ...notifications.email, authPassword: e.target.value }
+                })
+              }
+            />
 
-                <div className="tableTitle">SMTP email</div>
-                <label className="label">
-                  <input
-                    type="checkbox"
-                    checked={notifications.email.enabled}
-                    onChange={(e) =>
-                      setNotifications({
-                        ...notifications,
-                        email: { ...notifications.email, enabled: e.target.checked }
-                      })
-                    }
-                  />{" "}
-                  Enable email
-                </label>
-                <label className="label">To</label>
-                <input
-                  value={notifications.email.to}
-                  onChange={(e) =>
-                    setNotifications({
-                      ...notifications,
-                      email: { ...notifications.email, to: e.target.value }
-                    })
-                  }
-                />
-                <label className="label">From</label>
-                <input
-                  value={notifications.email.from}
-                  onChange={(e) =>
-                    setNotifications({
-                      ...notifications,
-                      email: { ...notifications.email, from: e.target.value }
-                    })
-                  }
-                />
-                <label className="label">SMTP host:port</label>
-                <input
-                  value={notifications.email.smarthost}
-                  placeholder="smtp.example.com:587"
-                  onChange={(e) =>
-                    setNotifications({
-                      ...notifications,
-                      email: { ...notifications.email, smarthost: e.target.value }
-                    })
-                  }
-                />
-                <label className="label">SMTP username</label>
-                <input
-                  value={notifications.email.authUsername}
-                  onChange={(e) =>
-                    setNotifications({
-                      ...notifications,
-                      email: { ...notifications.email, authUsername: e.target.value }
-                    })
-                  }
-                />
-                <label className="label">SMTP password</label>
-                <input
-                  type="password"
-                  value={notifications.email.authPassword}
-                  placeholder={notifications.email.hasPassword ? "•••••• (unchanged)" : ""}
-                  onChange={(e) =>
-                    setNotifications({
-                      ...notifications,
-                      email: { ...notifications.email, authPassword: e.target.value }
-                    })
-                  }
-                />
+            <div className="tableTitle">Webhook (optional)</div>
+            <label className="label">
+              <input
+                type="checkbox"
+                checked={notifications.webhook.enabled}
+                onChange={(e) =>
+                  setNotifications({
+                    ...notifications,
+                    webhook: { ...notifications.webhook, enabled: e.target.checked }
+                  })
+                }
+              />{" "}
+              Enable webhook
+            </label>
+            <input
+              value={notifications.webhook.url}
+              placeholder="https://hooks.example.com/alerts"
+              onChange={(e) =>
+                setNotifications({
+                  ...notifications,
+                  webhook: { ...notifications.webhook, url: e.target.value }
+                })
+              }
+            />
 
-                <div className="tableTitle">Webhook (optional)</div>
-                <label className="label">
-                  <input
-                    type="checkbox"
-                    checked={notifications.webhook.enabled}
-                    onChange={(e) =>
-                      setNotifications({
-                        ...notifications,
-                        webhook: { ...notifications.webhook, enabled: e.target.checked }
-                      })
-                    }
-                  />{" "}
-                  Enable webhook
-                </label>
-                <input
-                  value={notifications.webhook.url}
-                  placeholder="https://hooks.example.com/alerts"
-                  onChange={(e) =>
-                    setNotifications({
-                      ...notifications,
-                      webhook: { ...notifications.webhook, url: e.target.value }
-                    })
-                  }
-                />
-
-                <div className="formActions">
-                  <button className="primary" type="submit" disabled={busy}>
-                    Save notifications
-                  </button>
-                  <button type="button" onClick={onApplyNotifications} disabled={busy}>
-                    Apply to Alertmanager
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <p className="muted">Loading notifications…</p>
-            )}
-          </div>
-        ) : null}
-
-        {tab === "storage" ? (
-          <div className="tableCard">
-            <div className="tableTitle">Prometheus storage</div>
-            <p className="muted">
-              Retention and scrape intervals. Current size: {formatBytes(storageBytes)}.
-            </p>
-            {retention ? (
-              <form className="deviceForm" onSubmit={onSaveRetention}>
-                <label className="label">Retention time</label>
-                <input
-                  value={retention.retentionTime}
-                  onChange={(e) => setRetention({ ...retention, retentionTime: e.target.value })}
-                  placeholder="28d"
-                />
-                <label className="label">Retention size (GB)</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={retention.retentionSizeGB}
-                  onChange={(e) =>
-                    setRetention({ ...retention, retentionSizeGB: Number(e.target.value) })
-                  }
-                />
-                <label className="label">Host scrape interval (sec)</label>
-                <input
-                  type="number"
-                  min={15}
-                  value={retention.hostScrapeIntervalSec}
-                  onChange={(e) =>
-                    setRetention({ ...retention, hostScrapeIntervalSec: Number(e.target.value) })
-                  }
-                />
-                <label className="label">ICMP scrape interval (sec)</label>
-                <input
-                  type="number"
-                  min={15}
-                  value={retention.icmpScrapeIntervalSec}
-                  onChange={(e) =>
-                    setRetention({ ...retention, icmpScrapeIntervalSec: Number(e.target.value) })
-                  }
-                />
-                <label className="label">SNMP scrape interval (sec)</label>
-                <input
-                  type="number"
-                  min={15}
-                  value={retention.snmpScrapeIntervalSec}
-                  onChange={(e) =>
-                    setRetention({ ...retention, snmpScrapeIntervalSec: Number(e.target.value) })
-                  }
-                />
-                <label className="label">
-                  <input
-                    type="checkbox"
-                    checked={retention.scheduledExportsEnabled}
-                    onChange={(e) =>
-                      setRetention({ ...retention, scheduledExportsEnabled: e.target.checked })
-                    }
-                  />{" "}
-                  Enable scheduled exports
-                </label>
-                <div className="formActions">
-                  <button className="primary" type="submit" disabled={busy}>
-                    Save retention
-                  </button>
-                  <button type="button" onClick={onApplyRetention} disabled={busy}>
-                    Apply to Prometheus
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <p className="muted">Loading retention…</p>
-            )}
-          </div>
-        ) : null}
-
-        {tab === "exports" ? (
-          <div className="tableCard">
-            <div className="tableTitle">Reports & exports</div>
-            <p className="muted">Weekly (Sunday 00:00 MYT) and monthly (1st 00:00 MYT) when enabled.</p>
             <div className="formActions">
-              <button type="button" onClick={() => onRunExport("weekly")} disabled={busy}>
-                Export now (weekly)
+              <button className="primary" type="submit" disabled={busy}>
+                Save notifications
               </button>
-              <button type="button" onClick={() => onRunExport("monthly")} disabled={busy}>
-                Export now (monthly)
+              <button type="button" onClick={onApplyNotifications} disabled={busy}>
+                Apply to Alertmanager
+              </button>
+              <button type="button" onClick={() => setModal(null)} disabled={busy}>
+                Cancel
               </button>
             </div>
-            <table className="dataTable" style={{ marginTop: 12 }}>
-              <thead>
-                <tr>
-                  <th>Period</th>
-                  <th>Created</th>
-                  <th>Files</th>
-                </tr>
-              </thead>
-              <tbody>
-                {exports.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="muted">
-                      No exports yet.
-                    </td>
-                  </tr>
-                ) : (
-                  exports.map((rec) => (
-                    <tr key={rec.id}>
-                      <td>{rec.period}</td>
-                      <td>{new Date(rec.createdAt).toLocaleString()}</td>
-                      <td>
-                        {rec.files.map((f) => (
-                          <button
-                            key={f}
-                            type="button"
-                            onClick={() => onDownload(rec, f)}
-                            style={{ marginRight: 8 }}
-                          >
-                            {f}
-                          </button>
-                        ))}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
+          </form>
+        ) : (
+          <p className="muted">Loading notifications…</p>
+        )}
+      </Modal>
 
-        {tab === "advanced" ? (
-          <div className="tableCard">
-            <div className="tableTitle">Integrations & resets</div>
-            <div className="kvList">
-              <div>
-                <strong>Grafana public URL</strong>
-                <div className="muted">{grafanaUrl || "—"}</div>
-                <p className="muted fieldHint" style={{ marginTop: 8 }}>
-                  Charts in this app use the same Prometheus metrics as Grafana.
-                </p>
-              </div>
-            </div>
-            <div className="formActions" style={{ marginTop: 16 }}>
-              <button type="button" onClick={resetLayout}>
-                Reset my dashboard layout
+      <Modal
+        open={modal === "storage"}
+        title="Prometheus storage"
+        onClose={() => setModal(null)}
+        wide
+      >
+        {retention ? (
+          <form className="deviceForm" onSubmit={onSaveRetention}>
+            <p className="muted">Current size: {formatBytes(storageBytes)}</p>
+            <label className="label">Retention time</label>
+            <input
+              value={retention.retentionTime}
+              onChange={(e) => setRetention({ ...retention, retentionTime: e.target.value })}
+              placeholder="28d"
+            />
+            <label className="label">Retention size (GB)</label>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={retention.retentionSizeGB}
+              onChange={(e) =>
+                setRetention({ ...retention, retentionSizeGB: Number(e.target.value) })
+              }
+            />
+            <label className="label">Host scrape interval (sec)</label>
+            <input
+              type="number"
+              min={15}
+              value={retention.hostScrapeIntervalSec}
+              onChange={(e) =>
+                setRetention({ ...retention, hostScrapeIntervalSec: Number(e.target.value) })
+              }
+            />
+            <label className="label">ICMP scrape interval (sec)</label>
+            <input
+              type="number"
+              min={15}
+              value={retention.icmpScrapeIntervalSec}
+              onChange={(e) =>
+                setRetention({ ...retention, icmpScrapeIntervalSec: Number(e.target.value) })
+              }
+            />
+            <label className="label">SNMP scrape interval (sec)</label>
+            <input
+              type="number"
+              min={15}
+              value={retention.snmpScrapeIntervalSec}
+              onChange={(e) =>
+                setRetention({ ...retention, snmpScrapeIntervalSec: Number(e.target.value) })
+              }
+            />
+            <label className="label">
+              <input
+                type="checkbox"
+                checked={retention.scheduledExportsEnabled}
+                onChange={(e) =>
+                  setRetention({ ...retention, scheduledExportsEnabled: e.target.checked })
+                }
+              />{" "}
+              Enable scheduled exports
+            </label>
+            <div className="formActions">
+              <button className="primary" type="submit" disabled={busy}>
+                Save retention
               </button>
-              <button type="button" onClick={onResetSites} disabled={busy}>
-                Reset sites from seed
+              <button type="button" onClick={onApplyRetention} disabled={busy}>
+                Apply to Prometheus
+              </button>
+              <button type="button" onClick={() => setModal(null)} disabled={busy}>
+                Cancel
               </button>
             </div>
+          </form>
+        ) : (
+          <p className="muted">Loading retention…</p>
+        )}
+      </Modal>
+
+      <Modal open={modal === "exports"} title="Reports & exports" onClose={() => setModal(null)} wide>
+        <p className="muted">Weekly (Sunday 00:00 MYT) and monthly (1st 00:00 MYT) when enabled.</p>
+        <div className="formActions">
+          <button type="button" className="primary" onClick={() => onRunExport("weekly")} disabled={busy}>
+            Export now (weekly)
+          </button>
+          <button type="button" onClick={() => onRunExport("monthly")} disabled={busy}>
+            Export now (monthly)
+          </button>
+        </div>
+        <table className="dataTable" style={{ marginTop: 12 }}>
+          <thead>
+            <tr>
+              <th>Period</th>
+              <th>Created</th>
+              <th>Files</th>
+            </tr>
+          </thead>
+          <tbody>
+            {exports.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="muted">
+                  No exports yet.
+                </td>
+              </tr>
+            ) : (
+              exports.map((rec) => (
+                <tr key={rec.id}>
+                  <td>{rec.period}</td>
+                  <td>{new Date(rec.createdAt).toLocaleString()}</td>
+                  <td>
+                    {rec.files.map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => onDownload(rec, f)}
+                        style={{ marginRight: 8 }}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </Modal>
+
+      <Modal open={modal === "advanced"} title="Advanced" onClose={() => setModal(null)}>
+        <div className="kvList">
+          <div>
+            <strong>Grafana public URL</strong>
+            <div className="muted">{grafanaUrl || "—"}</div>
+            <p className="muted fieldHint" style={{ marginTop: 8 }}>
+              Charts in this app use the same Prometheus metrics as Grafana.
+            </p>
           </div>
-        ) : null}
-      </div>
+        </div>
+        <div className="formActions" style={{ marginTop: 16 }}>
+          <button type="button" onClick={resetLayout}>
+            Reset my dashboard layout
+          </button>
+          <button type="button" onClick={onResetSites} disabled={busy}>
+            Reset sites from seed
+          </button>
+          <button type="button" onClick={() => setModal(null)}>
+            Close
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

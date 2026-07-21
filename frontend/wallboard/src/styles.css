@@ -1,21 +1,23 @@
 :root {
-  --bg: #0b1214;
-  --panel: #121c1f;
-  --panel-2: #182428;
-  --border: rgba(125, 211, 192, 0.16);
-  --text: #e8f1ef;
-  --muted: rgba(148, 175, 170, 0.92);
-  --accent: #2dd4bf;
-  --accent-soft: rgba(45, 212, 191, 0.14);
+  /* Digital Penang: cyan + yellow on near-black */
+  --bg: #07090c;
+  --panel: #10151a;
+  --panel-2: #161d24;
+  --border: rgba(0, 181, 226, 0.18);
+  --text: #eef4f8;
+  --muted: rgba(160, 180, 195, 0.92);
+  --accent: #00b5e2;
+  --accent-soft: rgba(0, 181, 226, 0.14);
+  --accent-yellow: #f5c400;
   --good: #34d399;
-  --warn: #fbbf24;
+  --warn: #f5c400;
   --bad: #f87171;
-  --sidebar: #081012;
+  --sidebar: #05070a;
   --font-display: "Sora", ui-sans-serif, sans-serif;
   --font-body: "DM Sans", ui-sans-serif, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
   --radius: 12px;
-  --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 }
 
 * {
@@ -49,7 +51,7 @@ a:hover {
 
 .sidebar {
   background:
-    linear-gradient(180deg, rgba(45, 212, 191, 0.06), transparent 28%),
+    linear-gradient(180deg, rgba(0, 181, 226, 0.07), transparent 28%),
     var(--sidebar);
   border-right: 1px solid var(--border);
   display: flex;
@@ -60,6 +62,14 @@ a:hover {
 
 .sidebarBrand {
   padding: 4px 8px 16px;
+}
+
+.sidebarLogoImg {
+  display: block;
+  height: 38px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
 }
 
 .sidebarLogo {
@@ -98,7 +108,7 @@ a:hover {
 
 .navItem.active {
   background: var(--accent-soft);
-  border: 1px solid rgba(45, 212, 191, 0.35);
+  border: 1px solid rgba(0, 181, 226, 0.35);
 }
 
 .sidebarLogout {
@@ -108,7 +118,7 @@ a:hover {
 .mainPane {
   overflow: auto;
   background:
-    radial-gradient(900px 480px at 8% -10%, rgba(45, 212, 191, 0.1), transparent 55%),
+    radial-gradient(900px 480px at 8% -10%, rgba(0, 181, 226, 0.1), transparent 55%),
     radial-gradient(700px 420px at 100% 0%, rgba(56, 189, 248, 0.06), transparent 50%),
     var(--bg);
 }
@@ -284,8 +294,8 @@ button,
 }
 
 button.primary {
-  background: rgba(45, 212, 191, 0.18);
-  border-color: rgba(45, 212, 191, 0.5);
+  background: rgba(0, 181, 226, 0.2);
+  border-color: rgba(0, 181, 226, 0.55);
 }
 
 input,
@@ -343,8 +353,8 @@ textarea {
 }
 
 .bannerHint {
-  background: rgba(45, 212, 191, 0.1);
-  border: 1px solid rgba(45, 212, 191, 0.35);
+  background: rgba(0, 181, 226, 0.1);
+  border: 1px solid rgba(0, 181, 226, 0.35);
   color: #fde68a;
   padding: 10px 12px;
   border-radius: 10px;
@@ -509,7 +519,7 @@ textarea {
 
 .gaugeFill {
   height: 100%;
-  background: linear-gradient(90deg, #34d399, #2dd4bf);
+  background: linear-gradient(90deg, #34d399, #00b5e2);
   border-radius: 999px;
 }
 
@@ -544,12 +554,12 @@ textarea {
 }
 
 .typeChip:hover {
-  border-color: rgba(45, 212, 191, 0.45);
+  border-color: rgba(0, 181, 226, 0.45);
 }
 
 .typeChip.active {
   border-color: var(--accent);
-  background: rgba(45, 212, 191, 0.14);
+  background: rgba(0, 181, 226, 0.14);
 }
 
 .typeChipIcon {
@@ -577,11 +587,11 @@ textarea {
 
 .dashboardHostEditing {
   background-image:
-    linear-gradient(rgba(45, 212, 191, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(45, 212, 191, 0.1) 1px, transparent 1px);
+    linear-gradient(rgba(0, 181, 226, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 181, 226, 0.1) 1px, transparent 1px);
   background-size: 100% 46px, calc(100% / 12) 100%;
   background-position: 0 0;
-  border: 1px dashed rgba(45, 212, 191, 0.18);
+  border: 1px dashed rgba(0, 181, 226, 0.18);
   border-radius: 14px;
   padding-bottom: 48px;
 }
@@ -632,7 +642,7 @@ textarea {
 
 .iconBtnActive {
   background: var(--accent-soft);
-  border-color: rgba(45, 212, 191, 0.45);
+  border-color: rgba(0, 181, 226, 0.45);
   color: var(--accent);
 }
 
@@ -864,7 +874,7 @@ textarea {
   width: 20px;
   height: 20px;
   opacity: 1;
-  background: rgba(45, 212, 191, 0.25);
+  background: rgba(0, 181, 226, 0.25);
   border-top-left-radius: 4px;
 }
 
@@ -951,7 +961,7 @@ textarea {
 /* Themed scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(45, 212, 191, 0.45) rgba(15, 23, 24, 0.8);
+  scrollbar-color: rgba(0, 181, 226, 0.45) rgba(15, 23, 24, 0.8);
 }
 
 *::-webkit-scrollbar {
@@ -965,14 +975,14 @@ textarea {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(45, 212, 191, 0.4);
+  background: rgba(0, 181, 226, 0.4);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(45, 212, 191, 0.65);
+  background: rgba(0, 181, 226, 0.65);
   background-clip: padding-box;
 }
 
@@ -1102,8 +1112,8 @@ textarea {
 }
 
 .timeRangeBtn.active {
-  background: rgba(45, 212, 191, 0.22);
-  border-color: rgba(45, 212, 191, 0.55);
+  background: rgba(0, 181, 226, 0.22);
+  border-color: rgba(0, 181, 226, 0.55);
 }
 
 .chartTooltip {
@@ -1156,7 +1166,8 @@ textarea {
   display: grid;
   place-items: center;
   background:
-    radial-gradient(700px 400px at 30% 20%, rgba(45, 212, 191, 0.12), transparent 55%),
+    radial-gradient(700px 400px at 28% 18%, rgba(0, 181, 226, 0.14), transparent 55%),
+    radial-gradient(500px 320px at 78% 78%, rgba(245, 196, 0, 0.08), transparent 50%),
     var(--bg);
 }
 
@@ -1168,6 +1179,15 @@ textarea {
   padding: 20px;
 }
 
+.loginLogoImg {
+  display: block;
+  height: 52px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  margin-bottom: 12px;
+}
+
 .loginTitle {
   font-size: 20px;
   font-weight: 900;
@@ -1175,7 +1195,7 @@ textarea {
 }
 
 .react-grid-item.react-grid-placeholder {
-  background: rgba(45, 212, 191, 0.25) !important;
+  background: rgba(0, 181, 226, 0.25) !important;
   border-radius: 14px;
 }
 
@@ -1223,7 +1243,7 @@ textarea {
 }
 
 .toastCard--info {
-  border-color: rgba(45, 212, 191, 0.4);
+  border-color: rgba(0, 181, 226, 0.4);
   background: rgba(12, 28, 30, 0.96);
 }
 
@@ -1385,8 +1405,8 @@ textarea {
 }
 
 .mapsOpsRow--active {
-  border-color: rgba(45, 212, 191, 0.45);
-  box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.2);
+  border-color: rgba(0, 181, 226, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(0, 181, 226, 0.2);
 }
 
 .mapsOpsName {
@@ -1585,13 +1605,13 @@ textarea {
 
 .settingsTab:hover {
   color: var(--text);
-  border-color: rgba(45, 212, 191, 0.35);
+  border-color: rgba(0, 181, 226, 0.35);
 }
 
 .settingsTab--active {
   color: var(--text);
   background: var(--accent-soft);
-  border-color: rgba(45, 212, 191, 0.5);
+  border-color: rgba(0, 181, 226, 0.5);
 }
 
 .settingsStack {
@@ -1613,4 +1633,89 @@ textarea {
 .settingsInfoBanner ul {
   margin: 8px 0 0;
   padding-left: 18px;
+}
+
+.settingsBento {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
+}
+
+.settingsBentoCard {
+  grid-column: span 6;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px 18px 16px;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text);
+  font: inherit;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.settingsBentoCard--detection {
+  grid-column: 1 / -1;
+  min-height: 0;
+  box-shadow: inset 3px 0 0 var(--accent-yellow);
+  cursor: default;
+}
+
+.settingsBentoCard--accent {
+  box-shadow: inset 3px 0 0 var(--accent-yellow);
+}
+
+.settingsBentoCard--click {
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.settingsBentoCard--click:hover {
+  border-color: rgba(0, 181, 226, 0.45);
+  background: var(--panel-2);
+  transform: translateY(-1px);
+}
+
+.settingsBentoEyebrow {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.settingsBentoTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.settingsBentoBlurb {
+  margin: 0;
+  flex: 1;
+  font-size: 0.92rem;
+}
+
+.settingsBentoList {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.settingsBentoCta {
+  margin-top: 8px;
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 800px) {
+  .settingsBentoCard {
+    grid-column: 1 / -1;
+  }
 }

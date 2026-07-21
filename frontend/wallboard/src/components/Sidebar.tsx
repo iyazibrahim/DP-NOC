@@ -17,8 +17,12 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebarBrand">
-        <div className="sidebarLogo">NOC</div>
-        <div className="sidebarSub">Site operations</div>
+        <img
+          src="/digital-penang-logo.png"
+          alt="Digital Penang"
+          className="sidebarLogoImg"
+        />
+        <div className="sidebarSub">NOC operations</div>
       </div>
       <nav className="sidebarNav">
         {links.map((l) => (

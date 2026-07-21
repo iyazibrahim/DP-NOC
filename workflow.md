@@ -74,6 +74,9 @@ Collector box → Alloy → Prometheus (central)
     - Site detail: health full-width; map+devices equal row; websites compact; map invalidateSize
     - Alerts page: live status incidents + Alertmanager section
     - Settings: tabbed single-column (Notifications / Storage / Exports / Advanced)
+  - **Digital Penang branding + Settings bento (2026-07-21)**
+    - Logo in sidebar + login; accent cyan `#00b5e2` + yellow `#f5c400`
+    - Settings bento cards open Configure modals (Detection read-only)
 
 ## Local Validation
 1. `docker compose up -d --build`
