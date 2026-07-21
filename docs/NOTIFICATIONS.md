@@ -26,12 +26,12 @@ Without this, save still writes the config — restart the Alertmanager service 
 
 | Alert | Condition | `for` |
 |---|---|---|
-| SiteUplinkDown | `probe_success` wan = 0 **or** `absent_over_time(...[45s])` | 15s |
+| SiteUplinkDown | `probe_success` wan = 0 **or** `absent_over_time(...[90s])` | 30s |
 | SiteWebsiteDown | website probe = 0 **or** absent 2m | 1m |
-| SiteCollectorDown | host `up` = 0 **or** absent memory/`up` 45s | 15s |
+| SiteCollectorDown | host `up` = 0 **or** absent memory/`up` 90s | 30s |
 | SiteLocalDeviceDown | `snmp_up` = 0 **or** absent 5m | 2m |
 
-Silence (collector stopped) fires uplink/collector alerts within ~60s. Notifications fire after the `for` duration, in addition to the dashboard status change and in-app toast.
+Silence (collector stopped) fires uplink/collector alerts within ~2 minutes. The 90s window avoids false ups/downs when ICMP scrapes every 60s. Notifications fire after the `for` duration, in addition to the dashboard status change and in-app toast.
 
 ## Security
 

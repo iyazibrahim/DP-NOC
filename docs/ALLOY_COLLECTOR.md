@@ -21,6 +21,8 @@ Collector box (NUC / Pi / mini-PC / server)
 - Host metrics: `job=integrations/unix`, often only `instance=<hostname>` (no `device`)
 - Uplink: `job=integrations/blackbox/ping_*`, `check=wan_dns|wan_vps`
 
+If ICMP scrape is left at Alloy’s default (~60s) while the NOC freshness window is shorter, uplink will flicker DOWN every minute even though the collector is fine. Set ICMP `scrape_interval` to **15s–30s** on the collector (this repo’s template uses 15s).
+
 If you use a legacy integrations config, add a relabel so series also carry `device="$HOST_DEVICE_ID"`. Until then, the app adopts the collector using the hostname `instance` value.
 
 Do **not** point Alloy at `noc.iyazbrhm.cloud` (that is the UI on port 8080).

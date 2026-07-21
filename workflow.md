@@ -60,12 +60,10 @@ Collector box → Alloy → Prometheus (central)
       - New widgets: Sites signal board, Uplink status, Collector status, bar chart
       - Uplink/probe gauges show green UP / red DOWN (not 1.0)
   - **Faster uplink detection (2026-07-21)**
-    - Freshness window 45s: silence = DOWN for uplink/collector; uplink forces overall DOWN
-    - Gauges use `last_over_time(...[45s])` — empty → DOWN (aligned with status API)
-    - Alert rules: `absent_over_time[45s]` + `for: 15s` (SiteUplinkDown / SiteCollectorDown)
-    - Dashboard toast on uplink/overall → critical
-    - CPU gated by host freshness (no end-of-series spike); signal card text no longer overflows
-    - Settings copy: ~30–60s detection target
+    - Freshness window **90s**: silence = DOWN for uplink/collector; uplink forces overall DOWN
+    - Minute flicker root cause: ICMP scrape often ~60s default vs freshness 45s → false uplink DOWN while collector (30s) stayed healthy
+    - Alloy template icmp `scrape_interval = 15s`; alerts `absent_over_time[90s]` + `for: 30s`
+    - Gauges aligned; dashboard toast; CPU freshness guard; signal card overflow fixed
 
 ## Local Validation
 1. `docker compose up -d --build`

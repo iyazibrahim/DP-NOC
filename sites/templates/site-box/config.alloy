@@ -40,9 +40,11 @@ prometheus.exporter.blackbox "icmp_probe" {
 }
 
 prometheus.scrape "icmp_scrape" {
-  targets    = prometheus.exporter.blackbox.icmp_probe.targets
-  forward_to = [prometheus.remote_write.central.receiver]
-  job_name   = "site_icmp_probe"
+  targets         = prometheus.exporter.blackbox.icmp_probe.targets
+  forward_to      = [prometheus.remote_write.central.receiver]
+  job_name        = "site_icmp_probe"
+  // Must stay well under status freshness (90s). Default 1m caused false uplink downs.
+  scrape_interval = "15s"
 }
 
 // NUC / site-box host metrics (CPU, memory, disk, network)

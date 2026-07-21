@@ -48,8 +48,8 @@ export type StatusMeta = {
 
 export const STATUS_META: Omit<StatusMeta, "checkedAt"> = {
   dashboardRefreshSec: 10,
-  metricFreshWindowSec: 45,
-  typicalDetectionSec: 45,
+  metricFreshWindowSec: 90,
+  typicalDetectionSec: 90,
   scrapeIntervalSec: 30
 };
 
