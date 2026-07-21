@@ -43,7 +43,6 @@ function saveView(lat: number, lng: number, zoom: number) {
   }
 }
 
-/** Fit once when there is no saved user view — never re-fit on poll refreshes. */
 function FitBoundsOnce({ sites, enabled }: { sites: Site[]; enabled: boolean }) {
   const map = useMap();
   const done = useRef(false);
@@ -94,18 +93,32 @@ function InvalidateOnResize({ containerRef }: { containerRef: RefObject<HTMLDivE
   return null;
 }
 
+function FlyToSite({ site }: { site: Site | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!site) return;
+    map.flyTo([site.lat, site.lng], Math.max(map.getZoom(), 11), { duration: 0.6 });
+  }, [map, site]);
+  return null;
+}
+
 export function SitesLeafletMap({
   sites,
   statuses,
-  height = "100%"
+  height = "100%",
+  selectedSiteId,
+  onSelectSite
 }: {
   sites: Site[];
   statuses: SiteStatus[];
   height?: string | number;
+  selectedSiteId?: string | null;
+  onSelectSite?: (siteId: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [saved] = useState(() => loadSavedView());
   const byId = new Map(statuses.map((s) => [s.siteId, s]));
+  const selected = selectedSiteId ? sites.find((s) => s.id === selectedSiteId) ?? null : null;
 
   const clusters = sites.map((s) => {
     const nearby = sites.filter(
@@ -144,25 +157,33 @@ export function SitesLeafletMap({
         <FitBoundsOnce sites={sites} enabled={!saved} />
         <PersistView />
         <InvalidateOnResize containerRef={containerRef} />
-        {markers.map(({ site, count, status }) => (
-          <CircleMarker
-            key={site.id}
-            center={[site.lat, site.lng]}
-            radius={Math.min(8 + count * 3, 22)}
-            pathOptions={{
-              color: colorFor(status?.overall),
-              fillColor: colorFor(status?.overall),
-              fillOpacity: 0.75,
-              weight: 2
-            }}
-          >
-            <Popup>
-              <strong>{site.name}</strong>
-              <div>{status?.overall?.toUpperCase() ?? "UNKNOWN"}</div>
-              <div>Cluster ~{count} nearby</div>
-            </Popup>
-          </CircleMarker>
-        ))}
+        <FlyToSite site={selected} />
+        {markers.map(({ site, count, status }) => {
+          const isSelected = selectedSiteId === site.id;
+          const base = Math.min(8 + count * 3, 22);
+          return (
+            <CircleMarker
+              key={site.id}
+              center={[site.lat, site.lng]}
+              radius={isSelected ? base + 4 : base}
+              eventHandlers={{
+                click: () => onSelectSite?.(site.id)
+              }}
+              pathOptions={{
+                color: isSelected ? "#2dd4bf" : colorFor(status?.overall),
+                fillColor: colorFor(status?.overall),
+                fillOpacity: isSelected ? 0.95 : 0.75,
+                weight: isSelected ? 3 : 2
+              }}
+            >
+              <Popup>
+                <strong>{site.name}</strong>
+                <div>{status?.overall?.toUpperCase() ?? "UNKNOWN"}</div>
+                <div>Cluster ~{count} nearby</div>
+              </Popup>
+            </CircleMarker>
+          );
+        })}
       </MapContainer>
     </div>
   );

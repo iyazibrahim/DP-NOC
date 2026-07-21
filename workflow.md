@@ -63,6 +63,12 @@ Collector box → Alloy → Prometheus (central)
     - Freshness **45s** (30–60s target): silence = DOWN; uplink forces overall DOWN
     - **Prerequisite:** collector ICMP scrape 15–30s (template `scrape_interval = 15s`). 60s default + 45s freshness = minute flicker false alarms
     - Alerts `absent_over_time[45s]` + `for: 15s`; gauges aligned; toast; CPU freshness guard
+  - **Ops UX redesign (2026-07-21)**
+    - Custom dashboard widget names (`config.title`) in settings
+    - Maps right rail: site uplink + collectors + hotspots (click focuses map)
+    - Site detail Bento layout; Add device / website / edit site via modal
+    - Devices: hide empty “New devices found” card
+    - Website checks: table-first + Add/Edit modal
 
 ## Local Validation
 1. `docker compose up -d --build`

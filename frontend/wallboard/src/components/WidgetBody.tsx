@@ -161,7 +161,7 @@ export function WidgetBody({
   if (type === "uplink_status") {
     return (
       <div className="widgetInner flush">
-        <UplinkStatusCard site={site} status={st} />
+        <UplinkStatusCard site={site} status={st} title={config?.title} />
       </div>
     );
   }
@@ -169,7 +169,7 @@ export function WidgetBody({
   if (type === "collector_status") {
     return (
       <div className="widgetInner flush">
-        <CollectorStatusCard site={site} status={st} />
+        <CollectorStatusCard site={site} status={st} title={config?.title} />
       </div>
     );
   }
@@ -256,6 +256,7 @@ export function WidgetBody({
           deviceId={deviceId}
           metric={metric}
           presets={presets}
+          title={config?.title}
         />
       </div>
     );
@@ -264,7 +265,13 @@ export function WidgetBody({
   if (type === "device_metric_bar") {
     return (
       <div className="widgetInner">
-        <DeviceMetricBar siteId={siteId} deviceId={deviceId} metric={metric} presets={presets} />
+        <DeviceMetricBar
+          siteId={siteId}
+          deviceId={deviceId}
+          metric={metric}
+          presets={presets}
+          title={config?.title}
+        />
       </div>
     );
   }
@@ -278,6 +285,7 @@ export function WidgetBody({
           metric={metric}
           presets={presets}
           siteName={site?.name}
+          title={config?.title}
         />
       </div>
     );
@@ -286,7 +294,7 @@ export function WidgetBody({
   if (type === "device_detail") {
     return (
       <div className="widgetInner widgetInnerScroll">
-        <div className="widgetTitle">Device info</div>
+        <div className="widgetTitle">{config?.title?.trim() || "Device info"}</div>
         <DeviceDetailPanel site={site} deviceId={deviceId} />
       </div>
     );

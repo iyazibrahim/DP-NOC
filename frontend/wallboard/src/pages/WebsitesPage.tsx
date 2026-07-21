@@ -10,6 +10,7 @@ import {
   updateSiteWebsite
 } from "../api";
 import { StatusPill } from "../components/StatusPill";
+import { Modal } from "../components/Modal";
 import type { Site } from "../types";
 
 export function WebsitesPage() {
@@ -21,6 +22,7 @@ export function WebsitesPage() {
   const [sites, setSites] = useState<Site[]>([]);
   const [form, setForm] = useState({ siteId: "", name: "", url: "" });
   const [editingUrl, setEditingUrl] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,6 +46,24 @@ export function WebsitesPage() {
     reload().catch((e) => setError(e instanceof Error ? e.message : "Load failed"));
   }, [token, searchParams]);
 
+  function openAdd() {
+    setEditingUrl(null);
+    setForm((f) => ({ ...f, name: "", url: "" }));
+    setModalOpen(true);
+  }
+
+  function openEdit(r: { siteId: string; name: string; url: string }) {
+    setEditingUrl(r.url);
+    setForm({ siteId: r.siteId, name: r.name, url: r.url });
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setEditingUrl(null);
+    setForm((f) => ({ ...f, name: "", url: "" }));
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!token || !form.siteId) return;
@@ -59,10 +79,9 @@ export function WebsitesPage() {
       } else {
         await addSiteWebsite(token, form.siteId, { name: form.name, url: form.url });
       }
-      setForm((f) => ({ ...f, name: "", url: "" }));
-      setEditingUrl(null);
       setMsg("Saved. Click Save and start checking to activate.");
       await reload();
+      closeModal();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -104,117 +123,119 @@ export function WebsitesPage() {
           <h1>Website checks</h1>
           <p className="pageSub">We check if your public websites respond</p>
         </div>
+        <div className="pageActions">
+          <button type="button" className="primary" onClick={openAdd}>
+            Add website
+          </button>
+        </div>
       </div>
 
       {error ? <div className="bannerError">{error}</div> : null}
       {msg ? <p className="muted">{msg}</p> : null}
 
-      <div className="detailGrid">
-        <div className="tableCard" style={{ gridColumn: "1 / -1" }}>
-          <div className="tableTitle">{editingUrl ? "Edit website" : "Add website"}</div>
-          <form className="deviceForm" onSubmit={onSubmit}>
-            <label className="label">Site</label>
-            <select
-              value={form.siteId}
-              onChange={(e) => setForm((f) => ({ ...f, siteId: e.target.value }))}
-              required
-            >
-              <option value="global">Global (no physical site)</option>
-              {sites.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-            <p className="muted fieldHint">
-              Website checks run from the central server and count toward that site&apos;s health.
-            </p>
-            <label className="label">Display name</label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Public website"
-            />
-            <label className="label">URL</label>
-            <input
-              value={form.url}
-              onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
-              placeholder="https://example.com"
-              required
-            />
-            <div className="formActions">
-              <button className="primary" type="submit" disabled={busy}>
-                {editingUrl ? "Save" : "Add website"}
-              </button>
-              {form.siteId ? (
-                <button type="button" onClick={() => onApply(form.siteId)} disabled={busy}>
-                  Save and start checking
-                </button>
-              ) : null}
-              {editingUrl ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingUrl(null);
-                    setForm((f) => ({ ...f, name: "", url: "" }));
-                  }}
-                >
-                  Cancel
-                </button>
-              ) : null}
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <table className="dataTable full" style={{ marginTop: 16 }}>
-        <thead>
-          <tr>
-            <th>Site</th>
-            <th>Name</th>
-            <th>URL</th>
-            <th>State</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
+      <div className="tableCard">
+        <div className="tableTitle">Checked URLs</div>
+        <table className="dataTable">
+          <thead>
             <tr>
-              <td colSpan={5} className="muted">
-                No websites yet — add one above or on a{" "}
-                <Link to="/sites">site detail page</Link>.
-              </td>
+              <th>Site</th>
+              <th>Name</th>
+              <th>URL</th>
+              <th>State</th>
+              <th></th>
             </tr>
-          ) : (
-            rows.map((r) => (
-              <tr key={`${r.siteId}-${r.url}`}>
-                <td>
-                  {r.siteId === "global" ? <span>{r.siteName}</span> : <Link to={`/sites/${r.siteId}`}>{r.siteName}</Link>}
-                </td>
-                <td>{r.name}</td>
-                <td>{r.url}</td>
-                <td>
-                  <StatusPill state={r.state} />
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingUrl(r.url);
-                      setForm({ siteId: r.siteId, name: r.name, url: r.url });
-                    }}
-                  >
-                    Edit
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="muted">
+                  No websites yet —{" "}
+                  <button type="button" className="linkBtn" onClick={openAdd}>
+                    add one
                   </button>{" "}
-                  <button type="button" onClick={() => onDelete(r.siteId, r.url)}>
-                    Remove
-                  </button>
+                  or use a <Link to="/sites">site detail page</Link>.
                 </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : (
+              rows.map((r) => (
+                <tr key={`${r.siteId}-${r.url}`}>
+                  <td>
+                    {r.siteId === "global" ? (
+                      <span>{r.siteName}</span>
+                    ) : (
+                      <Link to={`/sites/${r.siteId}`}>{r.siteName}</Link>
+                    )}
+                  </td>
+                  <td>{r.name}</td>
+                  <td>{r.url}</td>
+                  <td>
+                    <StatusPill state={r.state} />
+                  </td>
+                  <td>
+                    <button type="button" onClick={() => openEdit(r)}>
+                      Edit
+                    </button>{" "}
+                    <button type="button" onClick={() => onDelete(r.siteId, r.url)}>
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <Modal
+        open={modalOpen}
+        title={editingUrl ? "Edit website" : "Add website"}
+        onClose={closeModal}
+      >
+        <form className="deviceForm" onSubmit={onSubmit}>
+          <label className="label">Site</label>
+          <select
+            value={form.siteId}
+            onChange={(e) => setForm((f) => ({ ...f, siteId: e.target.value }))}
+            required
+          >
+            <option value="global">Global (no physical site)</option>
+            {sites.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <p className="muted fieldHint">
+            Website checks run from the central server and count toward that site&apos;s health.
+          </p>
+          <label className="label">Display name</label>
+          <input
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder="Public website"
+          />
+          <label className="label">URL</label>
+          <input
+            value={form.url}
+            onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
+            placeholder="https://example.com"
+            required
+          />
+          <div className="formActions">
+            <button className="primary" type="submit" disabled={busy}>
+              {editingUrl ? "Save" : "Add website"}
+            </button>
+            {form.siteId ? (
+              <button type="button" onClick={() => onApply(form.siteId)} disabled={busy}>
+                Save and start checking
+              </button>
+            ) : null}
+            <button type="button" onClick={closeModal} disabled={busy}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

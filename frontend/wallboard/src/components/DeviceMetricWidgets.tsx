@@ -88,12 +88,14 @@ export function DeviceMetricChart({
   siteId,
   deviceId,
   metric,
-  presets
+  presets,
+  title
 }: {
   siteId: string;
   deviceId: string;
   metric: string;
   presets: MetricPreset[];
+  title?: string;
 }) {
   const { token } = useAuth();
   const [points, setPoints] = useState<Array<{ t: string; v: number; ts: number }>>([]);
@@ -101,7 +103,7 @@ export function DeviceMetricChart({
   const [loading, setLoading] = useState(false);
   const [hours, setHours] = useState<number>(1);
   const preset = presets.find((p) => p.id === metric);
-  const label = preset?.label ?? metric;
+  const label = title?.trim() || preset?.label || metric;
   const unit = preset?.unit ?? "";
 
   useEffect(() => {
@@ -186,12 +188,14 @@ export function DeviceMetricBar({
   siteId,
   deviceId,
   metric,
-  presets
+  presets,
+  title
 }: {
   siteId: string;
   deviceId: string;
   metric: string;
   presets: MetricPreset[];
+  title?: string;
 }) {
   const { token } = useAuth();
   const [points, setPoints] = useState<Array<{ t: string; v: number; ts: number }>>([]);
@@ -199,7 +203,7 @@ export function DeviceMetricBar({
   const [loading, setLoading] = useState(false);
   const [hours, setHours] = useState<number>(1);
   const preset = presets.find((p) => p.id === metric);
-  const label = preset?.label ?? metric;
+  const label = title?.trim() || preset?.label || metric;
   const unit = preset?.unit ?? "";
 
   useEffect(() => {
@@ -287,13 +291,15 @@ export function DeviceStatGauge({
   deviceId,
   metric,
   presets,
-  siteName
+  siteName,
+  title
 }: {
   siteId: string;
   deviceId: string;
   metric: string;
   presets: MetricPreset[];
   siteName?: string;
+  title?: string;
 }) {
   const { token } = useAuth();
   const [value, setValue] = useState<number | null>(null);
@@ -302,6 +308,7 @@ export function DeviceStatGauge({
   const preset = presets.find((p) => p.id === metric);
   const unit = preset?.unit ?? "";
   const isBool = BOOLEAN_METRICS.has(metric);
+  const displayTitle = title?.trim() || preset?.label || metric;
 
   useEffect(() => {
     if (!token || !siteId || !metric) return;
@@ -345,7 +352,7 @@ export function DeviceStatGauge({
     const label = up ? "UP" : "DOWN";
     return (
       <div className={`signalCard signalCard--${tone} signalCardCompact`}>
-        <div className="signalCardEyebrow">{preset?.label ?? metric}</div>
+        <div className="signalCardEyebrow">{displayTitle}</div>
         <div className="signalCardName">{siteName ?? siteId}</div>
         <div className="signalCardState">{label}</div>
         <div className="signalCardHint">
@@ -366,7 +373,7 @@ export function DeviceStatGauge({
 
   return (
     <div className="gaugeWidget">
-      <div className="widgetTitle">{preset?.label ?? metric}</div>
+          <div className="widgetTitle">{displayTitle}</div>
       {loading && value == null ? (
         <div className="chartSkeleton gaugeSkeleton" aria-hidden />
       ) : (

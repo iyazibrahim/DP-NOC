@@ -1,5 +1,27 @@
 import type { DashboardWidget, MetricPreset, Site } from "../types";
 
+function TitleField({
+  config,
+  onChange,
+  placeholder
+}: {
+  config: Record<string, string>;
+  onChange: (config: Record<string, string>) => void;
+  placeholder?: string;
+}) {
+  return (
+    <>
+      <label className="label">Widget name</label>
+      <input
+        value={config.title ?? ""}
+        onChange={(e) => onChange({ ...config, title: e.target.value })}
+        placeholder={placeholder ?? "e.g. DP Nuc Disk Free"}
+      />
+      <p className="muted fieldHint">Shown on the widget chrome. Leave blank for the default name.</p>
+    </>
+  );
+}
+
 export function WidgetConfigEditor({
   widget,
   sites,
@@ -33,6 +55,13 @@ export function WidgetConfigEditor({
   ) {
     return (
       <div className="widgetConfig">
+        <TitleField
+          config={config}
+          onChange={onChange}
+          placeholder={
+            widget.type === "uplink_status" ? "e.g. DP Office Uplink" : "e.g. DP Office Collector"
+          }
+        />
         <label className="label">Site</label>
         <select
           value={config.siteId ?? siteId}
@@ -52,6 +81,7 @@ export function WidgetConfigEditor({
     const base = grafanaUrl.replace(/\/$/, "");
     return (
       <div className="widgetConfig">
+        <TitleField config={config} onChange={onChange} placeholder="e.g. Grafana CPU panel" />
         <p className="muted widgetConfigHint">
           Optional. Prefer native Collector charts unless you need a specific Grafana panel.
         </p>
@@ -72,13 +102,23 @@ export function WidgetConfigEditor({
       p.kind === "any" ||
       devices.find((d) => d.id === deviceId)?.kind === p.kind ||
       !deviceId ||
-      // Uplink presets work without a device
       p.id === "wan_dns" ||
       p.id === "wan_vps"
   );
 
   return (
     <div className="widgetConfig">
+      <TitleField
+        config={config}
+        onChange={onChange}
+        placeholder={
+          widget.type === "device_metric_chart"
+            ? "e.g. DP Nuc CPU Usage"
+            : widget.type === "device_stat_gauge"
+              ? "e.g. DP Nuc Disk Free"
+              : "e.g. Custom widget name"
+        }
+      />
       <label className="label">Site</label>
       <select
         value={siteId}

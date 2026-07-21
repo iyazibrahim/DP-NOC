@@ -23,7 +23,9 @@ import type { DeviceKind, DiscoveredDevice, Site, SiteDevice, SiteStatus } from 
 import { StatusPill } from "../components/StatusPill";
 import { SiteLocationPicker } from "../components/SiteLocationPicker";
 import { DeviceTypePicker, useDeviceTypes, type DeviceTypeOption } from "../components/DeviceTypePicker";
-import { collectorOf, formatDomainLine, localDevicesOf, uplinkOf } from "../statusLabels";
+import { collectorOf, localDevicesOf, uplinkOf } from "../statusLabels";
+import { Modal } from "../components/Modal";
+import { SitesLeafletMap } from "../components/SitesLeafletMap";
 
 export function SitesPage() {
   const { token } = useAuth();
@@ -185,6 +187,9 @@ export function SiteDetailPage() {
   const [editingWebsiteUrl, setEditingWebsiteUrl] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [discovered, setDiscovered] = useState<DiscoveredDevice[]>([]);
+  const [editSiteOpen, setEditSiteOpen] = useState(false);
+  const [deviceModalOpen, setDeviceModalOpen] = useState(false);
+  const [websiteModalOpen, setWebsiteModalOpen] = useState(false);
 
   async function reload() {
     if (!token || !id) return;
@@ -222,6 +227,14 @@ export function SiteDetailPage() {
       vendor: d.vendor
     });
     setError(null);
+    setDeviceModalOpen(true);
+  }
+
+  function openAddDevice() {
+    setEditingId(null);
+    setForm(emptyForm);
+    setError(null);
+    setDeviceModalOpen(true);
   }
 
   function suggestDeviceId(typeId: string, kind: DeviceKind) {
@@ -254,6 +267,7 @@ export function SiteDetailPage() {
     setEditingId(null);
     setForm(emptyForm);
     setError(null);
+    setDeviceModalOpen(false);
   }
 
   async function onSubmit(e: FormEvent) {
@@ -298,7 +312,8 @@ export function SiteDetailPage() {
         hostMetricId: "",
         vendor: "generic"
       });
-      setMsg(`Discovered ${d.deviceId} — enter SNMP IP below and click Add device.`);
+      setMsg(`Discovered ${d.deviceId} — enter SNMP IP and save.`);
+      setDeviceModalOpen(true);
       return;
     }
     setBusy(true);
@@ -344,6 +359,7 @@ export function SiteDetailPage() {
     setError(null);
     try {
       await updateSite(token, id, siteForm);
+      setEditSiteOpen(false);
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -396,7 +412,8 @@ export function SiteDetailPage() {
       }
       setWebsiteForm({ name: "", url: "" });
       setEditingWebsiteUrl(null);
-      setMsg("Website saved. Click Apply probes to start HTTP checks.");
+      setWebsiteModalOpen(false);
+      setMsg("Website saved. Click Save and start checking to activate probes.");
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Website save failed");
@@ -438,205 +455,146 @@ export function SiteDetailPage() {
 
   if (!site) return <div className="page">Loading…</div>;
 
+  const pendingDisc = discovered.filter((d) => !d.alreadyRegistered);
+  const col = collectorOf(status);
+  const up = uplinkOf(status);
+  const loc = localDevicesOf(status);
+  const web = status?.websites ?? { state: "unknown" as const };
+
+  function openAddWebsite() {
+    setEditingWebsiteUrl(null);
+    setWebsiteForm({ name: "", url: "" });
+    setWebsiteModalOpen(true);
+  }
+
+  function openEditWebsite(w: { name: string; url: string }) {
+    setEditingWebsiteUrl(w.url);
+    setWebsiteForm({ name: w.name, url: w.url });
+    setWebsiteModalOpen(true);
+  }
+
   return (
     <div className="page">
       <div className="pageHeader">
         <div>
+          <p className="pageEyebrow">
+            <Link to="/sites">Sites</Link>
+            <span aria-hidden> / </span>
+            {site.id}
+          </p>
           <h1>{site.name}</h1>
-          <p className="pageSub">{site.id}</p>
+          {site.address ? <p className="pageSub">{site.address}</p> : null}
         </div>
-        <StatusPill
-          state={status?.overall ?? "unknown"}
-          notes={collectorOf(status).notes ?? uplinkOf(status).notes}
-        />
+        <div className="pageActions">
+          <StatusPill
+            state={status?.overall ?? "unknown"}
+            notes={col.notes ?? up.notes}
+          />
+          <button type="button" onClick={() => setEditSiteOpen(true)}>
+            Edit site
+          </button>
+        </div>
       </div>
 
       {error ? <div className="bannerError">{error}</div> : null}
       {msg ? <p className="muted">{msg}</p> : null}
 
-      <div className="detailGrid">
-        <div className="tableCard">
-          <div className="tableTitle">Site details</div>
-          <form className="deviceForm" onSubmit={onSaveSite}>
-            <label className="label">Name</label>
-            <input
-              value={siteForm.name}
-              onChange={(e) => setSiteForm((f) => ({ ...f, name: e.target.value }))}
-              required
-            />
-            <label className="label">Address</label>
-            <input
-              value={siteForm.address}
-              onChange={(e) => setSiteForm((f) => ({ ...f, address: e.target.value }))}
-            />
-            <label className="label">Notes</label>
-            <input
-              value={siteForm.notes}
-              onChange={(e) => setSiteForm((f) => ({ ...f, notes: e.target.value }))}
-            />
-            <SiteLocationPicker
-              lat={siteForm.lat}
-              lng={siteForm.lng}
-              onChange={(lat, lng) => setSiteForm((f) => ({ ...f, lat, lng }))}
-            />
+      <div className="siteBento">
+        <section className="bentoTile bentoHero">
+          <div className="bentoHeroMain">
+            <div className="tableTitle">Overview</div>
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              {site.notes?.trim() || "No notes yet."}
+            </p>
             <div className="formActions">
-              <button className="primary" type="submit" disabled={busy}>
-                Save site
+              <button type="button" onClick={() => setEditSiteOpen(true)}>
+                Edit details
               </button>
               <button type="button" onClick={onDeleteSite} disabled={busy}>
                 Delete site
               </button>
             </div>
-          </form>
-        </div>
+          </div>
+        </section>
 
-        <div className="tableCard">
+        <section className="bentoTile bentoHealth">
           <div className="tableTitle">Health</div>
-          <div className="kvList healthKv">
-            <div>{formatDomainLine("Collector", collectorOf(status))}</div>
-            <div>{formatDomainLine("Uplink / Internet", uplinkOf(status))}</div>
-            <div>{formatDomainLine("Local devices", localDevicesOf(status))}</div>
-            <div>{formatDomainLine("Website checks", status?.websites)}</div>
-            <div>
-              Alerts: {status?.alerts.firing ?? 0} firing / {status?.alerts.resolved ?? 0} resolved
+          <div className="healthMiniGrid">
+            <div className={`healthMini healthMini--${col.state}`}>
+              <span className="healthMiniLabel">Collector</span>
+              <strong>{col.state}</strong>
+              {col.notes ? <span className="muted">{col.notes}</span> : null}
+            </div>
+            <div className={`healthMini healthMini--${up.state}`}>
+              <span className="healthMiniLabel">Uplink</span>
+              <strong>{up.state}</strong>
+              {up.notes ? <span className="muted">{up.notes}</span> : null}
+            </div>
+            <div className={`healthMini healthMini--${loc.state}`}>
+              <span className="healthMiniLabel">Local devices</span>
+              <strong>{loc.state}</strong>
+              {loc.notes ? <span className="muted">{loc.notes}</span> : null}
+            </div>
+            <div className={`healthMini healthMini--${web.state}`}>
+              <span className="healthMiniLabel">Websites</span>
+              <strong>{web.state}</strong>
+              {web.notes ? <span className="muted">{web.notes}</span> : null}
             </div>
           </div>
-        </div>
-
-        <div className="tableCard">
-          <div className="tableTitle">Website checks</div>
-          <p className="muted">
-            We check whether public websites respond. Add a URL, then click{" "}
-            <strong>Save and start checking</strong>.
+          <p className="muted" style={{ marginTop: 10, marginBottom: 0 }}>
+            Alerts: {status?.alerts.firing ?? 0} firing / {status?.alerts.resolved ?? 0} resolved
           </p>
-          <div className="formActions" style={{ marginBottom: 12 }}>
-            <button type="button" onClick={onApplyProbes} disabled={busy}>
-              Save and start checking
-            </button>
+        </section>
+
+        <section className="bentoTile bentoMap">
+          <div className="tableTitle">Location</div>
+          <div className="bentoMapFrame">
+            <SitesLeafletMap
+              sites={[site]}
+              statuses={status ? [status] : []}
+              height={220}
+              selectedSiteId={site.id}
+            />
           </div>
-          <table className="dataTable">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>URL</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {(site.websiteTargets ?? []).length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="muted">
-                    No websites — add one below (e.g. https://digitalpenang.gov.my)
-                  </td>
-                </tr>
-              ) : (
-                (site.websiteTargets ?? []).map((w) => (
-                  <tr key={w.url}>
-                    <td>{w.name}</td>
-                    <td>{w.url}</td>
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingWebsiteUrl(w.url);
-                          setWebsiteForm({ name: w.name, url: w.url });
-                        }}
-                        disabled={busy}
-                      >
-                        Edit
-                      </button>{" "}
-                      <button type="button" onClick={() => onDeleteWebsite(w.url)} disabled={busy}>
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-          <form className="deviceForm" onSubmit={onWebsiteSubmit}>
-            <div className="tableTitle">{editingWebsiteUrl ? "Edit website" : "Add website"}</div>
-            <label className="label">Display name</label>
-            <input
-              value={websiteForm.name}
-              onChange={(e) => setWebsiteForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Main website"
-            />
-            <label className="label">URL</label>
-            <input
-              value={websiteForm.url}
-              onChange={(e) => setWebsiteForm((f) => ({ ...f, url: e.target.value }))}
-              placeholder="https://example.com"
-              required
-            />
+        </section>
+
+        <section className="bentoTile bentoDevices">
+          <div className="bentoTileHeader">
+            <div className="tableTitle">Devices</div>
             <div className="formActions">
-              <button className="primary" type="submit" disabled={busy}>
-                {editingWebsiteUrl ? "Save website" : "Add website"}
+              <button type="button" className="primary" onClick={openAddDevice}>
+                Add device
               </button>
-              {editingWebsiteUrl ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingWebsiteUrl(null);
-                    setWebsiteForm({ name: "", url: "" });
-                  }}
-                  disabled={busy}
-                >
-                  Cancel
-                </button>
-              ) : null}
+              <button type="button" onClick={onDownloadDevices}>
+                Download devices.json
+              </button>
             </div>
-          </form>
-        </div>
+          </div>
 
-        <div className="tableCard">
-          <div className="tableTitle">Devices</div>
-          <p className="muted">
-            <strong>Collectors</strong> (NUC, mini-PC, Pi, server) appear automatically when they send
-            CPU/memory data. <strong>Local devices</strong> (switches, routers) are added here, then
-            exported to the collector for SNMP monitoring.
-          </p>
-
-          {discovered.filter((d) => !d.alreadyRegistered).length > 0 ? (
+          {pendingDisc.length > 0 ? (
             <div className="discoveryBanner">
               <div className="discoveryBannerTitle">New devices found</div>
-              <p className="muted" style={{ marginBottom: 8 }}>
-                These are sending data but are not in inventory yet. Collectors are usually added
-                automatically within a minute — or register them now.
-              </p>
-              {discovered
-                .filter((d) => !d.alreadyRegistered)
-                .map((d) => (
-                  <div key={d.deviceId} className="discoveryRow">
-                    <div>
-                      <strong>{d.suggestedName}</strong>
-                      <div className="muted">
-                        {d.deviceId} · {d.kind === "server" ? "Collector" : "Local device"}
-                        {d.lastSeen ? ` · seen ${new Date(d.lastSeen).toLocaleString()}` : ""}
-                      </div>
+              {pendingDisc.map((d) => (
+                <div key={d.deviceId} className="discoveryRow">
+                  <div>
+                    <strong>{d.suggestedName}</strong>
+                    <div className="muted">
+                      {d.deviceId} · {d.kind === "server" ? "Collector" : "Local device"}
                     </div>
-                    <button
-                      type="button"
-                      className="primary"
-                      onClick={() => onRegisterDiscovered(d)}
-                      disabled={busy}
-                    >
-                      {d.kind === "server" ? "Add collector" : "Add details"}
-                    </button>
                   </div>
-                ))}
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => onRegisterDiscovered(d)}
+                    disabled={busy}
+                  >
+                    {d.kind === "server" ? "Add collector" : "Add details"}
+                  </button>
+                </div>
+              ))}
             </div>
           ) : null}
 
-          <div className="pageActions" style={{ marginBottom: 12 }}>
-            <button type="button" onClick={onDownloadDevices}>
-              Download devices.json (for SNMP)
-            </button>
-          </div>
-          <p className="muted" style={{ marginBottom: 12 }}>
-            After adding local network devices, download the file, copy it to the collector, run the
-            config generator, and restart Alloy.
-          </p>
           <table className="dataTable">
             <thead>
               <tr>
@@ -651,7 +609,7 @@ export function SiteDetailPage() {
               {(site.devices ?? []).length === 0 ? (
                 <tr>
                   <td colSpan={5} className="muted">
-                    No devices yet — use Discover above or add one below.
+                    No devices yet — add a collector or local device.
                   </td>
                 </tr>
               ) : (
@@ -662,9 +620,7 @@ export function SiteDetailPage() {
                       <div className="muted">{d.id}</div>
                     </td>
                     <td>{d.kind}</td>
-                    <td>
-                      {deviceTypes.find((t) => t.id === d.type)?.label ?? d.type}
-                    </td>
+                    <td>{deviceTypes.find((t) => t.id === d.type)?.label ?? d.type}</td>
                     <td>{d.kind === "server" ? d.hostMetricId ?? d.id : d.snmpIp}</td>
                     <td>
                       <button type="button" onClick={() => startEdit(d)} disabled={busy}>
@@ -679,74 +635,196 @@ export function SiteDetailPage() {
               )}
             </tbody>
           </table>
+        </section>
 
-          <form className="deviceForm" onSubmit={onSubmit}>
-            <div className="tableTitle">{editingId ? `Edit ${editingId}` : "Add device"}</div>
-
-            <DeviceTypePicker
-              types={deviceTypes}
-              selectedTypeId={form.type}
-              onSelectType={onSelectDeviceType}
-              vendor={form.vendor}
-              onVendorChange={(vendor) => setForm((f) => ({ ...f, vendor }))}
-              onAddCustomType={onAddCustomType}
-            />
-
-            {!editingId ? (
-              <>
-                <label className="label">ID</label>
-                <input
-                  value={form.id}
-                  onChange={(e) => setForm((f) => ({ ...f, id: e.target.value }))}
-                  placeholder={`${site.id}-sw1`}
-                  required
-                />
-              </>
-            ) : null}
-            <label className="label">Display name</label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Core switch"
-              required
-            />
-            {form.kind === "network" ? (
-              <>
-                <label className="label">SNMP IP</label>
-                <input
-                  value={form.snmpIp}
-                  onChange={(e) => setForm((f) => ({ ...f, snmpIp: e.target.value }))}
-                  placeholder="192.168.1.1"
-                  required
-                />
-              </>
-            ) : (
-              <>
-                <label className="label">Host metric ID (Alloy HOST_DEVICE_ID)</label>
-                <input
-                  value={form.hostMetricId}
-                  onChange={(e) => setForm((f) => ({ ...f, hostMetricId: e.target.value }))}
-                  placeholder={`${site.id}-nuc`}
-                  required
-                />
-              </>
-            )}
+        <section className="bentoTile bentoWebsites">
+          <div className="bentoTileHeader">
+            <div className="tableTitle">Website checks</div>
             <div className="formActions">
-              <button className="primary" type="submit" disabled={busy}>
-                {editingId ? "Save" : "Add device"}
+              <button type="button" className="primary" onClick={openAddWebsite}>
+                Add website
               </button>
-              {editingId ? (
-                <button type="button" onClick={cancelEdit} disabled={busy}>
-                  Cancel
-                </button>
-              ) : null}
+              <button type="button" onClick={onApplyProbes} disabled={busy}>
+                Save and start checking
+              </button>
             </div>
-          </form>
-        </div>
+          </div>
+          <table className="dataTable">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>URL</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {(site.websiteTargets ?? []).length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="muted">
+                    No websites — add a public URL to monitor from the central server.
+                  </td>
+                </tr>
+              ) : (
+                (site.websiteTargets ?? []).map((w) => (
+                  <tr key={w.url}>
+                    <td>{w.name}</td>
+                    <td>{w.url}</td>
+                    <td>
+                      <button type="button" onClick={() => openEditWebsite(w)} disabled={busy}>
+                        Edit
+                      </button>{" "}
+                      <button type="button" onClick={() => onDeleteWebsite(w.url)} disabled={busy}>
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </section>
       </div>
-      <p>
-        <Link to="/sites">← Back to sites</Link>
-      </p>
+
+      <Modal open={editSiteOpen} title="Edit site" onClose={() => setEditSiteOpen(false)} wide>
+        <form className="deviceForm" onSubmit={onSaveSite}>
+          <label className="label">Name</label>
+          <input
+            value={siteForm.name}
+            onChange={(e) => setSiteForm((f) => ({ ...f, name: e.target.value }))}
+            required
+          />
+          <label className="label">Address</label>
+          <input
+            value={siteForm.address}
+            onChange={(e) => setSiteForm((f) => ({ ...f, address: e.target.value }))}
+          />
+          <label className="label">Notes</label>
+          <input
+            value={siteForm.notes}
+            onChange={(e) => setSiteForm((f) => ({ ...f, notes: e.target.value }))}
+          />
+          <SiteLocationPicker
+            lat={siteForm.lat}
+            lng={siteForm.lng}
+            onChange={(lat, lng) => setSiteForm((f) => ({ ...f, lat, lng }))}
+          />
+          <div className="formActions">
+            <button className="primary" type="submit" disabled={busy}>
+              Save site
+            </button>
+            <button type="button" onClick={() => setEditSiteOpen(false)} disabled={busy}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={deviceModalOpen}
+        title={editingId ? `Edit ${editingId}` : "Add device"}
+        onClose={cancelEdit}
+        wide
+      >
+        <form className="deviceForm" onSubmit={onSubmit}>
+          <DeviceTypePicker
+            types={deviceTypes}
+            selectedTypeId={form.type}
+            onSelectType={onSelectDeviceType}
+            vendor={form.vendor}
+            onVendorChange={(vendor) => setForm((f) => ({ ...f, vendor }))}
+            onAddCustomType={onAddCustomType}
+          />
+          {!editingId ? (
+            <>
+              <label className="label">ID</label>
+              <input
+                value={form.id}
+                onChange={(e) => setForm((f) => ({ ...f, id: e.target.value }))}
+                placeholder={`${site.id}-sw1`}
+                required
+              />
+            </>
+          ) : null}
+          <label className="label">Display name</label>
+          <input
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder="Core switch"
+            required
+          />
+          {form.kind === "network" ? (
+            <>
+              <label className="label">SNMP IP</label>
+              <input
+                value={form.snmpIp}
+                onChange={(e) => setForm((f) => ({ ...f, snmpIp: e.target.value }))}
+                placeholder="192.168.1.1"
+                required
+              />
+            </>
+          ) : (
+            <>
+              <label className="label">Host metric ID (Alloy HOST_DEVICE_ID)</label>
+              <input
+                value={form.hostMetricId}
+                onChange={(e) => setForm((f) => ({ ...f, hostMetricId: e.target.value }))}
+                placeholder={`${site.id}-nuc`}
+                required
+              />
+            </>
+          )}
+          <div className="formActions">
+            <button className="primary" type="submit" disabled={busy}>
+              {editingId ? "Save" : "Add device"}
+            </button>
+            <button type="button" onClick={cancelEdit} disabled={busy}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={websiteModalOpen}
+        title={editingWebsiteUrl ? "Edit website" : "Add website"}
+        onClose={() => {
+          setWebsiteModalOpen(false);
+          setEditingWebsiteUrl(null);
+          setWebsiteForm({ name: "", url: "" });
+        }}
+      >
+        <form className="deviceForm" onSubmit={onWebsiteSubmit}>
+          <label className="label">Display name</label>
+          <input
+            value={websiteForm.name}
+            onChange={(e) => setWebsiteForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder="Main website"
+          />
+          <label className="label">URL</label>
+          <input
+            value={websiteForm.url}
+            onChange={(e) => setWebsiteForm((f) => ({ ...f, url: e.target.value }))}
+            placeholder="https://example.com"
+            required
+          />
+          <div className="formActions">
+            <button className="primary" type="submit" disabled={busy}>
+              {editingWebsiteUrl ? "Save website" : "Add website"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setWebsiteModalOpen(false);
+                setEditingWebsiteUrl(null);
+                setWebsiteForm({ name: "", url: "" });
+              }}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

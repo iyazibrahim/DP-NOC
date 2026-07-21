@@ -18,16 +18,18 @@ function stateLabel(state: DomainState | string): string {
 /** Big green/red uplink card for one site. */
 export function UplinkStatusCard({
   site,
-  status
+  status,
+  title
 }: {
   site?: Site;
   status?: SiteStatus | null;
+  title?: string;
 }) {
   const up = uplinkOf(status);
   const tone = stateTone(up.state);
   return (
     <div className={`signalCard signalCard--${tone}`}>
-      <div className="signalCardEyebrow">Uplink / Internet</div>
+      <div className="signalCardEyebrow">{title?.trim() || "Uplink / Internet"}</div>
       <div className="signalCardName">{site?.name ?? "Pick a site"}</div>
       <div className="signalCardState">{stateLabel(up.state)}</div>
       {up.notes ? <div className="signalCardNotes">{up.notes}</div> : null}
@@ -39,10 +41,12 @@ export function UplinkStatusCard({
 /** Big green/red collector card for one site. */
 export function CollectorStatusCard({
   site,
-  status
+  status,
+  title
 }: {
   site?: Site;
   status?: SiteStatus | null;
+  title?: string;
 }) {
   const col = collectorOf(status);
   const tone = stateTone(col.state);
@@ -50,7 +54,7 @@ export function CollectorStatusCard({
     site?.devices?.find((d) => (d.kind ?? "network") === "server")?.name ?? "Collector";
   return (
     <div className={`signalCard signalCard--${tone}`}>
-      <div className="signalCardEyebrow">Collector</div>
+      <div className="signalCardEyebrow">{title?.trim() || "Collector"}</div>
       <div className="signalCardName">{site?.name ?? "Pick a site"}</div>
       <div className="signalCardSub">{collectorName}</div>
       <div className="signalCardState">{stateLabel(col.state)}</div>

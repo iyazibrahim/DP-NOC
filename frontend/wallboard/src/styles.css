@@ -1263,3 +1263,290 @@ textarea {
     transform: translateY(0);
   }
 }
+
+/* Modal */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 6000;
+  background: rgba(4, 10, 12, 0.72);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: toastIn 0.18s ease-out;
+}
+
+.modalPanel {
+  width: min(480px, 100%);
+  max-height: min(90vh, 720px);
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+.modalPanel--wide {
+  width: min(640px, 100%);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 1;
+}
+
+.modalTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.modalBody {
+  padding: 16px;
+}
+
+.modalBody .deviceForm {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.linkBtn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.pageEyebrow {
+  margin: 0 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Maps ops rail */
+.mapsOpsRail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.mapsOpsBlock {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.mapsOpsList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.mapsOpsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.mapsOpsRow:hover {
+  border-color: var(--border);
+  background: var(--accent-soft);
+}
+
+.mapsOpsRow--active {
+  border-color: rgba(45, 212, 191, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.2);
+}
+
+.mapsOpsName {
+  font-size: 0.9rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mapsOpsBadge {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+}
+
+.mapsOpsBadge--ok {
+  background: rgba(52, 211, 153, 0.18);
+  color: #6ee7b7;
+}
+.mapsOpsBadge--bad {
+  background: rgba(248, 113, 113, 0.2);
+  color: #fca5a5;
+}
+.mapsOpsBadge--warn {
+  background: rgba(251, 191, 36, 0.18);
+  color: #fde68a;
+}
+
+.mapsOpsEmpty,
+.mapsOpsHint {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+/* Site detail bento */
+.siteBento {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.bentoTile {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.bentoHero {
+  grid-column: span 5;
+}
+
+.bentoHealth {
+  grid-column: span 7;
+}
+
+.bentoMap {
+  grid-column: span 4;
+}
+
+.bentoDevices {
+  grid-column: span 8;
+}
+
+.bentoWebsites {
+  grid-column: 1 / -1;
+}
+
+.bentoTileHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.bentoTileHeader .tableTitle {
+  margin: 0;
+}
+
+.bentoMapFrame {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.healthMiniGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.healthMini {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.healthMini strong {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.95rem;
+}
+
+.healthMiniLabel {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.healthMini--healthy {
+  border-color: rgba(52, 211, 153, 0.35);
+}
+.healthMini--healthy strong {
+  color: #6ee7b7;
+}
+.healthMini--critical {
+  border-color: rgba(248, 113, 113, 0.4);
+}
+.healthMini--critical strong {
+  color: #fca5a5;
+}
+.healthMini--warning {
+  border-color: rgba(251, 191, 36, 0.35);
+}
+.healthMini--warning strong {
+  color: #fde68a;
+}
+
+@media (max-width: 1100px) {
+  .bentoHero,
+  .bentoHealth,
+  .bentoMap,
+  .bentoDevices,
+  .bentoWebsites {
+    grid-column: 1 / -1;
+  }
+  .healthMiniGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .healthMiniGrid {
+    grid-template-columns: 1fr;
+  }
+}

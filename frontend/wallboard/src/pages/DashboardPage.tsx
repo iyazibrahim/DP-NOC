@@ -47,7 +47,9 @@ function normalizeLayoutForSave(layout: DashboardLayout): DashboardLayout {
   };
 }
 
-function widgetLabel(type: DashboardWidget["type"]) {
+function widgetLabel(type: DashboardWidget["type"], config?: Record<string, string>) {
+  const custom = config?.title?.trim();
+  if (custom) return custom;
   return WIDGET_GROUPS.flatMap((g) => g.widgets).find((c) => c.type === type)?.label ?? type;
 }
 
@@ -405,7 +407,7 @@ export function DashboardPage() {
                       ⋮⋮
                     </span>
                   )}
-                  <span className="widgetTypeLabel">{widgetLabel(w.type)}</span>
+                  <span className="widgetTypeLabel">{widgetLabel(w.type, w.config)}</span>
                   {editing && widgetHasConfig(w.type) ? (
                     <button
                       type="button"

@@ -85,6 +85,7 @@ export type DashboardWidget = {
   y: number;
   w: number;
   h: number;
+  /** Optional keys: siteId, deviceId, metric, embedUrl, title (custom display name) */
   config?: Record<string, string>;
 };
 

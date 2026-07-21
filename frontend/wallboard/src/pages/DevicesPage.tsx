@@ -33,6 +33,10 @@ export function DevicesPage() {
   const pending = discovered.filter((d) => !d.alreadyRegistered);
   const collectors = devices.filter((d) => (d.kind ?? "network") === "server");
   const localDevices = devices.filter((d) => (d.kind ?? "network") === "network");
+  const hasDiagError =
+    diagnostics?.prometheusReachable === false ||
+    (diagnostics?.labelMismatchHints?.length ?? 0) > 0;
+  const showDiscovery = pending.length > 0 || hasDiagError;
 
   return (
     <div className="page">
@@ -58,60 +62,73 @@ export function DevicesPage() {
         </div>
       </div>
 
-      <div className="tableCard" style={{ marginBottom: 14 }}>
-        <div className="tableTitle">New devices found</div>
-        <div className="muted" style={{ marginBottom: 10 }}>
-          {diagnostics?.plainSummary ??
-            (diagnostics?.prometheusReachable === false
-              ? "Cannot reach metrics storage."
-              : "New collectors are added automatically within about a minute.")}
-        </div>
+      {!showDiscovery && pending.length === 0 ? (
+        <p className="muted" style={{ marginBottom: 14 }}>
+          All collectors registered
+        </p>
+      ) : null}
 
-        {pending.length === 0 ? (
-          <div className="muted">Nothing waiting — collectors already registered or not sending data yet.</div>
-        ) : (
-          <table className="dataTable">
-            <thead>
-              <tr>
-                <th>Site</th>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Last seen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pending.slice(0, 10).map((d) => (
-                <tr key={`${d.siteId ?? "unknown"}-${d.deviceId}`}>
-                  <td>
-                    {d.siteId ? <Link to={`/sites/${d.siteId}`}>{d.siteId}</Link> : "—"}
-                  </td>
-                  <td>
-                    {d.suggestedName}
-                    <div className="muted">{d.deviceId}</div>
-                  </td>
-                  <td>{kindLabel(d.kind)}</td>
-                  <td className="muted">
-                    {d.lastSeen ? new Date(d.lastSeen).toLocaleString() : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {diagnostics?.labelMismatchHints?.length ? (
-          <div className="calloutWarn" style={{ marginTop: 12 }}>
-            <div className="tableTitle" style={{ marginBottom: 6 }}>
-              Needs attention
+      {showDiscovery ? (
+        <div className="tableCard" style={{ marginBottom: 14 }}>
+          <div className="tableTitle">New devices found</div>
+          {diagnostics?.prometheusReachable === false ? (
+            <div className="muted" style={{ marginBottom: 10 }}>
+              {diagnostics.plainSummary ?? "Cannot reach metrics storage."}
             </div>
-            <ul className="alertUl" style={{ paddingLeft: 18 }}>
-              {diagnostics.labelMismatchHints.map((h, i) => (
-                <li key={i}>{h}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+
+          {pending.length > 0 ? (
+            <table className="dataTable">
+              <thead>
+                <tr>
+                  <th>Site</th>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Last seen</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {pending.slice(0, 10).map((d) => (
+                  <tr key={`${d.siteId ?? "unknown"}-${d.deviceId}`}>
+                    <td>
+                      {d.siteId ? <Link to={`/sites/${d.siteId}`}>{d.siteId}</Link> : "—"}
+                    </td>
+                    <td>
+                      {d.suggestedName}
+                      <div className="muted">{d.deviceId}</div>
+                    </td>
+                    <td>{kindLabel(d.kind)}</td>
+                    <td className="muted">
+                      {d.lastSeen ? new Date(d.lastSeen).toLocaleString() : "—"}
+                    </td>
+                    <td>
+                      {d.siteId ? (
+                        <Link to={`/sites/${d.siteId}`}>Open site</Link>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+
+          {diagnostics?.labelMismatchHints?.length ? (
+            <div className="calloutWarn" style={{ marginTop: 12 }}>
+              <div className="tableTitle" style={{ marginBottom: 6 }}>
+                Needs attention
+              </div>
+              <ul className="alertUl" style={{ paddingLeft: 18 }}>
+                {diagnostics.labelMismatchHints.map((h, i) => (
+                  <li key={i}>{h}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="detailGrid">
         <TopDevicesTable devices={top} />
@@ -131,7 +148,8 @@ export function DevicesPage() {
               {devices.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="muted">
-                    No devices yet. When a collector starts sending data, it should appear above and be added automatically.
+                    No devices yet. When a collector starts sending data, it should appear and be
+                    added automatically.
                   </td>
                 </tr>
               ) : (
