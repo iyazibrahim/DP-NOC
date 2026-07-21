@@ -3,7 +3,12 @@ import { promQuery, parseFirstVectorValue, parseVectorToNumericValues } from "./
 import { getActiveAlerts, type Alert } from "./alertmanager";
 import { hasUnregisteredHostMetrics, siteHasCollectorMetrics } from "./deviceDiscovery";
 import { getGlobalWebsites } from "../data/globalWebsites";
-import { dualHostMemFresh, dualHostUpFresh } from "./promLabels";
+import {
+  dualHostMemFresh,
+  dualHostUpFresh,
+  METRIC_FRESH_WINDOW,
+  METRIC_HISTORY_WINDOW
+} from "./promLabels";
 
 export type DomainState = "healthy" | "warning" | "critical" | "unknown";
 
@@ -41,14 +46,11 @@ export type StatusMeta = {
   scrapeIntervalSec: number;
 };
 
-const METRIC_FRESH_WINDOW = "3m";
-const METRIC_HISTORY_WINDOW = "30m";
-
 export const STATUS_META: Omit<StatusMeta, "checkedAt"> = {
   dashboardRefreshSec: 10,
-  metricFreshWindowSec: 180,
-  typicalDetectionSec: 90,
-  scrapeIntervalSec: 60
+  metricFreshWindowSec: 45,
+  typicalDetectionSec: 45,
+  scrapeIntervalSec: 30
 };
 
 function booleanValueToDomain(v: number | null): DomainState {
@@ -100,7 +102,18 @@ function stateFromBooleanSeries(values: number[]): DomainState {
   return "healthy";
 }
 
-async function queryBooleanMetricState(metricSelector: string): Promise<DomainStatus> {
+/**
+ * Fresh sample required. Missing samples after we once had data = DOWN (silence).
+ * Never seen = unknown.
+ */
+async function queryBooleanMetricState(
+  metricSelector: string,
+  opts?: { silenceMeansDown?: boolean; downNotes?: string }
+): Promise<DomainStatus> {
+  const silenceMeansDown = opts?.silenceMeansDown ?? true;
+  const downNotes =
+    opts?.downNotes ?? `No data in the last ${METRIC_FRESH_WINDOW} — treated as down`;
+
   try {
     const freshQ = `last_over_time(${metricSelector}[${METRIC_FRESH_WINDOW}])`;
     const fresh = parseFirstVectorValue(await promQuery(freshQ));
@@ -108,20 +121,16 @@ async function queryBooleanMetricState(metricSelector: string): Promise<DomainSt
       const state = booleanValueToDomain(fresh);
       return {
         state,
-        notes:
-          state === "critical"
-            ? "Reported down by the latest check"
-            : undefined
+        notes: state === "critical" ? "Reported down by the latest check" : undefined
       };
     }
 
     const histQ = `last_over_time(${metricSelector}[${METRIC_HISTORY_WINDOW}])`;
     const hist = parseFirstVectorValue(await promQuery(histQ));
     if (hist !== null) {
-      return {
-        state: "critical",
-        notes: `No data in the last ${METRIC_FRESH_WINDOW} — collector may be offline`
-      };
+      return silenceMeansDown
+        ? { state: "critical", notes: downNotes }
+        : { state: "unknown", notes: downNotes };
     }
 
     return { state: "unknown", notes: "No data received yet" };
@@ -167,7 +176,7 @@ async function collectorIdStatus(siteId: string, metricId: string): Promise<Doma
     if (upHist !== null || memHist !== null) {
       return {
         state: "critical",
-        notes: "Collector was sending data, but not recently"
+        notes: `Collector silent for ${METRIC_FRESH_WINDOW} — treated as down`
       };
     }
     return { state: "unknown", notes: "Waiting for collector data" };
@@ -188,6 +197,7 @@ async function computeCollectorStatus(siteId: string): Promise<DomainStatus> {
     return aggregateProbeStatuses(statuses);
   }
 
+  // No registered collector — if site once had uplink/host metrics but host is silent, still surface
   if (await siteHasCollectorMetrics(siteId)) {
     return {
       state: "warning",
@@ -249,19 +259,39 @@ export async function computeSiteStatus(
   }
 
   const wanDns = await queryBooleanMetricState(
-    `probe_success{site="${siteId}",check="wan_dns"}`
+    `probe_success{site="${siteId}",check="wan_dns"}`,
+    {
+      silenceMeansDown: true,
+      downNotes: `Internet probe silent for ${METRIC_FRESH_WINDOW}`
+    }
   );
   const wanVps = await queryBooleanMetricState(
-    `probe_success{site="${siteId}",check="wan_vps"}`
+    `probe_success{site="${siteId}",check="wan_vps"}`,
+    {
+      silenceMeansDown: true,
+      downNotes: `Central uplink probe silent for ${METRIC_FRESH_WINDOW}`
+    }
   );
   const uplink = aggregateProbeStatuses([
-    { ...wanDns, notes: wanDns.state === "critical" ? "Cannot reach DNS (internet)" : wanDns.notes },
-    { ...wanVps, notes: wanVps.state === "critical" ? "Cannot reach central server" : wanVps.notes }
+    {
+      ...wanDns,
+      notes:
+        wanDns.state === "critical"
+          ? wanDns.notes ?? "Cannot reach DNS (internet)"
+          : wanDns.notes
+    },
+    {
+      ...wanVps,
+      notes:
+        wanVps.state === "critical"
+          ? wanVps.notes ?? "Cannot reach central server"
+          : wanVps.notes
+    }
   ]);
   if (uplink.state === "healthy") {
     uplink.notes = undefined;
-  } else if (!uplink.notes) {
-    uplink.notes = "Internet / uplink check failed";
+  } else if (uplink.state === "critical" && !uplink.notes) {
+    uplink.notes = "Internet / uplink down";
   }
 
   const websiteVector = await queryProbeSuccessVector(siteId, "check", "website");
@@ -283,13 +313,11 @@ export async function computeSiteStatus(
   let localDevices: DomainStatus = { state: "unknown", notes: "No local devices configured" };
   const devices = site.devices ?? [];
   const networkOrAll = devices.filter((d) => (d.kind ?? "network") === "network");
-  // Local devices = SNMP/network gear; servers counted under collector
   if (networkOrAll.length > 0) {
     const deviceStatuses: DomainStatus[] = [];
     for (const d of networkOrAll) {
-      const metricId = d.id;
       deviceStatuses.push(
-        await queryBooleanMetricState(`snmp_up{site="${siteId}",device="${metricId}"}`)
+        await queryBooleanMetricState(`snmp_up{site="${siteId}",device="${d.id}"}`)
       );
     }
     localDevices = aggregateProbeStatuses(deviceStatuses);
@@ -305,9 +333,13 @@ export async function computeSiteStatus(
   const firing = relevant.filter((a) => a.status === "firing").length;
   const resolved = relevant.filter((a) => a.status === "resolved").length;
 
-  let overall = worst(uplink.state, websites.state);
-  overall = worst(overall, localDevices.state);
-  overall = worst(overall, collector.state);
+  // Uplink is primary: critical uplink always forces overall DOWN.
+  let overall: DomainState = uplink.state;
+  if (uplink.state !== "critical") {
+    overall = worst(overall, collector.state);
+    overall = worst(overall, websites.state);
+    overall = worst(overall, localDevices.state);
+  }
   if (firing > 0) overall = "critical";
 
   return {

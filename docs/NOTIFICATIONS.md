@@ -26,12 +26,12 @@ Without this, save still writes the config — restart the Alertmanager service 
 
 | Alert | Condition | `for` |
 |---|---|---|
-| SiteWANDown | `probe_success` wan_dns or wan_vps = 0 | 2m |
-| SiteWebsiteDown | website probe = 0 | 2m |
-| SiteHostDown | NUC `up{job="site_host"}` = 0 | 3m |
-| SiteSNMPDown | `snmp_up` = 0 | 5m |
+| SiteUplinkDown | `probe_success` wan = 0 **or** `absent_over_time(...[45s])` | 15s |
+| SiteWebsiteDown | website probe = 0 **or** absent 2m | 1m |
+| SiteCollectorDown | host `up` = 0 **or** absent memory/`up` 45s | 15s |
+| SiteLocalDeviceDown | `snmp_up` = 0 **or** absent 5m | 2m |
 
-Notifications fire after the `for` duration, in addition to the dashboard status change.
+Silence (collector stopped) fires uplink/collector alerts within ~60s. Notifications fire after the `for` duration, in addition to the dashboard status change and in-app toast.
 
 ## Security
 

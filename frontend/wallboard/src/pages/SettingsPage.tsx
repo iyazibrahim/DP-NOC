@@ -463,15 +463,21 @@ export function SettingsPage() {
         <div className="tableCard">
           <div className="tableTitle">Status detection timing</div>
           <p className="muted">
-            How quickly the dashboard reflects outages. Critical = down; unknown = never received
-            metrics.
+            How quickly the dashboard reflects outages (~30–60s target). Critical = down; unknown =
+            never received metrics for that site.
           </p>
           {statusTiming ? (
             <ul className="alertUl">
               <li>Dashboard refresh: every {statusTiming.dashboardRefreshSec}s</li>
               <li>Collector scrape interval: ~{statusTiming.scrapeIntervalSec}s</li>
-              <li>Typical uplink / collector down detection: ~{statusTiming.typicalDetectionSec}s</li>
-              <li>Stale collector (no metrics): critical after {statusTiming.metricFreshWindowSec}s silence</li>
+              <li>
+                Typical uplink / collector down detection: ~30–60s (about{" "}
+                {statusTiming.typicalDetectionSec}s)
+              </li>
+              <li>
+                Stale uplink / collector (no metrics): critical after{" "}
+                {statusTiming.metricFreshWindowSec}s silence
+              </li>
               {statusTiming.notes.map((n) => (
                 <li key={n}>{n}</li>
               ))}

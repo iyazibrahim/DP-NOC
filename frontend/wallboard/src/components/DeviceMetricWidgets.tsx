@@ -325,7 +325,7 @@ export function DeviceStatGauge({
       }
     };
     load();
-    const t = setInterval(load, 15000);
+    const t = setInterval(load, 10000);
     return () => {
       cancelled = true;
       clearInterval(t);
@@ -339,17 +339,17 @@ export function DeviceStatGauge({
   if (error) return <div className="muted">{error}</div>;
 
   if (isBool) {
+    // Empty instant (silence) = DOWN — same 45s freshness as status API.
     const up = value != null && value >= 1;
-    const known = value != null;
-    const tone = !known ? "unk" : up ? "ok" : "bad";
-    const label = !known ? "UNKNOWN" : up ? "UP" : "DOWN";
+    const tone = up ? "ok" : "bad";
+    const label = up ? "UP" : "DOWN";
     return (
       <div className={`signalCard signalCard--${tone} signalCardCompact`}>
         <div className="signalCardEyebrow">{preset?.label ?? metric}</div>
         <div className="signalCardName">{siteName ?? siteId}</div>
         <div className="signalCardState">{label}</div>
         <div className="signalCardHint">
-          {up ? "Reachable" : known ? "Not reachable" : "No data yet"}
+          {up ? "Reachable" : value != null ? "Not reachable" : "No recent samples"}
         </div>
       </div>
     );

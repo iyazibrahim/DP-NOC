@@ -59,6 +59,13 @@ Collector box → Alloy → Prometheus (central)
       - Drag/resize apply on stop only + collision prevention (less “watery” spreading)
       - New widgets: Sites signal board, Uplink status, Collector status, bar chart
       - Uplink/probe gauges show green UP / red DOWN (not 1.0)
+  - **Faster uplink detection (2026-07-21)**
+    - Freshness window 45s: silence = DOWN for uplink/collector; uplink forces overall DOWN
+    - Gauges use `last_over_time(...[45s])` — empty → DOWN (aligned with status API)
+    - Alert rules: `absent_over_time[45s]` + `for: 15s` (SiteUplinkDown / SiteCollectorDown)
+    - Dashboard toast on uplink/overall → critical
+    - CPU gated by host freshness (no end-of-series spike); signal card text no longer overflows
+    - Settings copy: ~30–60s detection target
 
 ## Local Validation
 1. `docker compose up -d --build`

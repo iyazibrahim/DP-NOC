@@ -1,5 +1,11 @@
 import { promQuery, promQueryRange } from "./prometheus";
-import { dualHostMetric, dualHostUp } from "./promLabels";
+import {
+  dualHostMetric,
+  dualHostUpFresh,
+  hostFreshGuard,
+  METRIC_FRESH_WINDOW,
+  probeSuccessFresh
+} from "./promLabels";
 
 export type MetricPreset = {
   id: string;
@@ -51,26 +57,31 @@ export const METRIC_PRESETS: MetricPreset[] = [
     id: "wan_dns",
     label: "Uplink (DNS)",
     kind: "any",
-    query: `probe_success{site="{{site}}",check="wan_dns"}`
+    query: `WAN_DNS_PLACEHOLDER`
   },
   {
     id: "wan_vps",
     label: "Uplink (central)",
     kind: "any",
-    query: `probe_success{site="{{site}}",check="wan_vps"}`
+    query: `WAN_VPS_PLACEHOLDER`
   }
 ];
 
 function buildCpuQuery(siteId: string, deviceId: string): string {
-  const idleDevice = `rate(node_cpu_seconds_total{mode="idle",site="${siteId}",device="${deviceId}"}[5m])`;
-  const idleInstance = `rate(node_cpu_seconds_total{mode="idle",site="${siteId}",instance="${deviceId}"}[5m])`;
-  return `100 - (avg( (${idleDevice}) or (${idleInstance}) ) * 100)`;
+  // Only emit CPU when host metrics are still fresh — avoids end-of-series rate() spikes on stop.
+  const idleDevice = `rate(node_cpu_seconds_total{mode="idle",site="${siteId}",device="${deviceId}"}[2m])`;
+  const idleInstance = `rate(node_cpu_seconds_total{mode="idle",site="${siteId}",instance="${deviceId}"}[2m])`;
+  const cpu = `clamp_min(clamp_max(100 - (avg( (${idleDevice}) or (${idleInstance}) ) * 100), 100), 0)`;
+  const guard = hostFreshGuard(siteId, deviceId, METRIC_FRESH_WINDOW);
+  return `${cpu} and on() (${guard})`;
 }
 
 function buildMemQuery(siteId: string, deviceId: string): string {
   const avail = dualHostMetric("node_memory_MemAvailable_bytes", siteId, deviceId);
   const total = dualHostMetric("node_memory_MemTotal_bytes", siteId, deviceId);
-  return `(${avail} / ${total}) * 100`;
+  const pct = `(${avail} / ${total}) * 100`;
+  const guard = hostFreshGuard(siteId, deviceId, METRIC_FRESH_WINDOW);
+  return `${pct} and on() (${guard})`;
 }
 
 function buildDiskQuery(siteId: string, deviceId: string): string {
@@ -86,7 +97,9 @@ function buildDiskQuery(siteId: string, deviceId: string): string {
     deviceId,
     'mountpoint="/",fstype!="rootfs"'
   );
-  return `(${avail} / ${size}) * 100`;
+  const pct = `(${avail} / ${size}) * 100`;
+  const guard = hostFreshGuard(siteId, deviceId, METRIC_FRESH_WINDOW);
+  return `${pct} and on() (${guard})`;
 }
 
 export function buildQuery(presetId: string, siteId: string, deviceId: string): string | null {
@@ -101,7 +114,13 @@ export function buildQuery(presetId: string, siteId: string, deviceId: string): 
     case "disk_pct":
       return buildDiskQuery(siteId, deviceId);
     case "host_up":
-      return dualHostUp(siteId, deviceId);
+      return dualHostUpFresh(siteId, deviceId, METRIC_FRESH_WINDOW);
+    case "wan_dns":
+      return probeSuccessFresh(siteId, "wan_dns", METRIC_FRESH_WINDOW);
+    case "wan_vps":
+      return probeSuccessFresh(siteId, "wan_vps", METRIC_FRESH_WINDOW);
+    case "snmp_up":
+      return `last_over_time(snmp_up{site="${siteId}",device="${deviceId}"}[${METRIC_FRESH_WINDOW}])`;
     default:
       return preset.query.replace(/\{\{site\}\}/g, siteId).replace(/\{\{device\}\}/g, deviceId);
   }
@@ -113,8 +132,7 @@ export function listPresetsForApi(): MetricPreset[] {
     if (p.id === "cpu_pct") {
       return {
         ...p,
-        query:
-          '100 - (avg(rate(node_cpu_seconds_total{mode="idle",site,device|instance}[5m])) * 100)'
+        query: `CPU % only while host metrics fresh (${METRIC_FRESH_WINDOW})`
       };
     }
     if (p.id === "mem_pct") {
@@ -132,7 +150,13 @@ export function listPresetsForApi(): MetricPreset[] {
     if (p.id === "host_up") {
       return {
         ...p,
-        query: 'up{job=~"site_host|integrations/unix",site,device|instance}'
+        query: `last_over_time(up{job=~"site_host|integrations/unix"}[${METRIC_FRESH_WINDOW}])`
+      };
+    }
+    if (p.id === "wan_dns" || p.id === "wan_vps") {
+      return {
+        ...p,
+        query: `last_over_time(probe_success{check}[${METRIC_FRESH_WINDOW}])`
       };
     }
     return p;

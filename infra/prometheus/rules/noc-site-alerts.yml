@@ -1,46 +1,63 @@
 groups:
   - name: noc-site-alerts
     rules:
+      # Primary: internet / uplink — fires on explicit down OR silence (collector stopped)
       - alert: SiteUplinkDown
         expr: |
-          (probe_success{check="wan_dns"} == 0)
-          or
-          (probe_success{check="wan_vps"} == 0)
-        for: 2m
+          (
+            (probe_success{check=~"wan_dns|wan_vps"} == 0)
+            or
+            absent_over_time(probe_success{check=~"wan_dns|wan_vps"}[45s])
+          )
+        for: 15s
         labels:
           severity: critical
           site: "{{ $labels.site }}"
         annotations:
-          summary: "Uplink / internet check failed (site={{ $labels.site }}, check={{ $labels.check }})"
+          summary: "Internet down at {{ $labels.site }} (check={{ $labels.check }})"
 
       - alert: SiteWebsiteDown
-        expr: probe_success{check="website"} == 0
-        for: 2m
+        expr: |
+          (
+            (probe_success{check="website"} == 0)
+            or
+            absent_over_time(probe_success{check="website"}[2m])
+          )
+        for: 1m
         labels:
           severity: critical
           site: "{{ $labels.site }}"
         annotations:
           summary: "Website check failing (site={{ $labels.site }}, target={{ $labels.instance }})"
 
+      # Secondary: collector box offline or silent
       - alert: SiteCollectorDown
         expr: |
           (
-            up{job=~"site_host|integrations/unix"} == 0
+            (up{job=~"site_host|integrations/unix"} == 0)
+            or
+            absent_over_time(up{job=~"site_host|integrations/unix"}[45s])
+            or
+            absent_over_time(node_memory_MemAvailable_bytes{role="site-box"}[45s])
           )
-        for: 3m
+        for: 15s
         labels:
           severity: critical
           site: "{{ $labels.site }}"
         annotations:
-          summary: "Collector offline (site={{ $labels.site }}, device={{ $labels.device }}, instance={{ $labels.instance }})"
+          summary: "Collector offline at {{ $labels.site }} (device={{ $labels.device }}, instance={{ $labels.instance }})"
 
       - alert: SiteLocalDeviceDown
-        expr: snmp_up{site=~".+"} == 0
-        for: 5m
+        expr: |
+          (
+            (snmp_up{site=~".+"} == 0)
+            or
+            absent_over_time(snmp_up{site=~".+"}[5m])
+          )
+        for: 2m
         labels:
           severity: warning
           site: "{{ $labels.site }}"
           device: "{{ $labels.device }}"
         annotations:
           summary: "Local device SNMP check failing (site={{ $labels.site }}, device={{ $labels.device }})"
-

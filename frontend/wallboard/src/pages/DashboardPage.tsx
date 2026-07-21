@@ -14,10 +14,20 @@ import {
   saveDashboardLayout,
   STATUS_POLL_MS
 } from "../api";
-import type { ActiveAlert, DashboardLayout, DashboardWidget, DeviceRow, Site, SiteStatus } from "../types";
+import type {
+  ActiveAlert,
+  DashboardLayout,
+  DashboardWidget,
+  DeviceRow,
+  DomainState,
+  Site,
+  SiteStatus
+} from "../types";
 import { WidgetBody, WIDGET_GROUPS } from "../components/WidgetBody";
 import { WidgetConfigEditor } from "../components/WidgetConfigEditor";
 import { useMetricPresets } from "../components/DeviceMetricWidgets";
+import { pushToast, ToastStack, type ToastItem } from "../components/ToastStack";
+import { uplinkOf } from "../statusLabels";
 
 function normalizeLayoutForSave(layout: DashboardLayout): DashboardLayout {
   let maxBottom = 0;
@@ -72,6 +82,48 @@ export function DashboardPage() {
   const [configOpenId, setConfigOpenId] = useState<string | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const presets = useMetricPresets();
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const prevStatusRef = useRef<Record<string, { uplink: DomainState; overall: DomainState }> | null>(
+    null
+  );
+
+  // Toast when a site uplink / overall flips to critical (skip first poll baseline).
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    const next: Record<string, { uplink: DomainState; overall: DomainState }> = {};
+    for (const st of statuses) {
+      const uplink = uplinkOf(st).state;
+      next[st.siteId] = { uplink, overall: st.overall };
+      if (!prev) continue;
+      const before = prev[st.siteId];
+      if (!before) continue;
+      const siteName = sites.find((s) => s.id === st.siteId)?.name ?? st.siteId;
+      if (uplink === "critical" && before.uplink !== "critical") {
+        setToasts((t) =>
+          pushToast(t, {
+            id: `uplink-down-${st.siteId}-${Date.now()}`,
+            title: `${siteName} — Internet DOWN`,
+            detail: "Uplink / internet check went critical",
+            tone: "critical"
+          })
+        );
+      } else if (
+        st.overall === "critical" &&
+        before.overall !== "critical" &&
+        uplink !== "critical"
+      ) {
+        setToasts((t) =>
+          pushToast(t, {
+            id: `site-down-${st.siteId}-${Date.now()}`,
+            title: `${siteName} — Site DOWN`,
+            detail: "Overall site health went critical",
+            tone: "critical"
+          })
+        );
+      }
+    }
+    prevStatusRef.current = next;
+  }, [statuses, sites]);
 
   // Measure AFTER the grid host mounts (layout ready). Stuck width=1200 caused ~70% usable area.
   useEffect(() => {
@@ -268,6 +320,7 @@ export function DashboardPage() {
 
   return (
     <div className="page dashboardPage">
+      <ToastStack toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
       <div className="pageHeader">
         <div>
           <h1>Dashboard</h1>

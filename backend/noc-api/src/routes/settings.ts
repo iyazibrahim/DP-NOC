@@ -59,14 +59,14 @@ settingsRouter.post("/retention/apply", requireJwt(["operator"]), async (_req, r
 settingsRouter.get("/status-timing", requireJwt(["operator", "wallboard"]), (_req, res) => {
   return res.json({
     dashboardRefreshSec: env.STATUS_DASHBOARD_REFRESH_SEC,
-    metricFreshWindowSec: env.STATUS_METRIC_FRESH_SEC,
+    metricFreshWindowSec: STATUS_META.metricFreshWindowSec,
     typicalDetectionSec: STATUS_META.typicalDetectionSec,
     scrapeIntervalSec: STATUS_META.scrapeIntervalSec,
     notes: [
       "Dashboard polls /api/sites/status/all every ~10s.",
-      "Status uses last_over_time over 3m; probe failure (0) shows as critical within ~1 scrape cycle (~60s).",
-      "If Alloy stops sending metrics, status becomes critical after ~3m of silence (not unknown).",
-      "Alertmanager SiteWANDown fires after 2m of probe_success=0."
+      "Status and gauges use last_over_time over 45s; missing samples = DOWN for uplink/collector.",
+      "Typical internet-down detection is ~30–60s after the collector goes silent.",
+      "Alerts use absent_over_time[45s] with for: 15s (SiteUplinkDown / SiteCollectorDown)."
     ]
   });
 });
