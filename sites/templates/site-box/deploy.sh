@@ -108,7 +108,7 @@ DEVICES_TMP="$(mktemp)"
 echo "[]" > "$DEVICES_TMP"
 echo
 echo "Add SNMP devices for this site (leave blank ID to finish)."
-echo "You can also manage devices later in the NOC UI — then re-run deploy or edit devices.json."
+echo "Prefer managing devices in the NOC UI — this box can pull inventory with COLLECTOR_TOKEN."
 echo
 
 while true; do
@@ -144,6 +144,11 @@ cp "$DEVICES_TMP" "$SCRIPT_DIR/devices.json"
 rm -f "$DEVICES_TMP"
 
 # --- 5) Write .env + config ---
+read -r -p "NOC_API_URL for inventory sync (empty=skip auto-sync) [https://noc.example.com]: " NOC_URL
+NOC_URL="${NOC_URL:-}"
+read -r -p "COLLECTOR_TOKEN from NOC UI (Sites → site → Generate token, empty=skip): " COLLECTOR_TOKEN
+COLLECTOR_TOKEN="${COLLECTOR_TOKEN:-}"
+
 cat > "$SCRIPT_DIR/.env" <<EOF
 CENTRAL_REMOTE_WRITE_URL=$RW_URL
 CF_ACCESS_CLIENT_ID=$CF_ID
@@ -152,10 +157,21 @@ SITE_NAME=$SITE_ID
 HOST_DEVICE_ID=${SITE_ID}-nuc
 PING_TARGET_1=$PING1
 PING_TARGET_2=$PING2
+NOC_API_URL=$NOC_URL
+COLLECTOR_TOKEN=$COLLECTOR_TOKEN
+SCRAPE_INTERVAL_SEC=15
+SYNC_INTERVAL_SEC=90
 EOF
 
-chmod +x "$SCRIPT_DIR/generate-config.sh"
+chmod +x "$SCRIPT_DIR/generate-config.sh" "$SCRIPT_DIR/sync-devices.sh"
 "$SCRIPT_DIR/generate-config.sh" "$SCRIPT_DIR/devices.json" "$SCRIPT_DIR/config.alloy"
+
+if [[ -n "$NOC_URL" && -n "$COLLECTOR_TOKEN" ]]; then
+  echo
+  echo "Pulling devices from NOC API..."
+  NOC_API_URL="$NOC_URL" SITE_NAME="$SITE_ID" COLLECTOR_TOKEN="$COLLECTOR_TOKEN" \
+    "$SCRIPT_DIR/sync-devices.sh" || echo "WARNING: initial sync failed (token/URL?). Continue anyway."
+fi
 
 echo
 echo "Starting Alloy..."
@@ -230,6 +246,9 @@ echo "Next:"
 echo "  1) Ensure metrics. tunnel → http://127.0.0.1:9090 on the VPS + Access token works (curl 200)."
 echo "  2) If host inventory is missing: register this collector host in NOC UI."
 echo "     Device id is ${SITE_ID}-nuc (type server)."
-echo "  3) Logs: docker logs -f noc_site_alloy"
+echo "  3) SNMP inventory: generate a collector token in NOC UI (Sites → this site) and set COLLECTOR_TOKEN in .env."
+echo "     Then: ./sync-devices.sh   or   ./sync-devices.sh --loop"
+echo "     Cron example: */2 * * * * cd $SCRIPT_DIR && set -a && . ./.env && set +a && ./sync-devices.sh"
+echo "  4) Logs: docker logs -f noc_site_alloy"
 echo
 echo "Dokploy: create an app from this folder's docker-compose.yml after .env exists."

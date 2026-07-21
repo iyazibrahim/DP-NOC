@@ -3,6 +3,7 @@ import GridLayout, { type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { useAuth } from "../auth/AuthContext";
+import { useCommandCenter } from "../commandCenter/CommandCenterContext";
 import {
   getAllSiteStatuses,
   getDashboardLayout,
@@ -62,12 +63,14 @@ function widgetHasConfig(type: DashboardWidget["type"]) {
     type === "device_stat_gauge" ||
     type === "device_detail" ||
     type === "uplink_status" ||
-    type === "collector_status"
+    type === "collector_status" ||
+    type === "local_devices_board"
   );
 }
 
 export function DashboardPage() {
   const { token } = useAuth();
+  const { active: commandCenter, enter: enterCommandCenter } = useCommandCenter();
   const [editing, setEditing] = useState(false);
   const editingRef = useRef(editing);
   editingRef.current = editing;
@@ -273,6 +276,8 @@ export function DashboardPage() {
       };
     } else if (type === "uplink_status" || type === "collector_status") {
       config = { siteId: firstSite?.id ?? "" };
+    } else if (type === "local_devices_board") {
+      config = { siteId: "" };
     }
     const widget: DashboardWidget = {
       i: id,
@@ -316,48 +321,64 @@ export function DashboardPage() {
     await refreshLayout();
   };
 
+  // Exit edit mode when entering command center so the grid stays locked.
+  useEffect(() => {
+    if (commandCenter && editing) {
+      setEditing(false);
+      setDrawerOpen(false);
+      setConfigOpenId(null);
+    }
+  }, [commandCenter, editing]);
+
   if (!layout) {
     return <div className="page">{error ? `Error: ${error}` : "Loading dashboard…"}</div>;
   }
 
-  return (
-    <div className="page dashboardPage">
-      <ToastStack toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
-      <div className="pageHeader">
-        <div>
-          <h1>Dashboard</h1>
-          <p className="pageSub">
-            Collector health, uplink, and charts — same metrics Grafana uses. In edit mode, drag
-            anywhere on the grid (including empty space below).
-          </p>
-        </div>
-        <div className="pageActions">
-          {editing ? (
-            <>
-              <button type="button" onClick={() => setDrawerOpen(true)}>
-                Add widget
-              </button>
-              <button type="button" className="primary" onClick={persist}>
-                Save layout
-              </button>
-              <button type="button" onClick={cancelEdit}>
-                Cancel
-              </button>
-            </>
-          ) : (
-            <>
-              <button type="button" className="primary" onClick={() => setEditing(true)}>
-                Edit layout
-              </button>
-              <button type="button" onClick={doReset}>
-                Reset
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+  const canEdit = editing && !commandCenter;
 
-      {editing ? (
+  return (
+    <div className={`page dashboardPage${commandCenter ? " page--commandCenter" : ""}`}>
+      <ToastStack toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
+      {!commandCenter ? (
+        <div className="pageHeader">
+          <div>
+            <h1>Dashboard</h1>
+            <p className="pageSub">
+              Collector health, uplink, and charts — same metrics Grafana uses. In edit mode, drag
+              anywhere on the grid (including empty space below).
+            </p>
+          </div>
+          <div className="pageActions">
+            {editing ? (
+              <>
+                <button type="button" onClick={() => setDrawerOpen(true)}>
+                  Add widget
+                </button>
+                <button type="button" className="primary" onClick={persist}>
+                  Save layout
+                </button>
+                <button type="button" onClick={cancelEdit}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" onClick={() => void enterCommandCenter()}>
+                  Fullscreen
+                </button>
+                <button type="button" className="primary" onClick={() => setEditing(true)}>
+                  Edit layout
+                </button>
+                <button type="button" onClick={doReset}>
+                  Reset
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {canEdit ? (
         <div className="bannerHint">
           Unsaved changes — drag into empty space, resize from the bottom-right corner, use{" "}
           <strong>Settings</strong> on a widget for options. Click <strong>Save layout</strong> when
@@ -370,19 +391,19 @@ export function DashboardPage() {
       <div
         id="dashboard-grid-host"
         ref={hostRef}
-        className={`dashboardHost${editing ? " dashboardHostEditing" : ""}`}
+        className={`dashboardHost${canEdit ? " dashboardHostEditing" : ""}`}
         style={{ minHeight: gridMinRows * 36 + 80 }}
       >
         <GridLayout
           className="layout"
           layout={gridLayout}
           cols={12}
-          rowHeight={36}
+          rowHeight={commandCenter ? 42 : 36}
           width={width}
-          margin={[10, 10]}
+          margin={commandCenter ? [8, 8] : [10, 10]}
           containerPadding={[0, 0]}
-          isDraggable={editing}
-          isResizable={editing}
+          isDraggable={canEdit}
+          isResizable={canEdit}
           onDragStop={applyLayoutPositions}
           onResizeStop={applyLayoutPositions}
           draggableHandle=".widgetDrag"
@@ -393,7 +414,7 @@ export function DashboardPage() {
           resizeHandles={["se"]}
         >
           {layout.widgets.map((w) => {
-            const showConfig = editing && configOpenId === w.i && widgetHasConfig(w.type);
+            const showConfig = canEdit && configOpenId === w.i && widgetHasConfig(w.type);
             return (
               <div
                 key={w.i}
@@ -402,13 +423,13 @@ export function DashboardPage() {
                 }`}
               >
                 <div className="widgetChrome">
-                  {editing && (
+                  {canEdit && (
                     <span className="widgetDrag" title="Drag">
                       ⋮⋮
                     </span>
                   )}
                   <span className="widgetTypeLabel">{widgetLabel(w.type, w.config)}</span>
-                  {editing && widgetHasConfig(w.type) ? (
+                  {canEdit && widgetHasConfig(w.type) ? (
                     <button
                       type="button"
                       className={`iconBtn${showConfig ? " iconBtnActive" : ""}`}
@@ -418,7 +439,7 @@ export function DashboardPage() {
                       ⚙
                     </button>
                   ) : null}
-                  {editing && (
+                  {canEdit && (
                     <button
                       type="button"
                       className="iconBtn"
@@ -463,7 +484,7 @@ export function DashboardPage() {
         </GridLayout>
       </div>
 
-      {drawerOpen && (
+      {drawerOpen && canEdit && (
         <div className="drawer">
           <div className="drawerTitle">Add widget</div>
           {WIDGET_GROUPS.map((group) => (

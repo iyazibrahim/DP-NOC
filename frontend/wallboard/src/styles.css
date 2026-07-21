@@ -49,6 +49,72 @@ a:hover {
   height: 100%;
 }
 
+.appShell--commandCenter {
+  grid-template-columns: 1fr;
+}
+
+.commandCenterBar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(8, 18, 28, 0.92);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+.commandCenterBrand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-size: 14px;
+}
+
+.commandCenterClock {
+  font-family: var(--font-mono);
+  color: var(--muted);
+  font-size: 14px;
+  margin-left: auto;
+}
+
+.commandCenterExit {
+  font-size: 12px;
+  padding: 6px 12px;
+}
+
+.page--commandCenter {
+  padding: 10px 12px 16px;
+  height: calc(100% - 42px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.page--commandCenter .dashboardHost {
+  flex: 1;
+  min-height: 0;
+}
+
+.page--commandCenter .mapPageLayout {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+.page--commandCenter .dashWidget {
+  font-size: 1.05em;
+}
+
+.page--commandCenter .widgetChrome {
+  padding: 6px 10px;
+}
+
+.page--commandCenter .widgetTypeLabel {
+  font-size: 12px;
+}
+
 .sidebar {
   background:
     linear-gradient(180deg, rgba(0, 181, 226, 0.07), transparent 28%),

@@ -1,5 +1,6 @@
 # Alloy site collector for NUC / site box (one site at a time).
 # Configure via deploy.sh (writes .env + devices.json + config.alloy).
+# Inventory sync: run ./sync-devices.sh on the host (or cron / --loop). UI is source of truth.
 
 services:
   alloy:

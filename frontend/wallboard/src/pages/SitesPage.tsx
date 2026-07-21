@@ -6,6 +6,7 @@ import {
   addSiteDevice,
   addSiteWebsite,
   applyWebsiteProbes,
+  clearCollectorToken,
   createSite,
   deleteSite,
   deleteSiteDevice,
@@ -15,6 +16,7 @@ import {
   getDiscoveredDevices,
   getSite,
   getSites,
+  rotateCollectorToken,
   updateSite,
   updateSiteDevice,
   updateSiteWebsite
@@ -190,6 +192,7 @@ export function SiteDetailPage() {
   const [editSiteOpen, setEditSiteOpen] = useState(false);
   const [deviceModalOpen, setDeviceModalOpen] = useState(false);
   const [websiteModalOpen, setWebsiteModalOpen] = useState(false);
+  const [revealedCollectorToken, setRevealedCollectorToken] = useState<string | null>(null);
 
   async function reload() {
     if (!token || !id) return;
@@ -473,6 +476,46 @@ export function SiteDetailPage() {
     setWebsiteModalOpen(true);
   }
 
+  async function onRotateCollectorToken() {
+    if (!token || !id) return;
+    if (
+      site?.hasCollectorToken &&
+      !confirm("Generate a new token? The previous token on the collector will stop working.")
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await rotateCollectorToken(token, id);
+      setSite(res.site);
+      setRevealedCollectorToken(res.token);
+      setMsg("Collector token generated — copy it into the site box .env as COLLECTOR_TOKEN.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Token generate failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onClearCollectorToken() {
+    if (!token || !id) return;
+    if (!confirm("Remove collector sync token? Inventory pull will stop until a new token is set.")) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await clearCollectorToken(token, id);
+      setSite(res.site);
+      setRevealedCollectorToken(null);
+      setMsg("Collector token cleared.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Clear failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="page">
       <div className="pageHeader">
@@ -601,39 +644,105 @@ export function SiteDetailPage() {
                 <th>Kind</th>
                 <th>Type</th>
                 <th>Target</th>
+                <th>SNMP</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {(site.devices ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="muted">
-                    No devices yet — add a collector or local device.
+                  <td colSpan={6} className="muted">
+                    No devices yet — add a collector or local device. Network devices need an SNMP IP
+                    so the site collector can poll them.
                   </td>
                 </tr>
               ) : (
-                (site.devices ?? []).map((d) => (
-                  <tr key={d.id}>
-                    <td>
-                      {d.name}
-                      <div className="muted">{d.id}</div>
-                    </td>
-                    <td>{d.kind}</td>
-                    <td>{deviceTypes.find((t) => t.id === d.type)?.label ?? d.type}</td>
-                    <td>{d.kind === "server" ? d.hostMetricId ?? d.id : d.snmpIp}</td>
-                    <td>
-                      <button type="button" onClick={() => startEdit(d)} disabled={busy}>
-                        Edit
-                      </button>{" "}
-                      <button type="button" onClick={() => onDeleteDevice(d.id)} disabled={busy}>
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                (site.devices ?? []).map((d) => {
+                  const snmpRow =
+                    d.kind === "network"
+                      ? status?.localDeviceStates?.find((x) => x.deviceId === d.id)
+                      : undefined;
+                  return (
+                    <tr key={d.id}>
+                      <td>
+                        {d.name}
+                        <div className="muted">{d.id}</div>
+                      </td>
+                      <td>{d.kind}</td>
+                      <td>{deviceTypes.find((t) => t.id === d.type)?.label ?? d.type}</td>
+                      <td>
+                        {d.kind === "server" ? d.hostMetricId ?? d.id : d.snmpIp ?? "—"}
+                        {d.kind === "network" && !d.snmpIp ? (
+                          <div className="muted">Needs SNMP IP</div>
+                        ) : null}
+                      </td>
+                      <td>
+                        {d.kind === "network" ? (
+                          <StatusPill
+                            state={snmpRow?.state ?? "unknown"}
+                            notes={
+                              snmpRow?.notes ??
+                              (!d.snmpIp
+                                ? "Needs SNMP IP"
+                                : "Waiting for collector SNMP scrape")
+                            }
+                          />
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                      <td>
+                        <button type="button" onClick={() => startEdit(d)} disabled={busy}>
+                          Edit
+                        </button>{" "}
+                        <button type="button" onClick={() => onDeleteDevice(d.id)} disabled={busy}>
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
+          <p className="muted" style={{ marginTop: 10 }}>
+            Network inventory syncs to the site collector every 1–2 minutes when a collector token is
+            configured.
+          </p>
+
+          <div className="collectorSyncPanel" style={{ marginTop: 16 }}>
+            <div className="tableTitle">Collector inventory sync</div>
+            <p className="muted">
+              {site.hasCollectorToken
+                ? "Token configured. Put COLLECTOR_TOKEN + NOC_API_URL on the site box and run sync-devices.sh."
+                : "Generate a token so this site’s Alloy box can pull SNMP targets from the UI."}
+            </p>
+            {site.collectorDevicesSyncedAt ? (
+              <p className="muted">
+                Last collector pull: {new Date(site.collectorDevicesSyncedAt).toLocaleString()}
+              </p>
+            ) : (
+              <p className="muted">No successful collector pull yet.</p>
+            )}
+            {revealedCollectorToken ? (
+              <div className="bannerHint" style={{ marginTop: 8 }}>
+                <strong>Copy now (shown once):</strong>
+                <code style={{ display: "block", marginTop: 6, wordBreak: "break-all" }}>
+                  {revealedCollectorToken}
+                </code>
+              </div>
+            ) : null}
+            <div className="formActions" style={{ marginTop: 10 }}>
+              <button type="button" className="primary" onClick={onRotateCollectorToken} disabled={busy}>
+                {site.hasCollectorToken ? "Rotate token" : "Generate token"}
+              </button>
+              {site.hasCollectorToken ? (
+                <button type="button" onClick={onClearCollectorToken} disabled={busy}>
+                  Clear token
+                </button>
+              ) : null}
+            </div>
+          </div>
         </section>
 
         <section className="bentoTile bentoWebsites">

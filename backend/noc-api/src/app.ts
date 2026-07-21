@@ -14,6 +14,7 @@ import { settingsRouter } from "./routes/settings";
 import { metricsRouter } from "./routes/metrics";
 import { exportsRouter } from "./routes/exports";
 import { deviceTypesRouter } from "./routes/deviceTypes";
+import { collectorRouter } from "./routes/collector";
 
 function resolvePublicDir() {
   if (env.PUBLIC_DIR && fs.existsSync(env.PUBLIC_DIR)) {
@@ -80,6 +81,7 @@ export function createApp() {
   app.use("/api/metrics", metricsRouter);
   app.use("/api/exports", exportsRouter);
   app.use("/api/device-types", deviceTypesRouter);
+  app.use("/api/collector", collectorRouter);
 
   if (hasUi && publicDir) {
     app.use(express.static(publicDir, { index: false }));

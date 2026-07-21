@@ -13,7 +13,7 @@ Labels: set `SITE_NAME=site-1` and `HOST_DEVICE_ID=site-1-nuc` so React can auto
 ## Quick deploy (NUC)
 
 ```bash
-chmod +x deploy.sh generate-config.sh
+chmod +x deploy.sh generate-config.sh sync-devices.sh
 ./deploy.sh
 ```
 
@@ -25,9 +25,10 @@ Requires: Docker, Docker Compose, python3.
 |---|---|
 | `deploy.sh` | Docker check + site/device wizard + `compose up` |
 | `generate-config.sh` | Build `config.alloy` from `devices.json` |
+| `sync-devices.sh` | Pull SNMP inventory from NOC UI (`COLLECTOR_TOKEN`) |
 | `docker-compose.yml` | Grafana Alloy (`host` network + `NET_RAW`) |
 | `blackbox.yml` | ICMP probe module (used via `config_file`) |
-| `devices.json` | SNMP targets for this site |
+| `devices.json` | SNMP targets for this site (cache when sync is enabled) |
 | `.env` | Secrets + `SITE_NAME` (gitignored) |
 | `snmp.yml` | SNMPv2c / if_mib module |
 
@@ -59,9 +60,8 @@ Add the same id in NOC UI (Sites → Add device, type `server`) for inventory.
 
 ## After UI device changes
 
-NOC UI device CRUD updates the central registry only. Re-sync the collector:
+With `COLLECTOR_TOKEN` + `NOC_API_URL` set, run `./sync-devices.sh` (or cron / `--loop`). The UI is the source of truth for SNMP targets.
 
-1. Edit `devices.json` (or re-run `deploy.sh`)
-2. `./generate-config.sh && docker compose up -d --force-recreate`
+Without sync: edit `devices.json` or re-run `deploy.sh`, then `./generate-config.sh && docker compose up -d --force-recreate`.
 
 **Never commit real Access token secrets.**

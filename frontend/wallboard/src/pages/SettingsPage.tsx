@@ -199,7 +199,7 @@ export function SettingsPage() {
           <div className="settingsBentoEyebrow">Read-only</div>
           <h2 className="settingsBentoTitle">Detection</h2>
           <p className="muted settingsBentoBlurb">
-            Outages show in ~30–60s. Collector ICMP scrape must be 15–30s.
+            UI refreshes every 5s. Outages show in ~30–60s. Collector ICMP scrape must be 15–30s.
           </p>
           {statusTiming ? (
             <ul className="settingsBentoList">

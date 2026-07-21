@@ -63,7 +63,7 @@ settingsRouter.get("/status-timing", requireJwt(["operator", "wallboard"]), (_re
     typicalDetectionSec: STATUS_META.typicalDetectionSec,
     scrapeIntervalSec: STATUS_META.scrapeIntervalSec,
     notes: [
-      "Dashboard polls /api/sites/status/all every ~10s.",
+      "Dashboard polls /api/sites/status/all every ~5s (UI refresh only — does not change detection speed).",
       "Status and gauges use last_over_time over 45s; missing samples = DOWN for uplink/collector.",
       "Target detection is ~30–60s — collector ICMP scrape must be 15s–30s (not the Alloy 60s default).",
       "If uplink flickers every minute while collector stays healthy, ICMP scrape is still ~60s; fix it on the collector.",

@@ -97,3 +97,63 @@ export function SiteSignalBoard({
     </div>
   );
 }
+
+/** Per-device SNMP LEDs — one site or all sites. */
+export function LocalDevicesSignalBoard({
+  sites,
+  statuses,
+  siteId,
+  title
+}: {
+  sites: Site[];
+  statuses: SiteStatus[];
+  siteId?: string;
+  title?: string;
+}) {
+  const rows = (siteId ? sites.filter((s) => s.id === siteId) : sites).flatMap((s) => {
+    const st = statuses.find((x) => x.siteId === s.id);
+    const devices = st?.localDeviceStates ?? [];
+    if (devices.length === 0) {
+      return [
+        {
+          key: `${s.id}-empty`,
+          siteName: s.name,
+          deviceName: "No local devices",
+          snmpIp: undefined as string | undefined,
+          state: "unknown" as DomainState,
+          notes: "Add network gear with an SNMP IP on this site" as string | undefined
+        }
+      ];
+    }
+    return devices.map((d) => ({
+      key: `${s.id}-${d.deviceId}`,
+      siteName: s.name,
+      deviceName: d.name,
+      snmpIp: d.snmpIp,
+      state: d.state,
+      notes: d.notes
+    }));
+  });
+
+  return (
+    <div className="signalBoard">
+      <div className="widgetTitle">{title?.trim() || "Local devices (SNMP)"}</div>
+      <div className="signalBoardList">
+        {rows.map((r) => (
+          <div key={r.key} className="signalBoardRow">
+            <div className="signalBoardSite">
+              {!siteId ? <span className="muted">{r.siteName} · </span> : null}
+              {r.deviceName}
+              {r.snmpIp ? <div className="muted">{r.snmpIp}</div> : null}
+            </div>
+            <div className="signalLeds">
+              <span className={`signalLed signalLed--${stateTone(r.state)}`} title={r.notes}>
+                <i /> SNMP {stateLabel(r.state)}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

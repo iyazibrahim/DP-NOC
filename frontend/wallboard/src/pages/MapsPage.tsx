@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
+import { useCommandCenter } from "../commandCenter/CommandCenterContext";
 import {
   getAllSiteStatuses,
   getRecentAlerts,
@@ -13,6 +14,7 @@ import { MapsOpsRail } from "../components/MapsOpsRail";
 
 export function MapsPage() {
   const { token } = useAuth();
+  const { active: commandCenter, enter: enterCommandCenter } = useCommandCenter();
   const [sites, setSites] = useState<Site[]>([]);
   const [statuses, setStatuses] = useState<SiteStatus[]>([]);
   const [devices, setDevices] = useState<DeviceRow[]>([]);
@@ -50,13 +52,20 @@ export function MapsPage() {
   }, [token]);
 
   return (
-    <div className="page">
-      <div className="pageHeader">
-        <div>
-          <h1>Maps</h1>
-          <p className="pageSub">Site geography, uplink, and alert hotspots</p>
+    <div className={`page${commandCenter ? " page--commandCenter" : ""}`}>
+      {!commandCenter ? (
+        <div className="pageHeader">
+          <div>
+            <h1>Maps</h1>
+            <p className="pageSub">Site geography, uplink, and alert hotspots</p>
+          </div>
+          <div className="pageActions">
+            <button type="button" onClick={() => void enterCommandCenter()}>
+              Fullscreen
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
       {error && <div className="bannerError">{error}</div>}
       <div className="mapPageLayout">
         <div className="mapPane">

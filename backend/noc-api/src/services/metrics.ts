@@ -54,6 +54,20 @@ export const METRIC_PRESETS: MetricPreset[] = [
     query: `snmp_up{site="{{site}}",device="{{device}}"}`
   },
   {
+    id: "if_in_bps",
+    label: "Interface traffic in",
+    kind: "network",
+    unit: "bps",
+    query: `IF_IN_PLACEHOLDER`
+  },
+  {
+    id: "if_out_bps",
+    label: "Interface traffic out",
+    kind: "network",
+    unit: "bps",
+    query: `IF_OUT_PLACEHOLDER`
+  },
+  {
     id: "wan_dns",
     label: "Uplink (DNS)",
     kind: "any",
@@ -121,6 +135,10 @@ export function buildQuery(presetId: string, siteId: string, deviceId: string): 
       return probeSuccessFresh(siteId, "wan_vps", METRIC_FRESH_WINDOW);
     case "snmp_up":
       return `last_over_time(snmp_up{site="${siteId}",device="${deviceId}"}[${METRIC_FRESH_WINDOW}])`;
+    case "if_in_bps":
+      return `sum(rate(ifHCInOctets{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
+    case "if_out_bps":
+      return `sum(rate(ifHCOutOctets{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
     default:
       return preset.query.replace(/\{\{site\}\}/g, siteId).replace(/\{\{device\}\}/g, deviceId);
   }
@@ -157,6 +175,18 @@ export function listPresetsForApi(): MetricPreset[] {
       return {
         ...p,
         query: `last_over_time(probe_success{check}[${METRIC_FRESH_WINDOW}])`
+      };
+    }
+    if (p.id === "if_in_bps") {
+      return {
+        ...p,
+        query: `sum(rate(ifHCInOctets{site,device}[5m]) * 8)`
+      };
+    }
+    if (p.id === "if_out_bps") {
+      return {
+        ...p,
+        query: `sum(rate(ifHCOutOctets{site,device}[5m]) * 8)`
       };
     }
     return p;

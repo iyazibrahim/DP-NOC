@@ -77,6 +77,12 @@ Collector box → Alloy → Prometheus (central)
   - **Digital Penang branding + Settings bento (2026-07-21)**
     - Logo in sidebar + login; accent cyan `#00b5e2` + yellow `#f5c400`
     - Settings bento cards open Configure modals (Detection read-only)
+  - **Command center + SNMP sync (2026-07-21)**
+    - Dashboard/Maps **Fullscreen** command-center mode (hide sidebar/chrome, lock grid, clock bar)
+    - Status poll **5s** (freshness stays **45s**; scrape default in `generate-config.sh` **15s**)
+    - Local devices SNMP signal board widget; live SNMP column on Devices / site detail
+    - Interface traffic presets (`if_in_bps` / `if_out_bps`)
+    - Collector pull sync: site token + `GET /api/collector/:siteId/devices.json` + `sync-devices.sh`
 
 ## Local Validation
 1. `docker compose up -d --build`
@@ -84,7 +90,9 @@ Collector box → Alloy → Prometheus (central)
 3. Sites → confirm Collector vs Uplink columns
 4. Devices → “New devices found” / auto-adopt when host metrics exist
 5. Dashboard → Edit → add Collector chart (CPU / memory) for a registered collector
-6. Grafana → folder NOC → “NOC — Collector & Uplink”
+6. Dashboard → **Fullscreen** — chrome hidden; Esc / Exit to leave
+7. Sites → site → Generate collector token; set on site box `.env` + `./sync-devices.sh`
+8. Grafana → folder NOC → “NOC — Collector & Uplink”
 
 ## Dokploy notes
 - Publish `noc-app:8080` and optionally `grafana:3000`

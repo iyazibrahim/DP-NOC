@@ -12,6 +12,7 @@ import {
 import { collectorOf, localDevicesOf, uplinkOf } from "../statusLabels";
 import {
   CollectorStatusCard,
+  LocalDevicesSignalBoard,
   SiteSignalBoard,
   UplinkStatusCard
 } from "./StatusVisualWidgets";
@@ -27,6 +28,13 @@ export type WidgetCatalogEntry = {
 export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   { type: "site_status_grid", label: "Site health overview", defaultW: 4, defaultH: 8 },
   { type: "site_signal_board", label: "Sites signal board", description: "Green/red LEDs for collector + uplink", defaultW: 6, defaultH: 7 },
+  {
+    type: "local_devices_board",
+    label: "Local devices (SNMP)",
+    description: "Per-device SNMP up/down LEDs",
+    defaultW: 6,
+    defaultH: 7
+  },
   { type: "uplink_status", label: "Uplink status", description: "Big UP/DOWN for one site’s internet", defaultW: 3, defaultH: 4 },
   { type: "collector_status", label: "Collector status", description: "Big UP/DOWN for one site’s collector", defaultW: 3, defaultH: 4 },
   { type: "alerts_table", label: "Active alerts", defaultW: 6, defaultH: 4 },
@@ -78,6 +86,7 @@ export const WIDGET_GROUPS: Array<{ label: string; widgets: WidgetCatalogEntry[]
       [
         "site_status_grid",
         "site_signal_board",
+        "local_devices_board",
         "uplink_status",
         "collector_status",
         "site_card",
@@ -154,6 +163,19 @@ export function WidgetBody({
     return (
       <div className="widgetInner widgetInnerScroll">
         <SiteSignalBoard sites={sites} statuses={statuses} />
+      </div>
+    );
+  }
+
+  if (type === "local_devices_board") {
+    return (
+      <div className="widgetInner widgetInnerScroll">
+        <LocalDevicesSignalBoard
+          sites={sites}
+          statuses={statuses}
+          siteId={config?.siteId || undefined}
+          title={config?.title}
+        />
       </div>
     );
   }

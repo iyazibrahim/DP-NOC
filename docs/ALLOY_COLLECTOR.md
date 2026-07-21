@@ -21,7 +21,9 @@ Collector box (NUC / Pi / mini-PC / server)
 - Host metrics: `job=integrations/unix`, often only `instance=<hostname>` (no `device`)
 - Uplink: `job=integrations/blackbox/ping_*`, `check=wan_dns|wan_vps`
 
-If ICMP scrape is left at Alloy’s default (~60s) while NOC freshness is 45s (30–60s detection), uplink will flicker DOWN every minute even though the collector is fine. **Required:** set ICMP `scrape_interval` to **15s–30s** on the collector (this repo’s template uses 15s).
+If ICMP scrape is left at Alloy’s default (~60s) while NOC freshness is 45s (30–60s detection), uplink will flicker DOWN every minute even though the collector is fine. **Required:** set ICMP `scrape_interval` to **15s–30s** on the collector (this repo’s template and `generate-config.sh` default to **15s**).
+
+The wallboard refreshes status every **~5s**; that only updates the UI. Detection still depends on scrape + 45s freshness (~30–60s). Do **not** set scrape to 60s.
 
 If you use a legacy integrations config, add a relabel so series also carry `device="$HOST_DEVICE_ID"`. Until then, the app adopts the collector using the hostname `instance` value.
 
@@ -117,7 +119,19 @@ docker compose up -d --force-recreate
 
 `SITE_NAME` must match seed ids (`site-1` … `site-5`) in `backend/noc-api/data/seed-sites.json`.
 
-Mirror the same devices in the **NOC UI** (Sites → site → Add device). UI registry and Alloy `devices.json` are separate in v1.
+Mirror the same devices in the **NOC UI** (Sites → site → Add device). With a **collector token**, the site box pulls `devices.json` automatically via `sync-devices.sh` (every 1–2 minutes). Without a token, UI registry and Alloy `devices.json` stay separate — export or re-run deploy manually.
+
+### Inventory sync (recommended)
+
+1. In NOC UI: Sites → site → **Generate token** (Collector inventory sync)
+2. On the site box `.env`:
+   - `NOC_API_URL=https://your-noc-host`
+   - `COLLECTOR_TOKEN=<token from UI>`
+   - `SITE_NAME=<same as site id>`
+3. Run `./sync-devices.sh` once, or cron / `./sync-devices.sh --loop`
+4. On change, the script regenerates `config.alloy` and recreates the Alloy container
+
+Endpoint: `GET /api/collector/:siteId/devices.json` with `Authorization: Bearer <token>`.
 
 ### Manual / binary install (optional)
 

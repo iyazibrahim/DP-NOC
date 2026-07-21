@@ -184,6 +184,33 @@ export async function downloadSiteDevicesJson(token: string, siteId: string) {
   return res.blob();
 }
 
+export async function getCollectorTokenMeta(token: string, siteId: string) {
+  return fetchJson<{
+    hasCollectorToken: boolean;
+    collectorDevicesSyncedAt: string | null;
+  }>(`/api/sites/${siteId}/collector-token`, {
+    headers: authHeaders(token)
+  });
+}
+
+export async function rotateCollectorToken(token: string, siteId: string) {
+  return fetchJson<{
+    site: Site;
+    token: string;
+    message: string;
+  }>(`/api/sites/${siteId}/collector-token`, {
+    method: "POST",
+    headers: authHeaders(token)
+  });
+}
+
+export async function clearCollectorToken(token: string, siteId: string) {
+  return fetchJson<{ site: Site }>(`/api/sites/${siteId}/collector-token`, {
+    method: "DELETE",
+    headers: authHeaders(token)
+  });
+}
+
 export async function getDeviceTypes(token: string) {
   return fetchJson<{ types: DeviceTypeDef[] }>("/api/device-types", {
     headers: authHeaders(token)
@@ -415,4 +442,4 @@ export async function getStatusTiming(token: string) {
 }
 
 /** Dashboard status poll interval (ms) — keep in sync with backend STATUS_DASHBOARD_REFRESH_SEC */
-export const STATUS_POLL_MS = 10_000;
+export const STATUS_POLL_MS = 5_000;

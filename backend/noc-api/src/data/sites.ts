@@ -32,6 +32,14 @@ export type Site = {
   lan?: {
     snmpTargetIp?: string;
   };
+  /** sha256 hex of collector sync bearer token (never returned to UI) */
+  collectorTokenHash?: string;
+  /** Last successful collector devices.json pull */
+  collectorDevicesSyncedAt?: string;
+};
+
+export type PublicSite = Omit<Site, "collectorTokenHash"> & {
+  hasCollectorToken: boolean;
 };
 
 function seedPathCandidates(): string[] {
@@ -163,6 +171,66 @@ export { siteList };
 
 export function getSiteById(id: string) {
   return siteList.find((s) => s.id === id) ?? null;
+}
+
+export function toPublicSite(site: Site): PublicSite {
+  const { collectorTokenHash, ...rest } = site;
+  return {
+    ...rest,
+    hasCollectorToken: Boolean(collectorTokenHash)
+  };
+}
+
+export function toPublicSites(sites: Site[] = siteList): PublicSite[] {
+  return sites.map(toPublicSite);
+}
+
+function hashCollectorToken(token: string): string {
+  return crypto.createHash("sha256").update(token, "utf8").digest("hex");
+}
+
+/** Generate a new collector sync token. Returns plaintext once; stores only the hash. */
+export function rotateCollectorToken(siteId: string): { site: PublicSite; token: string } | null {
+  const site = getSiteById(siteId);
+  if (!site) return null;
+  const token = `nocc_${crypto.randomBytes(24).toString("base64url")}`;
+  site.collectorTokenHash = hashCollectorToken(token);
+  persist();
+  return { site: toPublicSite(site), token };
+}
+
+export function clearCollectorToken(siteId: string): PublicSite | null {
+  const site = getSiteById(siteId);
+  if (!site) return null;
+  delete site.collectorTokenHash;
+  persist();
+  return toPublicSite(site);
+}
+
+export function verifyCollectorToken(siteId: string, token: string): boolean {
+  const site = getSiteById(siteId);
+  if (!site?.collectorTokenHash || !token) return false;
+  const incoming = hashCollectorToken(token);
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(site.collectorTokenHash, "hex"),
+      Buffer.from(incoming, "hex")
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function markCollectorDevicesSynced(siteId: string): void {
+  const site = getSiteById(siteId);
+  if (!site) return;
+  site.collectorDevicesSyncedAt = new Date().toISOString();
+  persist();
+}
+
+export function networkDevicesContentHash(siteId: string): string {
+  const devices = exportNetworkDevicesJson(siteId);
+  return crypto.createHash("sha256").update(JSON.stringify(devices), "utf8").digest("hex");
 }
 
 export function getAllDevices() {

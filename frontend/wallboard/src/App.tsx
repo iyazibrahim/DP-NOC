@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
+import { useCommandCenter } from "./commandCenter/CommandCenterContext";
 import { Sidebar } from "./components/Sidebar";
 import { DashboardPage } from "./pages/DashboardPage";
 import { MapsPage } from "./pages/MapsPage";
@@ -59,10 +60,21 @@ function LoginScreen() {
 }
 
 function Shell() {
+  const { active, exit, clock } = useCommandCenter();
+
   return (
-    <div className="appShell">
-      <Sidebar />
+    <div className={`appShell${active ? " appShell--commandCenter" : ""}`}>
+      {!active ? <Sidebar /> : null}
       <main className="mainPane">
+        {active ? (
+          <div className="commandCenterBar">
+            <span className="commandCenterBrand">Digital Penang NOC</span>
+            <span className="commandCenterClock">{clock}</span>
+            <button type="button" className="commandCenterExit" onClick={() => void exit()}>
+              Exit fullscreen
+            </button>
+          </div>
+        ) : null}
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/maps" element={<MapsPage />} />

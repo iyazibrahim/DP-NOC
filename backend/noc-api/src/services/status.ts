@@ -28,6 +28,14 @@ export type SiteStatus = {
   lan: DomainStatus;
   /** Alias of lan (Local devices) */
   localDevices: DomainStatus;
+  /** Per-network-device SNMP status for signal boards */
+  localDeviceStates: Array<{
+    deviceId: string;
+    name: string;
+    snmpIp?: string;
+    state: DomainState;
+    notes?: string;
+  }>;
   /** Collector box host metrics health */
   collector: DomainStatus;
   websiteTargetCount: number;
@@ -47,7 +55,7 @@ export type StatusMeta = {
 };
 
 export const STATUS_META: Omit<StatusMeta, "checkedAt"> = {
-  dashboardRefreshSec: 10,
+  dashboardRefreshSec: 5,
   metricFreshWindowSec: 45,
   typicalDetectionSec: 45,
   scrapeIntervalSec: 15
@@ -246,6 +254,7 @@ export async function computeSiteStatus(
       websites,
       lan: na,
       localDevices: na,
+      localDeviceStates: [],
       collector: na,
       alerts: { firing, resolved },
       websiteTargetCount: globalTargets.length,
@@ -311,14 +320,39 @@ export async function computeSiteStatus(
   const collector = await computeCollectorStatus(siteId);
 
   let localDevices: DomainStatus = { state: "unknown", notes: "No local devices configured" };
+  const localDeviceStates: SiteStatus["localDeviceStates"] = [];
   const devices = site.devices ?? [];
   const networkOrAll = devices.filter((d) => (d.kind ?? "network") === "network");
   if (networkOrAll.length > 0) {
     const deviceStatuses: DomainStatus[] = [];
     for (const d of networkOrAll) {
-      deviceStatuses.push(
-        await queryBooleanMetricState(`snmp_up{site="${siteId}",device="${d.id}"}`)
-      );
+      if (!d.snmpIp) {
+        const st: DomainStatus = {
+          state: "unknown",
+          notes: "Needs SNMP IP — collector cannot poll yet"
+        };
+        deviceStatuses.push(st);
+        localDeviceStates.push({
+          deviceId: d.id,
+          name: d.name,
+          snmpIp: d.snmpIp,
+          state: st.state,
+          notes: st.notes
+        });
+        continue;
+      }
+      const st = await queryBooleanMetricState(`snmp_up{site="${siteId}",device="${d.id}"}`);
+      if (st.state === "unknown" && !st.notes) {
+        st.notes = "Not polled yet — waiting for collector SNMP scrape";
+      }
+      deviceStatuses.push(st);
+      localDeviceStates.push({
+        deviceId: d.id,
+        name: d.name,
+        snmpIp: d.snmpIp,
+        state: st.state,
+        notes: st.notes
+      });
     }
     localDevices = aggregateProbeStatuses(deviceStatuses);
   } else if (devices.length === 0 && (await hasUnregisteredHostMetrics(siteId))) {
@@ -349,6 +383,7 @@ export async function computeSiteStatus(
     websites,
     lan: localDevices,
     localDevices,
+    localDeviceStates,
     collector,
     websiteTargetCount: site.websiteTargets?.length ?? 0,
     alerts: { firing, resolved },

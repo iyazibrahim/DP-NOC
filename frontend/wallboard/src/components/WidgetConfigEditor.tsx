@@ -77,6 +77,31 @@ export function WidgetConfigEditor({
     );
   }
 
+  if (widget.type === "local_devices_board") {
+    return (
+      <div className="widgetConfig">
+        <TitleField
+          config={config}
+          onChange={onChange}
+          placeholder="e.g. All LAN gear"
+        />
+        <label className="label">Site filter</label>
+        <select
+          value={config.siteId ?? ""}
+          onChange={(e) => onChange({ ...config, siteId: e.target.value })}
+        >
+          <option value="">All sites</option>
+          {sites.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        <p className="muted fieldHint">Leave as All sites to show every network device.</p>
+      </div>
+    );
+  }
+
   if (widget.type === "grafana_panel") {
     const base = grafanaUrl.replace(/\/$/, "");
     return (

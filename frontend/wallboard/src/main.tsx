@@ -6,13 +6,16 @@ import "@fontsource/ibm-plex-sans/600.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import "./styles.css";
 import { AuthProvider } from "./auth/AuthContext";
+import { CommandCenterProvider } from "./commandCenter/CommandCenterContext";
 import { App } from "./App";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <App />
+        <CommandCenterProvider>
+          <App />
+        </CommandCenterProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>

@@ -16,6 +16,10 @@ import {
   addWebsite,
   updateWebsite,
   removeWebsite,
+  toPublicSite,
+  toPublicSites,
+  rotateCollectorToken,
+  clearCollectorToken,
   type SiteDevice,
   type DeviceKind,
   type Site
@@ -82,11 +86,11 @@ sitesRouter.get("/catalog", requireJwt(["operator", "wallboard"]), (_req, res) =
 
 sitesRouter.post("/reset-from-seed", requireJwt(["operator"]), (_req, res) => {
   const sites = resetSitesFromSeed();
-  return res.json({ sites });
+  return res.json({ sites: toPublicSites(sites) });
 });
 
 sitesRouter.get("/", requireJwt(["operator", "wallboard"]), async (_req: Request, res: Response) => {
-  return res.json({ sites: siteList });
+  return res.json({ sites: toPublicSites(siteList) });
 });
 
 sitesRouter.post("/", requireJwt(["operator"]), async (req: Request, res: Response) => {
@@ -107,7 +111,7 @@ sitesRouter.post("/", requireJwt(["operator"]), async (req: Request, res: Respon
     notes: typeof body.notes === "string" ? body.notes : undefined,
     wan: wanBody
   });
-  return res.status(201).json({ site });
+  return res.status(201).json({ site: toPublicSite(site) });
 });
 
 sitesRouter.get("/status/all", requireJwt(["operator", "wallboard"]), async (_req: Request, res: Response) => {
@@ -150,6 +154,31 @@ sitesRouter.get("/:id/export/devices.json", requireJwt(["operator"]), (req, res)
   return res.send(JSON.stringify(devices, null, 2) + "\n");
 });
 
+sitesRouter.get("/:id/collector-token", requireJwt(["operator"]), (req, res) => {
+  const site = getSiteById(req.params.id);
+  if (!site) return res.status(404).json({ error: "Site not found" });
+  return res.json({
+    hasCollectorToken: Boolean(site.collectorTokenHash),
+    collectorDevicesSyncedAt: site.collectorDevicesSyncedAt ?? null
+  });
+});
+
+sitesRouter.post("/:id/collector-token", requireJwt(["operator"]), (req, res) => {
+  const result = rotateCollectorToken(req.params.id);
+  if (!result) return res.status(404).json({ error: "Site not found" });
+  return res.status(201).json({
+    site: result.site,
+    token: result.token,
+    message: "Store this token on the site collector (.env COLLECTOR_TOKEN). It is shown only once."
+  });
+});
+
+sitesRouter.delete("/:id/collector-token", requireJwt(["operator"]), (req, res) => {
+  const site = clearCollectorToken(req.params.id);
+  if (!site) return res.status(404).json({ error: "Site not found" });
+  return res.json({ site });
+});
+
 sitesRouter.post("/:id/websites/apply-probes", requireJwt(["operator"]), async (req, res) => {
   const siteId = req.params.id;
   if (siteId !== "global" && !getSiteById(siteId)) {
@@ -173,7 +202,7 @@ sitesRouter.post("/:id/websites", requireJwt(["operator"]), (req, res) => {
       return res.status(201).json({ site: asGlobalSite("global") });
     }
     const site = addWebsite(siteId, { name, url });
-    return res.status(201).json({ site });
+    return res.status(201).json({ site: site ? toPublicSite(site) : null });
   } catch (e) {
     return res.status(400).json({ error: e instanceof Error ? e.message : "Add failed" });
   }
@@ -200,7 +229,7 @@ sitesRouter.patch("/:id/websites", requireJwt(["operator"]), (req, res) => {
       url: typeof body.newUrl === "string" ? body.newUrl : undefined
     });
     if (!site) return res.status(404).json({ error: "Website not found" });
-    return res.json({ site });
+    return res.json({ site: toPublicSite(site) });
   } catch (e) {
     return res.status(400).json({ error: e instanceof Error ? e.message : "Update failed" });
   }
@@ -219,7 +248,7 @@ sitesRouter.delete("/:id/websites", requireJwt(["operator"]), (req, res) => {
   }
   const site = removeWebsite(siteId, url);
   if (!site) return res.status(404).json({ error: "Website not found" });
-  return res.json({ site });
+  return res.json({ site: toPublicSite(site) });
 });
 
 sitesRouter.patch("/:id", requireJwt(["operator"]), async (req: Request, res: Response) => {
@@ -245,7 +274,7 @@ sitesRouter.patch("/:id", requireJwt(["operator"]), async (req: Request, res: Re
     patch.websiteTargets = body.websiteTargets as Array<{ name: string; url: string }>;
   }
   const site = updateSite(id, patch);
-  return res.json({ site });
+  return res.json({ site: site ? toPublicSite(site) : null });
 });
 
 sitesRouter.delete("/:id", requireJwt(["operator"]), async (req: Request, res: Response) => {
@@ -269,7 +298,7 @@ sitesRouter.post("/:id/devices", requireJwt(["operator"]), async (req: Request, 
   }
   try {
     const site = addDevice(siteId, parsed);
-    return res.status(201).json({ site });
+    return res.status(201).json({ site: site ? toPublicSite(site) : null });
   } catch (e) {
     return res.status(409).json({ error: e instanceof Error ? e.message : "Conflict" });
   }
@@ -292,7 +321,7 @@ sitesRouter.patch("/:id/devices/:deviceId", requireJwt(["operator"]), async (req
   if (!site) {
     return res.status(404).json({ error: "Device not found" });
   }
-  return res.json({ site });
+  return res.json({ site: toPublicSite(site) });
 });
 
 sitesRouter.delete("/:id/devices/:deviceId", requireJwt(["operator"]), async (req: Request, res: Response) => {
@@ -304,7 +333,7 @@ sitesRouter.delete("/:id/devices/:deviceId", requireJwt(["operator"]), async (re
   if (!site) {
     return res.status(404).json({ error: "Device not found" });
   }
-  return res.json({ site });
+  return res.json({ site: toPublicSite(site) });
 });
 
 sitesRouter.get("/:id", requireJwt(["operator", "wallboard"]), async (req: Request, res: Response) => {
@@ -312,5 +341,5 @@ sitesRouter.get("/:id", requireJwt(["operator", "wallboard"]), async (req: Reque
   if (!site) {
     return res.status(404).json({ error: "Site not found" });
   }
-  return res.json({ site });
+  return res.json({ site: toPublicSite(site) });
 });

@@ -16,6 +16,14 @@ export type SiteStatus = {
   /** @deprecated prefer localDevices */
   lan: DomainStatus;
   localDevices?: DomainStatus;
+  /** Per-network-device SNMP status */
+  localDeviceStates?: Array<{
+    deviceId: string;
+    name: string;
+    snmpIp?: string;
+    state: DomainState;
+    notes?: string;
+  }>;
   collector?: DomainStatus;
   websiteTargetCount?: number;
   alerts: { firing: number; resolved: number };
@@ -52,6 +60,9 @@ export type Site = {
   websiteTargets: Array<{ name: string; url: string }>;
   wan: { dnsTarget: string; vpsTarget: string };
   devices: SiteDevice[];
+  /** Present when a collector sync token has been generated */
+  hasCollectorToken?: boolean;
+  collectorDevicesSyncedAt?: string | null;
 };
 
 export type ActiveAlert = {
@@ -65,6 +76,7 @@ export type ActiveAlert = {
 export type WidgetType =
   | "site_status_grid"
   | "site_signal_board"
+  | "local_devices_board"
   | "uplink_status"
   | "collector_status"
   | "alerts_table"

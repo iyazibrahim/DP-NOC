@@ -5,7 +5,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEVICES_FILE="${1:-$SCRIPT_DIR/devices.json}"
 OUT_FILE="${2:-$SCRIPT_DIR/config.alloy}"
-SCRAPE_INTERVAL_SEC="${SCRAPE_INTERVAL_SEC:-60}"
+# Must stay ≤30s (repo default 15s). 60s + 45s NOC freshness = false uplink downs.
+SCRAPE_INTERVAL_SEC="${SCRAPE_INTERVAL_SEC:-15}"
 
 if [[ ! -f "$DEVICES_FILE" ]]; then
   echo "[]" > "$DEVICES_FILE"
