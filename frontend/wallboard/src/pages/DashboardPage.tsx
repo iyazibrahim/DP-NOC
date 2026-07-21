@@ -223,7 +223,10 @@ export function DashboardPage() {
       <div className="pageHeader">
         <div>
           <h1>Dashboard</h1>
-          <p className="pageSub">Drag widgets like Grafana — save your own layout.</p>
+          <p className="pageSub">
+            Collector health, uplink, and charts — same metrics Grafana uses. Drag widgets in edit
+            mode to customize.
+          </p>
         </div>
         <div className="pageActions">
           {editing ? (

@@ -1,14 +1,27 @@
-# Alloy site collector (ICMP + SNMP → Prometheus)
-
-Safe path for this project:
+# Alloy site collector (Collector → Prometheus)
 
 ```text
-Site Alloy (NUC / site box)
-  -- HTTPS + CF-Access-Client-Id / Secret -->
-metrics.iyazbrhm.cloud
-  -- Cloudflare Tunnel (cloudflared on VPS host) -->
-127.0.0.1:9090  (Prometheus remote_write receiver)
+Collector box (NUC / Pi / mini-PC / server)
+  → Alloy (uplink pings + host metrics + SNMP)
+  → Prometheus (central)
+       ├─→ React dashboard
+       └─→ Grafana
 ```
+
+## Identity contract (required)
+
+| Concept | Env / label | Example |
+|---|---|---|
+| Site | `SITE_NAME` = Prometheus `site` = React site id | `site-1` |
+| Collector | `HOST_DEVICE_ID` = Prometheus `device` (preferred) | `site-1-nuc` |
+
+**Preferred (this repo template):** `job=site_host`, `device=$HOST_DEVICE_ID`, `site=$SITE_NAME`.
+
+**Legacy Alloy integrations** (still supported by the React app):
+- Host metrics: `job=integrations/unix`, often only `instance=<hostname>` (no `device`)
+- Uplink: `job=integrations/blackbox/ping_*`, `check=wan_dns|wan_vps`
+
+If you use a legacy integrations config, add a relabel so series also carry `device="$HOST_DEVICE_ID"`. Until then, the app adopts the collector using the hostname `instance` value.
 
 Do **not** point Alloy at `noc.iyazbrhm.cloud` (that is the UI on port 8080).
 
@@ -73,7 +86,7 @@ On the VPS, Prometheus must answer: `curl -sS http://127.0.0.1:9090/-/ready`
 
 ---
 
-## 2. Deploy Alloy on a NUC (recommended)
+## 2. Deploy Alloy on a collector (recommended)
 
 One Alloy instance = **one site** (pick from the catalog).
 

@@ -1,45 +1,60 @@
 # NOC (Network Operations Center) Multisite System
 
 ## Goal
-Multisite NOC for WAN connectivity, mixed-vendor SNMP, host metrics, and website checks — customizable React UI + Grafana, deployed behind Dokploy.
+Multisite NOC for **collectors**, **uplink / internet**, **local devices**, and **website checks** — React ops UI + Grafana, deployed behind Dokploy.
+
+## Vocabulary (user-facing)
+| Term | Meaning |
+|---|---|
+| Collector | Box running Alloy (NUC, Pi, mini-PC, server) |
+| Uplink / Internet | Collector can reach the internet / central server |
+| Local devices | Switches/routers/etc. polled via SNMP from the collector |
+| Website checks | Public URL checks from the central server |
 
 ## Architecture
-- Site Alloy agents (NUC): ICMP + SNMP + host metrics → Prometheus `remote_write` via Cloudflare Tunnel + Access
-- Central: Prometheus (28d / 10GB retention), Alertmanager, Blackbox, Grafana, **noc-app** (API + UI)
-- Reverse proxy: **Dokploy** for UI; **metrics.** is Tunnel → `127.0.0.1:9090`
+```text
+Collector box → Alloy → Prometheus (central)
+                     ├─→ React (noc-app)
+                     └─→ Grafana
+```
+- Site Alloy agents: uplink ICMP + SNMP + host metrics → Prometheus `remote_write` via Cloudflare Tunnel + Access
+- Central: Prometheus, Alertmanager, Blackbox (website checks), Grafana, **noc-app**
+- React and Grafana both read Prometheus (same labels / presets)
+
+## Identity contract
+- `SITE_NAME` = Prometheus `site` = React site id (e.g. `site-1`)
+- Preferred: `HOST_DEVICE_ID` = Prometheus `device` = React device id (e.g. `site-1-nuc`)
+- Legacy integrations Alloy: `job=integrations/unix` + `instance=<hostname>` still auto-adopted
 
 ## Seed sites (Penang)
 - Digital Penang Office, Penang Digital Library 1 & 2, Butterworth Digital Library, Batu Maung Digital Library
 - Full addresses and coordinates in `backend/noc-api/data/seed-sites.json`
-- Devices start empty; add via NOC UI (server/NUC or network/SNMP)
+- Devices start empty; collectors auto-adopt from Prometheus; network gear via UI + `devices.json`
 
 ## Progress Log
 - [x] Traefik removed; Compose uses `noc-app`; internal ports for Prometheus/AM/Blackbox
 - [x] Multi-stage root `Dockerfile` builds UI + API into one image
-- [x] Dashboard layout API + React shell (Maps / Sites / Devices / Alerts / Websites / Settings)
+- [x] Dashboard layout API + React shell
 - [x] Alloy CF Access headers + collector docs
-- [x] Penang seed sites + NUC `deploy.sh` / Compose / generate-config
+- [x] Penang seed sites + collector `deploy.sh` / Compose / generate-config
 - [x] Sites JSON persistence + device CRUD
-- [x] Fix Alloy blackbox ICMP via `blackbox.yml` + host metrics via `prometheus.exporter.unix`
-- [x] **Full site CRUD** (create/edit/delete, address, Leaflet map picker, reset from seed)
-- [x] **Device kinds** (`server` / `network`), LAN status from host + SNMP, Alloy `devices.json` export
-- [x] **Retention UI** (~28d / 10GB), shared flags volume, Prometheus entrypoint, `STORAGE_RETENTION.md`
-- [x] **Metrics API** (`/api/metrics/*`) + dashboard widgets (recharts chart/gauge/detail + config editor)
-- [x] **Weekly/monthly exports** (cron + manual CSV/JSON download in Settings)
-- [x] **Notifications UI** (Telegram, SMTP, webhook → Alertmanager YAML)
-- [x] **Status detection fix** — stale metrics show critical (down), not unknown; 10s dashboard poll
-- [x] **Dashboard layout fix** — widgets no longer disappear while editing (layout poll skips unsaved state)
-- [x] **Device auto-discovery** — `GET /api/sites/:id/discovered-devices` from Prometheus + Register UI on site detail
-- [x] **UI polish** — dark-themed selects, chart time ranges/tooltips, Grafana widget hints, website site helper text
-- [x] **LAN status hint** — warning when NUC metrics exist but no devices registered
+- [x] Device auto-discovery + auto-sync
+- [x] **Collector-first clarity (2026-07-21)**
+  - Root cause: live collector uses `job=integrations/unix` + `instance` (no `device`); discovery only looked for `job=site_host` + `device`
+  - Discovery / metrics / status accept template + legacy integrations labels
+  - Status split: Collector / Uplink / Local devices / Website checks
+  - Plain-language UI rename; responsive shell redesign (teal ops theme)
+  - Default dashboard includes collector CPU chart + memory/disk gauges
+  - Grafana provisioned dashboard `noc-collector-uplink` aligned with React presets
+  - Alert names/summaries use Collector / Uplink / Local device wording
 
 ## Local Validation
 1. `docker compose up -d --build`
 2. Open `http://localhost:8080` — login `admin` / `admin`
-3. Sites → create site-6 → appears on Maps → delete site-6
-4. Settings → change retention → Save → Apply (or restart `noc_prometheus`)
-5. Dashboard → Edit → add Device metric chart for `site-1-nuc`
-6. Settings → Export now (weekly) → download CSV/JSON
+3. Sites → confirm Collector vs Uplink columns
+4. Devices → “New devices found” / auto-adopt when host metrics exist
+5. Dashboard → Edit → add Collector chart (CPU / memory) for a registered collector
+6. Grafana → folder NOC → “NOC — Collector & Uplink”
 
 ## Dokploy notes
 - Publish `noc-app:8080` and optionally `grafana:3000`

@@ -4,6 +4,9 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -73,8 +76,8 @@ function ChartTooltip({
 function NoDeviceHint() {
   return (
     <div className="muted">
-      No devices —{" "}
-      <Link to="/sites">register collector host in Sites</Link> or use Discover on the site page.
+      No collector yet — open <Link to="/devices">Devices</Link> or a site page. Collectors are added
+      automatically when they send data.
     </div>
   );
 }
@@ -224,6 +227,13 @@ export function DeviceStatGauge({
   if (error) return <div className="muted">{error}</div>;
 
   const pct = value != null && unit === "%" ? Math.max(0, Math.min(100, value)) : null;
+  const pieData =
+    pct != null
+      ? [
+          { name: "used", value: Math.max(0, 100 - pct) },
+          { name: "free", value: pct }
+        ]
+      : null;
 
   return (
     <div className="gaugeWidget">
@@ -235,7 +245,26 @@ export function DeviceStatGauge({
           <div className="gaugeValue">
             {value != null ? `${value.toFixed(1)}${unit}` : "—"}
           </div>
-          {pct != null ? (
+          {pieData ? (
+            <div className="pieWrap">
+              <ResponsiveContainer width="100%" height={110}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    innerRadius={28}
+                    outerRadius={44}
+                    startAngle={90}
+                    endAngle={-270}
+                    stroke="none"
+                  >
+                    <Cell fill="rgba(45, 212, 191, 0.85)" />
+                    <Cell fill="rgba(148, 163, 184, 0.25)" />
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : pct != null ? (
             <div className="gaugeBar">
               <div className="gaugeFill" style={{ width: `${pct}%` }} />
             </div>

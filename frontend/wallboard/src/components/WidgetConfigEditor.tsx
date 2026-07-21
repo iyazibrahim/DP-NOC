@@ -48,7 +48,8 @@ export function WidgetConfigEditor({
     return (
       <div className="widgetConfig">
         <p className="muted widgetConfigHint">
-          For Zabbix/Grafana-style dashboards, paste a panel embed URL from Grafana (Share → Embed).
+          Optional. This app and Grafana both read the same metrics. Prefer a Collector chart unless
+          you need a specific Grafana panel.
         </p>
         <label className="label">Embed URL</label>
         <input
@@ -88,19 +89,26 @@ export function WidgetConfigEditor({
           </option>
         ))}
       </select>
-      <label className="label">Device</label>
+      <label className="label">Collector / device</label>
       <select
         value={deviceId}
         onChange={(e) => onChange({ ...config, siteId, deviceId: e.target.value })}
       >
         {devices.length === 0 ? (
-          <option value="">No devices — register in Sites</option>
+          <option value="">No collectors yet — wait for auto-add or open Devices</option>
         ) : (
-          devices.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name} ({d.kind})
-            </option>
-          ))
+          [...devices]
+            .sort((a, b) => {
+              const as = (a.kind ?? "") === "server" ? 0 : 1;
+              const bs = (b.kind ?? "") === "server" ? 0 : 1;
+              return as - bs;
+            })
+            .map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+                {d.kind === "server" ? " (collector)" : " (local)"}
+              </option>
+            ))
         )}
       </select>
       {widget.type !== "device_detail" ? (

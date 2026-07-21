@@ -11,7 +11,7 @@ import { WebsitesPage } from "./pages/WebsitesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
 function LoginScreen() {
-  const { login } = useAuth();
+  const { login, error: authError } = useAuth();
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("admin");
   const [busy, setBusy] = useState(false);
@@ -29,12 +29,14 @@ function LoginScreen() {
     }
   };
 
+  const shownError = error ?? authError;
+
   return (
     <div className="loginScreen">
       <div className="loginBox">
-        <div className="loginTitle">NOC Login</div>
-        <p className="muted">Operator access to the multisite NOC</p>
-        {error && <div className="bannerError">{error}</div>}
+        <div className="loginTitle">NOC</div>
+        <p className="muted">Sign in to monitor collectors, uplink, and sites</p>
+        {shownError && <div className="bannerError">{shownError}</div>}
         <label className="label">Username</label>
         <input value={username} onChange={(e) => setUsername(e.target.value)} />
         <label className="label">Password</label>

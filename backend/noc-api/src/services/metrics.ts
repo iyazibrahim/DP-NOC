@@ -1,4 +1,5 @@
 import { promQuery, promQueryRange } from "./prometheus";
+import { dualHostMetric, dualHostUp } from "./promLabels";
 
 export type MetricPreset = {
   id: string;
@@ -8,52 +9,134 @@ export type MetricPreset = {
   unit?: string;
 };
 
+/**
+ * Presets use {{site}} / {{device}}. buildQuery expands them and rewrites
+ * host series to match either `device` or `instance` (legacy Alloy).
+ */
 export const METRIC_PRESETS: MetricPreset[] = [
   {
     id: "cpu_pct",
-    label: "CPU usage %",
+    label: "CPU usage",
     kind: "server",
     unit: "%",
-    query: `100 - (avg by (device) (rate(node_cpu_seconds_total{mode="idle",site="{{site}}",device="{{device}}"}[5m])) * 100)`
+    query: `CPU_PLACEHOLDER`
   },
   {
     id: "mem_pct",
-    label: "Memory available %",
+    label: "Memory free",
     kind: "server",
     unit: "%",
-    query: `(node_memory_MemAvailable_bytes{site="{{site}}",device="{{device}}"} / node_memory_MemTotal_bytes{site="{{site}}",device="{{device}}"}) * 100`
+    query: `MEM_PLACEHOLDER`
   },
   {
     id: "disk_pct",
-    label: "Root disk free %",
+    label: "Disk free",
     kind: "server",
     unit: "%",
-    query: `(node_filesystem_avail_bytes{site="{{site}}",device="{{device}}",mountpoint="/",fstype!="rootfs"} / node_filesystem_size_bytes{site="{{site}}",device="{{device}}",mountpoint="/",fstype!="rootfs"}) * 100`
+    query: `DISK_PLACEHOLDER`
   },
   {
     id: "host_up",
-    label: "Host up",
+    label: "Collector online",
     kind: "server",
-    query: `up{job="site_host",site="{{site}}",device="{{device}}"}`
+    query: `UP_PLACEHOLDER`
   },
   {
     id: "snmp_up",
-    label: "SNMP up",
+    label: "Local device online",
     kind: "network",
     query: `snmp_up{site="{{site}}",device="{{device}}"}`
   },
   {
     id: "wan_dns",
-    label: "WAN DNS probe",
+    label: "Uplink (DNS)",
     kind: "any",
     query: `probe_success{site="{{site}}",check="wan_dns"}`
+  },
+  {
+    id: "wan_vps",
+    label: "Uplink (central)",
+    kind: "any",
+    query: `probe_success{site="{{site}}",check="wan_vps"}`
   }
 ];
+
+function buildCpuQuery(siteId: string, deviceId: string): string {
+  const idleDevice = `rate(node_cpu_seconds_total{mode="idle",site="${siteId}",device="${deviceId}"}[5m])`;
+  const idleInstance = `rate(node_cpu_seconds_total{mode="idle",site="${siteId}",instance="${deviceId}"}[5m])`;
+  return `100 - (avg( (${idleDevice}) or (${idleInstance}) ) * 100)`;
+}
+
+function buildMemQuery(siteId: string, deviceId: string): string {
+  const avail = dualHostMetric("node_memory_MemAvailable_bytes", siteId, deviceId);
+  const total = dualHostMetric("node_memory_MemTotal_bytes", siteId, deviceId);
+  return `(${avail} / ${total}) * 100`;
+}
+
+function buildDiskQuery(siteId: string, deviceId: string): string {
+  const avail = dualHostMetric(
+    "node_filesystem_avail_bytes",
+    siteId,
+    deviceId,
+    'mountpoint="/",fstype!="rootfs"'
+  );
+  const size = dualHostMetric(
+    "node_filesystem_size_bytes",
+    siteId,
+    deviceId,
+    'mountpoint="/",fstype!="rootfs"'
+  );
+  return `(${avail} / ${size}) * 100`;
+}
 
 export function buildQuery(presetId: string, siteId: string, deviceId: string): string | null {
   const preset = METRIC_PRESETS.find((p) => p.id === presetId);
   if (!preset) return null;
-  return preset.query.replace(/\{\{site\}\}/g, siteId).replace(/\{\{device\}\}/g, deviceId);
+
+  switch (presetId) {
+    case "cpu_pct":
+      return buildCpuQuery(siteId, deviceId);
+    case "mem_pct":
+      return buildMemQuery(siteId, deviceId);
+    case "disk_pct":
+      return buildDiskQuery(siteId, deviceId);
+    case "host_up":
+      return dualHostUp(siteId, deviceId);
+    default:
+      return preset.query.replace(/\{\{site\}\}/g, siteId).replace(/\{\{device\}\}/g, deviceId);
+  }
+}
+
+/** Public preset list with illustrative query templates (for UI display). */
+export function listPresetsForApi(): MetricPreset[] {
+  return METRIC_PRESETS.map((p) => {
+    if (p.id === "cpu_pct") {
+      return {
+        ...p,
+        query:
+          '100 - (avg(rate(node_cpu_seconds_total{mode="idle",site,device|instance}[5m])) * 100)'
+      };
+    }
+    if (p.id === "mem_pct") {
+      return {
+        ...p,
+        query: "(node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100"
+      };
+    }
+    if (p.id === "disk_pct") {
+      return {
+        ...p,
+        query: "(node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100"
+      };
+    }
+    if (p.id === "host_up") {
+      return {
+        ...p,
+        query: 'up{job=~"site_host|integrations/unix",site,device|instance}'
+      };
+    }
+    return p;
+  });
 }
 
 export async function queryInstant(query: string) {

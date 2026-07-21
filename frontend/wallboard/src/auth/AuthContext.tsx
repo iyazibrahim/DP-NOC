@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode
 } from "react";
-import { login as apiLogin } from "../api";
+import { AUTH_EXPIRED_EVENT, login as apiLogin } from "../api";
 
 type AuthContextValue = {
   token: string | null;
@@ -28,13 +28,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     else localStorage.removeItem(STORAGE_KEY);
   }, [token]);
 
+  const logout = useCallback(() => {
+    setToken(null);
+    localStorage.removeItem(STORAGE_KEY);
+  }, []);
+
+  // Stale JWT after rebuild/redeploy (JWT_SECRET change) or expired session.
+  useEffect(() => {
+    const onExpired = () => {
+      setToken(null);
+      localStorage.removeItem(STORAGE_KEY);
+      setError("Session expired — please sign in again.");
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+  }, []);
+
+  // Validate persisted token once on load so we don't keep firing 401s.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    fetch("/api/auth/me", {
+      headers: { authorization: `Bearer ${token}` }
+    })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.status === 401) {
+          setToken(null);
+          localStorage.removeItem(STORAGE_KEY);
+          setError("Session expired — please sign in again.");
+        }
+      })
+      .catch(() => {
+        /* network blip — keep token; pages will retry */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
   const login = useCallback(async (username: string, password: string) => {
     setError(null);
     const r = await apiLogin(username, password);
     setToken(r.token);
   }, []);
-
-  const logout = useCallback(() => setToken(null), []);
 
   const value = useMemo(
     () => ({ token, login, logout, error }),

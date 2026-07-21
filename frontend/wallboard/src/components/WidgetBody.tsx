@@ -8,6 +8,7 @@ import {
   DeviceStatGauge,
   useMetricPresets
 } from "./DeviceMetricWidgets";
+import { collectorOf, localDevicesOf, uplinkOf } from "../statusLabels";
 
 export type WidgetCatalogEntry = {
   type: WidgetType;
@@ -18,37 +19,37 @@ export type WidgetCatalogEntry = {
 };
 
 export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
-  { type: "site_status_grid", label: "Site status grid", defaultW: 6, defaultH: 6 },
+  { type: "site_status_grid", label: "Site health overview", defaultW: 6, defaultH: 6 },
   { type: "alerts_table", label: "Active alerts", defaultW: 6, defaultH: 4 },
   { type: "top_devices", label: "Top devices", defaultW: 6, defaultH: 4 },
-  { type: "mini_map", label: "Mini map", defaultW: 6, defaultH: 6 },
-  { type: "website_summary", label: "Website summary", defaultW: 6, defaultH: 4 },
+  { type: "mini_map", label: "Map", defaultW: 6, defaultH: 6 },
+  { type: "website_summary", label: "Website checks summary", defaultW: 6, defaultH: 4 },
   { type: "site_card", label: "Single site card", defaultW: 4, defaultH: 4 },
   {
     type: "device_metric_chart",
-    label: "Device metric chart",
-    description: "Time-series graph (CPU, memory, SNMP)",
+    label: "Collector chart",
+    description: "CPU, memory, disk over time — pick a collector",
     defaultW: 6,
     defaultH: 5
   },
   {
     type: "device_stat_gauge",
-    label: "Device stat gauge",
-    description: "Single metric gauge",
+    label: "Collector gauge",
+    description: "One metric as a gauge / pie",
     defaultW: 3,
     defaultH: 4
   },
   {
     type: "grafana_panel",
     label: "Grafana panel",
-    description: "Embed a Grafana dashboard or panel",
+    description: "Optional deep-dive chart (same metrics as this dashboard)",
     defaultW: 6,
     defaultH: 6
   },
   {
     type: "device_detail",
     label: "Device info",
-    description: "Metadata only — no chart",
+    description: "Name and IDs only",
     defaultW: 4,
     defaultH: 4
   }
@@ -82,7 +83,7 @@ export function WidgetBody({
   statuses,
   alerts,
   devices,
-  grafanaUrl
+  grafanaUrl: _grafanaUrl
 }: {
   type: WidgetType;
   config?: Record<string, string>;
@@ -95,7 +96,8 @@ export function WidgetBody({
   const presets = useMetricPresets();
   const siteId = config?.siteId ?? sites[0]?.id ?? "";
   const site = sites.find((s) => s.id === siteId);
-  const deviceId = config?.deviceId ?? site?.devices?.[0]?.id ?? "";
+  const collectors = (site?.devices ?? []).filter((d) => (d.kind ?? "network") === "server");
+  const deviceId = config?.deviceId || collectors[0]?.id || site?.devices?.[0]?.id || "";
   const metric = config?.metric ?? "cpu_pct";
 
   if (type === "site_status_grid") {
@@ -105,10 +107,16 @@ export function WidgetBody({
         <div className="statusGrid">
           {sites.map((s) => {
             const st = statuses.find((x) => x.siteId === s.id);
+            const col = collectorOf(st);
+            const up = uplinkOf(st);
             return (
               <div key={s.id} className="statusTile">
                 <div className="statusTileName">{s.name}</div>
-                <StatusPill state={st?.overall ?? "unknown"} notes={st?.wan.notes} />
+                <StatusPill state={st?.overall ?? "unknown"} notes={col.notes ?? up.notes} />
+                <div className="statusTileMeta">
+                  <span>Collector: {col.state}</span>
+                  <span>Uplink: {up.state}</span>
+                </div>
               </div>
             );
           })}
@@ -162,7 +170,7 @@ export function WidgetBody({
     }
     return (
       <div className="widgetInner">
-        <div className="widgetTitle">Websites</div>
+        <div className="widgetTitle">Website checks</div>
         <div className="kvList">
           <div>Healthy: {counts.healthy}</div>
           <div>Warning: {counts.warning}</div>
@@ -177,15 +185,19 @@ export function WidgetBody({
     const cardSiteId = config?.siteId ?? sites[0]?.id;
     const cardSite = sites.find((s) => s.id === cardSiteId);
     const st = statuses.find((x) => x.siteId === cardSiteId);
+    const col = collectorOf(st);
+    const up = uplinkOf(st);
+    const loc = localDevicesOf(st);
     return (
       <div className="widgetInner">
         <div className="widgetTitle">{cardSite?.name ?? cardSiteId ?? "Site"}</div>
         <div className="kvList">
-          <div>WAN: {st?.wan.state ?? "unknown"}</div>
-          <div>LAN: {st?.lan.state ?? "unknown"}</div>
-          <div>Web: {st?.websites.state ?? "unknown"}</div>
+          <div>Collector: {col.state}</div>
+          <div>Uplink: {up.state}</div>
+          <div>Local devices: {loc.state}</div>
+          <div>Website checks: {st?.websites.state ?? "unknown"}</div>
         </div>
-        <StatusPill state={st?.overall ?? "unknown"} notes={st?.wan.notes} />
+        <StatusPill state={st?.overall ?? "unknown"} notes={col.notes ?? up.notes} />
       </div>
     );
   }
@@ -221,13 +233,23 @@ export function WidgetBody({
   }
 
   if (type === "grafana_panel") {
-    const src = config?.embedUrl || `${grafanaUrl.replace(/\/$/, "")}/`;
+    const url = config?.embedUrl || config?.url || "";
+    if (!url) {
+      return (
+        <div className="widgetInner">
+          <div className="muted">
+            Prefer a Collector chart here — same metrics as Grafana. Or paste a Grafana embed URL in
+            edit mode.
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="widgetInner flush">
-        <iframe title="grafana" src={src} className="grafanaFrame" />
+        <iframe title="Grafana" src={url} className="grafanaFrame" />
       </div>
     );
   }
 
-  return <div className="widgetInner muted">Unknown widget</div>;
+  return <div className="muted">Unknown widget</div>;
 }

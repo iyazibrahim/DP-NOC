@@ -7,7 +7,7 @@ const links = [
   { to: "/sites", label: "Sites" },
   { to: "/devices", label: "Devices" },
   { to: "/alerts", label: "Alerts" },
-  { to: "/websites", label: "Websites" },
+  { to: "/websites", label: "Website checks" },
   { to: "/settings", label: "Settings" }
 ];
 
@@ -18,7 +18,7 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="sidebarBrand">
         <div className="sidebarLogo">NOC</div>
-        <div className="sidebarSub">Multisite Ops</div>
+        <div className="sidebarSub">Site operations</div>
       </div>
       <nav className="sidebarNav">
         {links.map((l) => (

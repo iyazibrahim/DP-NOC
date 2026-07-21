@@ -1,7 +1,7 @@
 groups:
   - name: noc-site-alerts
     rules:
-      - alert: SiteWANDown
+      - alert: SiteUplinkDown
         expr: |
           (probe_success{check="wan_dns"} == 0)
           or
@@ -11,7 +11,7 @@ groups:
           severity: critical
           site: "{{ $labels.site }}"
         annotations:
-          summary: "WAN connectivity failure (site={{ $labels.site }}, check={{ $labels.check }})"
+          summary: "Uplink / internet check failed (site={{ $labels.site }}, check={{ $labels.check }})"
 
       - alert: SiteWebsiteDown
         expr: probe_success{check="website"} == 0
@@ -22,17 +22,19 @@ groups:
         annotations:
           summary: "Website check failing (site={{ $labels.site }}, target={{ $labels.instance }})"
 
-      - alert: SiteHostDown
-        expr: up{job="site_host"} == 0
+      - alert: SiteCollectorDown
+        expr: |
+          (
+            up{job=~"site_host|integrations/unix"} == 0
+          )
         for: 3m
         labels:
           severity: critical
           site: "{{ $labels.site }}"
-          device: "{{ $labels.device }}"
         annotations:
-          summary: "Site NUC/host metrics down (site={{ $labels.site }}, device={{ $labels.device }})"
+          summary: "Collector offline (site={{ $labels.site }}, device={{ $labels.device }}, instance={{ $labels.instance }})"
 
-      - alert: SiteSNMPDown
+      - alert: SiteLocalDeviceDown
         expr: snmp_up{site=~".+"} == 0
         for: 5m
         labels:
@@ -40,5 +42,5 @@ groups:
           site: "{{ $labels.site }}"
           device: "{{ $labels.device }}"
         annotations:
-          summary: "SNMP polling failing (site={{ $labels.site }}, device={{ $labels.device }})"
+          summary: "Local device SNMP check failing (site={{ $labels.site }}, device={{ $labels.device }})"
 

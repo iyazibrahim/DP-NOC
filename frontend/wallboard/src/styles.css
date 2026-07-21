@@ -1,14 +1,21 @@
 :root {
-  --bg: #070b10;
-  --panel: #0f1620;
-  --border: rgba(148, 163, 184, 0.22);
-  --text: #e5e7eb;
-  --muted: rgba(148, 163, 184, 0.9);
-  --accent: #f59e0b;
-  --good: #22c55e;
+  --bg: #0b1214;
+  --panel: #121c1f;
+  --panel-2: #182428;
+  --border: rgba(125, 211, 192, 0.16);
+  --text: #e8f1ef;
+  --muted: rgba(148, 175, 170, 0.92);
+  --accent: #2dd4bf;
+  --accent-soft: rgba(45, 212, 191, 0.14);
+  --good: #34d399;
   --warn: #fbbf24;
-  --bad: #ef4444;
-  --sidebar: #0a1018;
+  --bad: #f87171;
+  --sidebar: #081012;
+  --font-display: "Sora", ui-sans-serif, sans-serif;
+  --font-body: "DM Sans", ui-sans-serif, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --radius: 12px;
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
 }
 
 * {
@@ -22,12 +29,16 @@ body,
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-body);
 }
 
 a {
   color: var(--accent);
   text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
 }
 
 .appShell {
@@ -37,7 +48,9 @@ a {
 }
 
 .sidebar {
-  background: var(--sidebar);
+  background:
+    linear-gradient(180deg, rgba(45, 212, 191, 0.06), transparent 28%),
+    var(--sidebar);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -50,15 +63,17 @@ a {
 }
 
 .sidebarLogo {
+  font-family: var(--font-display);
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   font-size: 22px;
 }
 
 .sidebarSub {
   color: var(--muted);
-  font-family: "IBM Plex Mono", monospace;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  margin-top: 4px;
 }
 
 .sidebarNav {
@@ -73,15 +88,17 @@ a {
   border-radius: 10px;
   color: var(--text);
   font-weight: 600;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .navItem:hover {
-  background: rgba(245, 158, 11, 0.08);
+  background: var(--accent-soft);
+  text-decoration: none;
 }
 
 .navItem.active {
-  background: rgba(245, 158, 11, 0.16);
-  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: var(--accent-soft);
+  border: 1px solid rgba(45, 212, 191, 0.35);
 }
 
 .sidebarLogout {
@@ -91,13 +108,147 @@ a {
 .mainPane {
   overflow: auto;
   background:
-    radial-gradient(900px 500px at 10% 0%, rgba(245, 158, 11, 0.08), transparent 50%),
+    radial-gradient(900px 480px at 8% -10%, rgba(45, 212, 191, 0.1), transparent 55%),
+    radial-gradient(700px 420px at 100% 0%, rgba(56, 189, 248, 0.06), transparent 50%),
     var(--bg);
 }
 
 .page {
   padding: 22px 24px 40px;
+  animation: pageIn 0.35s ease both;
 }
+
+@keyframes pageIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.pageHeader h1 {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  margin: 0 0 4px;
+  letter-spacing: -0.02em;
+}
+
+.pageSub {
+  margin: 0;
+  color: var(--muted);
+  max-width: 52ch;
+}
+
+.pageActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.healthStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.healthChip {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: var(--shadow);
+}
+
+.healthChipLabel {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.calloutWarn {
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.08);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+
+.statusTileMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.healthKv div {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.pieWrap {
+  margin-top: 4px;
+}
+
+@media (max-width: 900px) {
+  .appShell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .sidebarBrand {
+    padding: 0 8px 0 0;
+  }
+
+  .sidebarNav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    flex: 1;
+  }
+
+  .sidebarLogout {
+    margin-top: 0;
+  }
+
+  .page {
+    padding: 16px 14px 32px;
+  }
+
+  .detailGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dataTable.full {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
 
 .pageHeader {
   display: flex;
@@ -137,8 +288,8 @@ button,
 }
 
 button.primary {
-  background: rgba(245, 158, 11, 0.18);
-  border-color: rgba(245, 158, 11, 0.5);
+  background: rgba(45, 212, 191, 0.18);
+  border-color: rgba(45, 212, 191, 0.5);
 }
 
 input,
@@ -196,8 +347,8 @@ textarea {
 }
 
 .bannerHint {
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(45, 212, 191, 0.1);
+  border: 1px solid rgba(45, 212, 191, 0.35);
   color: #fde68a;
   padding: 10px 12px;
   border-radius: 10px;
@@ -376,7 +527,7 @@ textarea {
 
 .gaugeFill {
   height: 100%;
-  background: linear-gradient(90deg, #22c55e, #f59e0b);
+  background: linear-gradient(90deg, #34d399, #2dd4bf);
   border-radius: 999px;
 }
 
@@ -411,12 +562,12 @@ textarea {
 }
 
 .typeChip:hover {
-  border-color: rgba(245, 158, 11, 0.45);
+  border-color: rgba(45, 212, 191, 0.45);
 }
 
 .typeChip.active {
   border-color: var(--accent);
-  background: rgba(245, 158, 11, 0.14);
+  background: rgba(45, 212, 191, 0.14);
 }
 
 .typeChipIcon {
@@ -628,8 +779,8 @@ textarea {
 }
 
 .timeRangeBtn.active {
-  background: rgba(245, 158, 11, 0.22);
-  border-color: rgba(245, 158, 11, 0.55);
+  background: rgba(45, 212, 191, 0.22);
+  border-color: rgba(45, 212, 191, 0.55);
 }
 
 .chartTooltip {
@@ -682,7 +833,7 @@ textarea {
   display: grid;
   place-items: center;
   background:
-    radial-gradient(700px 400px at 30% 20%, rgba(245, 158, 11, 0.12), transparent 55%),
+    radial-gradient(700px 400px at 30% 20%, rgba(45, 212, 191, 0.12), transparent 55%),
     var(--bg);
 }
 
@@ -701,7 +852,7 @@ textarea {
 }
 
 .react-grid-item.react-grid-placeholder {
-  background: rgba(245, 158, 11, 0.25) !important;
+  background: rgba(45, 212, 191, 0.25) !important;
   border-radius: 14px;
 }
 

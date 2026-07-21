@@ -469,8 +469,8 @@ export function SettingsPage() {
           {statusTiming ? (
             <ul className="alertUl">
               <li>Dashboard refresh: every {statusTiming.dashboardRefreshSec}s</li>
-              <li>Alloy scrape interval: ~{statusTiming.scrapeIntervalSec}s</li>
-              <li>Typical WAN/device down detection: ~{statusTiming.typicalDetectionSec}s</li>
+              <li>Collector scrape interval: ~{statusTiming.scrapeIntervalSec}s</li>
+              <li>Typical uplink / collector down detection: ~{statusTiming.typicalDetectionSec}s</li>
               <li>Stale collector (no metrics): critical after {statusTiming.metricFreshWindowSec}s silence</li>
               {statusTiming.notes.map((n) => (
                 <li key={n}>{n}</li>
@@ -487,6 +487,10 @@ export function SettingsPage() {
             <div>
               <strong>Grafana public URL</strong>
               <div className="muted">{grafanaUrl || "—"}</div>
+              <p className="muted fieldHint" style={{ marginTop: 8 }}>
+                Charts in this app use the same metrics Grafana uses (Prometheus). You do not need to
+                rebuild Grafana charts for the React dashboard.
+              </p>
             </div>
           </div>
           <div className="pageActions" style={{ marginTop: 16 }}>

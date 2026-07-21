@@ -9,9 +9,14 @@ export type SiteStatus = {
   siteId: string;
   lat?: number;
   lng?: number;
+  /** @deprecated prefer uplink */
   wan: DomainStatus;
+  uplink?: DomainStatus;
   websites: DomainStatus;
+  /** @deprecated prefer localDevices */
   lan: DomainStatus;
+  localDevices?: DomainStatus;
+  collector?: DomainStatus;
   websiteTargetCount?: number;
   alerts: { firing: number; resolved: number };
   overall: DomainState;
@@ -176,4 +181,5 @@ export type DiscoveredDevice = {
 export type DiscoveryDiagnostics = {
   prometheusReachable: boolean;
   labelMismatchHints: string[];
+  plainSummary?: string;
 };

@@ -1,14 +1,14 @@
-# Site box (Alloy) template
+# Site box (Alloy) template — **Collector**
 
-Lightweight collector for a NUC / mini-PC at **one** site.
+Lightweight collector for a NUC / mini-PC / Pi / server at **one** site.
 
 Responsibilities:
-1. ICMP probes (WAN health)
-2. SNMP polling for local gear (from `devices.json`)
-3. **Host metrics** on the NUC itself (CPU, memory, disk via `prometheus.exporter.unix`)
+1. Uplink / internet ICMP probes
+2. SNMP polling for local devices (from `devices.json`)
+3. **Host metrics** on the collector itself (CPU, memory, disk via `prometheus.exporter.unix`)
 4. Push metrics to central Prometheus via `remote_write` over **HTTPS + Cloudflare Access Service Token**
 
-Full runbook: [`docs/ALLOY_COLLECTOR.md`](../../../docs/ALLOY_COLLECTOR.md)
+Labels: set `SITE_NAME=site-1` and `HOST_DEVICE_ID=site-1-nuc` so React can auto-adopt the collector. See identity contract in [`docs/ALLOY_COLLECTOR.md`](../../../docs/ALLOY_COLLECTOR.md).
 
 ## Quick deploy (NUC)
 

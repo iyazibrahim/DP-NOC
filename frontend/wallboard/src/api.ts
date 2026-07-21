@@ -20,14 +20,28 @@ import type {
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL?.toString() ?? "").replace(/\/$/, "");
 
+/** Fired when any authenticated API call returns 401 — AuthContext clears the session. */
+export const AUTH_EXPIRED_EVENT = "noc:auth-expired";
+
 function url(path: string) {
   return `${apiBase}${path}`;
+}
+
+function notifyAuthExpired() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
+  }
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url(path), init);
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    // Login failures stay on the login form; everything else with Bearer means stale session.
+    const isLogin = path.startsWith("/api/auth/login");
+    if (res.status === 401 && !isLogin) {
+      notifyAuthExpired();
+    }
     throw new Error(`Request failed: ${res.status} ${body}`);
   }
   return (await res.json()) as T;

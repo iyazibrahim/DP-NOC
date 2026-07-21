@@ -1,0 +1,133 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Uplink (DNS)",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "max": 1,
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "probe_success{site=~\"$site\",check=\"wan_dns\"}",
+          "legendFormat": "{{site}} DNS",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Uplink (central)",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "probe_success{site=~\"$site\",check=\"wan_vps\"}",
+          "legendFormat": "{{site}} central",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Collector CPU %",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "id": 3,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "max": 100, "min": 0 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "100 - (avg by (site, device, instance) (rate(node_cpu_seconds_total{mode=\"idle\",site=~\"$site\"}[5m])) * 100)",
+          "legendFormat": "{{site}} {{device}}{{instance}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Collector memory free %",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "id": 4,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "max": 100, "min": 0 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "(node_memory_MemAvailable_bytes{site=~\"$site\"} / node_memory_MemTotal_bytes{site=~\"$site\"}) * 100",
+          "legendFormat": "{{site}} {{device}}{{instance}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Collector online (up)",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 15 },
+      "id": 5,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "up{job=~\"site_host|integrations/unix\",site=~\"$site\"}",
+          "legendFormat": "{{site}} {{device}}{{instance}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Local devices (SNMP up)",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 15 },
+      "id": 6,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "snmp_up{site=~\"$site\"}",
+          "legendFormat": "{{site}} {{device}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["noc", "collector"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(probe_success, site)",
+        "includeAll": true,
+        "label": "Site",
+        "multi": true,
+        "name": "site",
+        "query": { "query": "label_values(probe_success, site)", "refId": "StandardVariableQuery" },
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "NOC — Collector & Uplink",
+  "uid": "noc-collector-uplink",
+  "version": 1
+}

@@ -1,11 +1,11 @@
 import express from "express";
 import { requireJwt } from "../middleware/auth";
-import { METRIC_PRESETS, buildQuery, queryInstant, queryRange } from "../services/metrics";
+import { listPresetsForApi, buildQuery, queryInstant, queryRange } from "../services/metrics";
 
 export const metricsRouter = express.Router();
 
 metricsRouter.get("/presets", requireJwt(["operator", "wallboard"]), (_req, res) => {
-  return res.json({ presets: METRIC_PRESETS });
+  return res.json({ presets: listPresetsForApi() });
 });
 
 metricsRouter.get("/query", requireJwt(["operator", "wallboard"]), async (req, res) => {

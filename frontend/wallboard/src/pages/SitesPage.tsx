@@ -23,6 +23,7 @@ import type { DeviceKind, DiscoveredDevice, Site, SiteDevice, SiteStatus } from 
 import { StatusPill } from "../components/StatusPill";
 import { SiteLocationPicker } from "../components/SiteLocationPicker";
 import { DeviceTypePicker, useDeviceTypes, type DeviceTypeOption } from "../components/DeviceTypePicker";
+import { collectorOf, formatDomainLine, localDevicesOf, uplinkOf } from "../statusLabels";
 
 export function SitesPage() {
   const { token } = useAuth();
@@ -117,14 +118,18 @@ export function SitesPage() {
             <th>Name</th>
             <th>Address</th>
             <th>Status</th>
-            <th>WAN</th>
-            <th>LAN</th>
+            <th>Collector</th>
+            <th>Uplink</th>
+            <th>Local devices</th>
             <th>Devices</th>
           </tr>
         </thead>
         <tbody>
           {sites.map((s) => {
             const st = statuses.find((x) => x.siteId === s.id);
+            const up = uplinkOf(st);
+            const col = collectorOf(st);
+            const loc = localDevicesOf(st);
             return (
               <tr key={s.id}>
                 <td>
@@ -133,10 +138,17 @@ export function SitesPage() {
                 </td>
                 <td>{s.address ?? "—"}</td>
                 <td>
-                  <StatusPill state={st?.overall ?? "unknown"} notes={st?.wan.notes} />
+                  <StatusPill state={st?.overall ?? "unknown"} notes={col.notes ?? up.notes} />
                 </td>
-                <td>{st?.wan.state ?? "—"}</td>
-                <td>{st?.lan.state ?? "—"}</td>
+                <td>
+                  <StatusPill state={col.state} notes={col.notes} />
+                </td>
+                <td>
+                  <StatusPill state={up.state} notes={up.notes} />
+                </td>
+                <td>
+                  <StatusPill state={loc.state} notes={loc.notes} />
+                </td>
                 <td>{s.devices?.length ?? 0}</td>
               </tr>
             );
@@ -433,7 +445,10 @@ export function SiteDetailPage() {
           <h1>{site.name}</h1>
           <p className="pageSub">{site.id}</p>
         </div>
-        <StatusPill state={status?.overall ?? "unknown"} notes={status?.wan.notes} />
+        <StatusPill
+          state={status?.overall ?? "unknown"}
+          notes={collectorOf(status).notes ?? uplinkOf(status).notes}
+        />
       </div>
 
       {error ? <div className="bannerError">{error}</div> : null}
@@ -477,10 +492,11 @@ export function SiteDetailPage() {
 
         <div className="tableCard">
           <div className="tableTitle">Health</div>
-          <div className="kvList">
-            <div>WAN: {status?.wan.state ?? "unknown"}{status?.wan.notes ? ` — ${status.wan.notes}` : ""}</div>
-            <div>LAN: {status?.lan.state ?? "unknown"}{status?.lan.notes ? ` — ${status.lan.notes}` : ""}</div>
-            <div>Websites: {status?.websites.state ?? "unknown"}</div>
+          <div className="kvList healthKv">
+            <div>{formatDomainLine("Collector", collectorOf(status))}</div>
+            <div>{formatDomainLine("Uplink / Internet", uplinkOf(status))}</div>
+            <div>{formatDomainLine("Local devices", localDevicesOf(status))}</div>
+            <div>{formatDomainLine("Website checks", status?.websites)}</div>
             <div>
               Alerts: {status?.alerts.firing ?? 0} firing / {status?.alerts.resolved ?? 0} resolved
             </div>
@@ -488,14 +504,14 @@ export function SiteDetailPage() {
         </div>
 
         <div className="tableCard">
-          <div className="tableTitle">Websites</div>
+          <div className="tableTitle">Website checks</div>
           <p className="muted">
-            Public URLs probed from the central VPS via Blackbox HTTP. Add here, then{" "}
-            <strong>Apply probes</strong> to register in Prometheus.
+            We check whether public websites respond. Add a URL, then click{" "}
+            <strong>Save and start checking</strong>.
           </p>
           <div className="formActions" style={{ marginBottom: 12 }}>
             <button type="button" onClick={onApplyProbes} disabled={busy}>
-              Apply probes to Prometheus
+              Save and start checking
             </button>
           </div>
           <table className="dataTable">
@@ -576,18 +592,18 @@ export function SiteDetailPage() {
         <div className="tableCard">
           <div className="tableTitle">Devices</div>
           <p className="muted">
-            Network devices export to Alloy <code>devices.json</code>. Server/collector devices use
-            host metrics — set <code>HOST_DEVICE_ID</code> on the collector so Grafana series are
-            labeled with <code>device=&quot;&lt;HOST_DEVICE_ID&gt;&quot;</code>.
-            <span className="muted" style={{ display: "block", marginTop: 6 }}>
-              Example:{" "}
-              <code>{`up{job="site_host",site="site-1",device="site-1-nuc"}`}</code>
-            </span>
+            <strong>Collectors</strong> (NUC, mini-PC, Pi, server) appear automatically when they send
+            CPU/memory data. <strong>Local devices</strong> (switches, routers) are added here, then
+            exported to the collector for SNMP monitoring.
           </p>
 
           {discovered.filter((d) => !d.alreadyRegistered).length > 0 ? (
             <div className="discoveryBanner">
-              <div className="discoveryBannerTitle">Discovered from Prometheus (not registered)</div>
+              <div className="discoveryBannerTitle">New devices found</div>
+              <p className="muted" style={{ marginBottom: 8 }}>
+                These are sending data but are not in inventory yet. Collectors are usually added
+                automatically within a minute — or register them now.
+              </p>
               {discovered
                 .filter((d) => !d.alreadyRegistered)
                 .map((d) => (
@@ -595,7 +611,7 @@ export function SiteDetailPage() {
                     <div>
                       <strong>{d.suggestedName}</strong>
                       <div className="muted">
-                        {d.deviceId} · {d.kind}
+                        {d.deviceId} · {d.kind === "server" ? "Collector" : "Local device"}
                         {d.lastSeen ? ` · seen ${new Date(d.lastSeen).toLocaleString()}` : ""}
                       </div>
                     </div>
@@ -605,7 +621,7 @@ export function SiteDetailPage() {
                       onClick={() => onRegisterDiscovered(d)}
                       disabled={busy}
                     >
-                      {d.kind === "server" ? "Register" : "Add details"}
+                      {d.kind === "server" ? "Add collector" : "Add details"}
                     </button>
                   </div>
                 ))}
@@ -614,12 +630,12 @@ export function SiteDetailPage() {
 
           <div className="pageActions" style={{ marginBottom: 12 }}>
             <button type="button" onClick={onDownloadDevices}>
-              Download devices.json (SNMP)
+              Download devices.json (for SNMP)
             </button>
           </div>
           <p className="muted" style={{ marginBottom: 12 }}>
-            After adding SNMP devices, download <code>devices.json</code>, copy it to the collector
-            host, then run <code>generate-config.sh</code> and restart Alloy.
+            After adding local network devices, download the file, copy it to the collector, run the
+            config generator, and restart Alloy.
           </p>
           <table className="dataTable">
             <thead>

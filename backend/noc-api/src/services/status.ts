@@ -1,8 +1,9 @@
 import { getSiteById, siteList } from "../data/sites";
 import { promQuery, parseFirstVectorValue, parseVectorToNumericValues } from "./prometheus";
 import { getActiveAlerts, type Alert } from "./alertmanager";
-import { hasUnregisteredHostMetrics } from "./deviceDiscovery";
+import { hasUnregisteredHostMetrics, siteHasCollectorMetrics } from "./deviceDiscovery";
 import { getGlobalWebsites } from "../data/globalWebsites";
+import { dualHostMemFresh, dualHostUpFresh } from "./promLabels";
 
 export type DomainState = "healthy" | "warning" | "critical" | "unknown";
 
@@ -13,9 +14,17 @@ export type DomainStatus = {
 
 export type SiteStatus = {
   siteId: string;
+  /** @deprecated use uplink — kept for API compatibility */
   wan: DomainStatus;
+  /** Alias of wan (Uplink / Internet) */
+  uplink: DomainStatus;
   websites: DomainStatus;
+  /** @deprecated use localDevices — kept for API compatibility */
   lan: DomainStatus;
+  /** Alias of lan (Local devices) */
+  localDevices: DomainStatus;
+  /** Collector box host metrics health */
+  collector: DomainStatus;
   websiteTargetCount: number;
   alerts: {
     firing: number;
@@ -64,7 +73,7 @@ function aggregateProbeStatuses(statuses: DomainStatus[]): DomainStatus {
   if (states.every((s) => s === "unknown")) {
     return {
       state: "unknown",
-      notes: statuses.find((s) => s.notes)?.notes ?? "No probe metrics yet"
+      notes: statuses.find((s) => s.notes)?.notes ?? "No data yet"
     };
   }
   if (states.some((s) => s === "critical")) {
@@ -76,10 +85,10 @@ function aggregateProbeStatuses(statuses: DomainStatus[]): DomainStatus {
     return { state: "critical", notes: notes || "One or more checks are down" };
   }
   if (states.some((s) => s === "warning")) {
-    return { state: "warning", notes: "Degraded probe readings" };
+    return { state: "warning", notes: "Degraded readings" };
   }
   if (states.some((s) => s === "unknown")) {
-    return { state: "warning", notes: "Partial probe data — other checks are up" };
+    return { state: "warning", notes: "Partial data — other checks are up" };
   }
   return { state: "healthy" };
 }
@@ -101,7 +110,7 @@ async function queryBooleanMetricState(metricSelector: string): Promise<DomainSt
         state,
         notes:
           state === "critical"
-            ? "Reported down by the latest metric sample"
+            ? "Reported down by the latest check"
             : undefined
       };
     }
@@ -111,13 +120,13 @@ async function queryBooleanMetricState(metricSelector: string): Promise<DomainSt
     if (hist !== null) {
       return {
         state: "critical",
-        notes: `No metrics in the last ${METRIC_FRESH_WINDOW} — collector or link may be down`
+        notes: `No data in the last ${METRIC_FRESH_WINDOW} — collector may be offline`
       };
     }
 
-    return { state: "unknown", notes: "No metrics received yet" };
+    return { state: "unknown", notes: "No data received yet" };
   } catch {
-    return { state: "unknown", notes: "Could not query Prometheus" };
+    return { state: "unknown", notes: "Could not read metrics" };
   }
 }
 
@@ -127,6 +136,72 @@ async function queryProbeSuccessVector(siteId: string, labelKey: string, labelVa
   const data = await promQuery(freshQ);
   const values = parseVectorToNumericValues(data);
   return { data, values };
+}
+
+async function collectorIdStatus(siteId: string, metricId: string): Promise<DomainStatus> {
+  try {
+    const upFresh = parseFirstVectorValue(
+      await promQuery(dualHostUpFresh(siteId, metricId, METRIC_FRESH_WINDOW))
+    );
+    if (upFresh !== null) {
+      const state = booleanValueToDomain(upFresh >= 1 ? 1 : upFresh === 0 ? 0 : upFresh);
+      return {
+        state,
+        notes: state === "critical" ? "Collector not responding" : undefined
+      };
+    }
+
+    const memFresh = parseFirstVectorValue(
+      await promQuery(dualHostMemFresh(siteId, metricId, METRIC_FRESH_WINDOW))
+    );
+    if (memFresh !== null) {
+      return { state: "healthy" };
+    }
+
+    const upHist = parseFirstVectorValue(
+      await promQuery(dualHostUpFresh(siteId, metricId, METRIC_HISTORY_WINDOW))
+    );
+    const memHist = parseFirstVectorValue(
+      await promQuery(dualHostMemFresh(siteId, metricId, METRIC_HISTORY_WINDOW))
+    );
+    if (upHist !== null || memHist !== null) {
+      return {
+        state: "critical",
+        notes: "Collector was sending data, but not recently"
+      };
+    }
+    return { state: "unknown", notes: "Waiting for collector data" };
+  } catch {
+    return { state: "unknown", notes: "Could not read collector metrics" };
+  }
+}
+
+async function computeCollectorStatus(siteId: string): Promise<DomainStatus> {
+  const site = getSiteById(siteId);
+  const servers = (site?.devices ?? []).filter((d) => (d.kind ?? "network") === "server");
+
+  if (servers.length > 0) {
+    const statuses: DomainStatus[] = [];
+    for (const d of servers) {
+      statuses.push(await collectorIdStatus(siteId, d.hostMetricId || d.id));
+    }
+    return aggregateProbeStatuses(statuses);
+  }
+
+  if (await siteHasCollectorMetrics(siteId)) {
+    return {
+      state: "warning",
+      notes:
+        "Collector is sending data but is not registered yet — it should appear under Devices shortly"
+    };
+  }
+  if (await hasUnregisteredHostMetrics(siteId)) {
+    return {
+      state: "warning",
+      notes: "Collector data found — waiting to add it automatically"
+    };
+  }
+  return { state: "unknown", notes: "Waiting for collector data" };
 }
 
 export async function computeSiteStatus(
@@ -143,9 +218,9 @@ export async function computeSiteStatus(
         globalTargets.length > 0
           ? {
               state: "unknown",
-              notes: "Global website probes silent for the configured targets"
+              notes: "Website checks are configured but no results yet"
             }
-          : { state: "unknown", notes: "No global website targets configured" };
+          : { state: "unknown", notes: "No website checks configured" };
     }
 
     const alerts = activeAlerts ?? (await getActiveAlerts());
@@ -153,13 +228,16 @@ export async function computeSiteStatus(
     const firing = relevant.filter((a) => a.status === "firing").length;
     const resolved = relevant.filter((a) => a.status === "resolved").length;
 
+    const na = { state: "unknown" as const, notes: "Not applicable" };
     return {
       siteId,
-      wan: { state: "unknown", notes: "Not applicable" },
+      wan: na,
+      uplink: na,
       websites,
-      lan: { state: "unknown", notes: "Not applicable" },
+      lan: na,
+      localDevices: na,
+      collector: na,
       alerts: { firing, resolved },
-      // For global mode, overall should reflect websites health.
       websiteTargetCount: globalTargets.length,
       overall: websites.state
     };
@@ -176,7 +254,15 @@ export async function computeSiteStatus(
   const wanVps = await queryBooleanMetricState(
     `probe_success{site="${siteId}",check="wan_vps"}`
   );
-  const wan = aggregateProbeStatuses([wanDns, wanVps]);
+  const uplink = aggregateProbeStatuses([
+    { ...wanDns, notes: wanDns.state === "critical" ? "Cannot reach DNS (internet)" : wanDns.notes },
+    { ...wanVps, notes: wanVps.state === "critical" ? "Cannot reach central server" : wanVps.notes }
+  ]);
+  if (uplink.state === "healthy") {
+    uplink.notes = undefined;
+  } else if (!uplink.notes) {
+    uplink.notes = "Internet / uplink check failed";
+  }
 
   const websiteVector = await queryProbeSuccessVector(siteId, "check", "website");
   let websites: DomainStatus = { state: stateFromBooleanSeries(websiteVector.values) };
@@ -187,29 +273,30 @@ export async function computeSiteStatus(
       hadWebsites !== null
         ? {
             state: "critical",
-            notes: `Website probes silent for ${METRIC_FRESH_WINDOW}`
+            notes: `Website checks silent for ${METRIC_FRESH_WINDOW}`
           }
-        : { state: "unknown", notes: "No website targets configured or probed" };
+        : { state: "unknown", notes: "No website checks configured" };
   }
 
-  let lan: DomainStatus = { state: "unknown", notes: "No devices configured" };
+  const collector = await computeCollectorStatus(siteId);
+
+  let localDevices: DomainStatus = { state: "unknown", notes: "No local devices configured" };
   const devices = site.devices ?? [];
-  if (devices.length > 0) {
+  const networkOrAll = devices.filter((d) => (d.kind ?? "network") === "network");
+  // Local devices = SNMP/network gear; servers counted under collector
+  if (networkOrAll.length > 0) {
     const deviceStatuses: DomainStatus[] = [];
-    for (const d of devices) {
-      const kind = d.kind ?? "network";
-      const metricId = kind === "server" ? d.hostMetricId || d.id : d.id;
-      const selector =
-        kind === "server"
-          ? `up{job="site_host",site="${siteId}",device="${metricId}"}`
-          : `snmp_up{site="${siteId}",device="${metricId}"}`;
-      deviceStatuses.push(await queryBooleanMetricState(selector));
+    for (const d of networkOrAll) {
+      const metricId = d.id;
+      deviceStatuses.push(
+        await queryBooleanMetricState(`snmp_up{site="${siteId}",device="${metricId}"}`)
+      );
     }
-    lan = aggregateProbeStatuses(deviceStatuses);
-  } else if (await hasUnregisteredHostMetrics(siteId)) {
-    lan = {
+    localDevices = aggregateProbeStatuses(deviceStatuses);
+  } else if (devices.length === 0 && (await hasUnregisteredHostMetrics(siteId))) {
+    localDevices = {
       state: "warning",
-      notes: "NUC reporting metrics but no devices registered — register in Sites"
+      notes: "Collector is reporting — add local devices (switches, etc.) when ready"
     };
   }
 
@@ -218,15 +305,19 @@ export async function computeSiteStatus(
   const firing = relevant.filter((a) => a.status === "firing").length;
   const resolved = relevant.filter((a) => a.status === "resolved").length;
 
-  let overall = worst(wan.state, websites.state);
-  overall = worst(overall, lan.state);
+  let overall = worst(uplink.state, websites.state);
+  overall = worst(overall, localDevices.state);
+  overall = worst(overall, collector.state);
   if (firing > 0) overall = "critical";
 
   return {
     siteId,
-    wan,
+    wan: uplink,
+    uplink,
     websites,
-    lan,
+    lan: localDevices,
+    localDevices,
+    collector,
     websiteTargetCount: site.websiteTargets?.length ?? 0,
     alerts: { firing, resolved },
     overall
@@ -243,7 +334,6 @@ export async function computeAllSitesStatus(): Promise<{
     statuses.push(await computeSiteStatus(s.id, activeAlerts));
   }
 
-  // Only include the synthetic "global" status if there are global websites configured.
   const globalTargets = getGlobalWebsites();
   if (globalTargets.length > 0) {
     statuses.push(await computeSiteStatus("global", activeAlerts));

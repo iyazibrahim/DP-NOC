@@ -61,7 +61,7 @@ export function WebsitesPage() {
       }
       setForm((f) => ({ ...f, name: "", url: "" }));
       setEditingUrl(null);
-      setMsg("Saved. Apply probes on the site page or below to activate HTTP checks.");
+      setMsg("Saved. Click Save and start checking to activate.");
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -101,8 +101,8 @@ export function WebsitesPage() {
     <div className="page">
       <div className="pageHeader">
         <div>
-          <h1>Websites</h1>
-          <p className="pageSub">Blackbox HTTP probes from the central VPS</p>
+          <h1>Website checks</h1>
+          <p className="pageSub">We check if your public websites respond</p>
         </div>
       </div>
 
@@ -127,8 +127,7 @@ export function WebsitesPage() {
               ))}
             </select>
             <p className="muted fieldHint">
-              Websites are monitored per site — probes run from the central VPS and roll up into that
-              site&apos;s health status and alerts.
+              Website checks run from the central server and count toward that site&apos;s health.
             </p>
             <label className="label">Display name</label>
             <input
@@ -149,7 +148,7 @@ export function WebsitesPage() {
               </button>
               {form.siteId ? (
                 <button type="button" onClick={() => onApply(form.siteId)} disabled={busy}>
-                  Apply probes
+                  Save and start checking
                 </button>
               ) : null}
               {editingUrl ? (

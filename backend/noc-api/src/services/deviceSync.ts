@@ -25,12 +25,12 @@ function normalizeSuggestedDevice(
   suggestedName: string,
   suggestedType: string
 ): SiteDevice {
-  // Server devices are keyed by the host's `device` label.
+  // Server/collector devices are keyed by Prometheus `device` or legacy `instance`.
   if (kind === "server") {
     return {
       id: deviceId,
-      name: suggestedName,
-      type: suggestedType,
+      name: suggestedName || "Collector",
+      type: suggestedType || "nuc",
       kind,
       hostMetricId: deviceId,
       vendor: "generic"

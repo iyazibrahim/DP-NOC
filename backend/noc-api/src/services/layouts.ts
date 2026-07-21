@@ -33,9 +33,11 @@ const DEFAULT_LAYOUT: DashboardLayout = {
   widgets: [
     { i: "sites", type: "site_status_grid", x: 0, y: 0, w: 6, h: 6 },
     { i: "alerts", type: "alerts_table", x: 6, y: 0, w: 6, h: 4 },
-    { i: "topdev", type: "top_devices", x: 6, y: 4, w: 6, h: 4 },
-    { i: "map", type: "mini_map", x: 0, y: 6, w: 6, h: 6 },
-    { i: "websites", type: "website_summary", x: 6, y: 8, w: 6, h: 4 }
+    { i: "cpu", type: "device_metric_chart", x: 6, y: 4, w: 6, h: 5, config: { siteId: "site-1", metric: "cpu_pct" } },
+    { i: "mem", type: "device_stat_gauge", x: 0, y: 6, w: 3, h: 4, config: { siteId: "site-1", metric: "mem_pct" } },
+    { i: "disk", type: "device_stat_gauge", x: 3, y: 6, w: 3, h: 4, config: { siteId: "site-1", metric: "disk_pct" } },
+    { i: "map", type: "mini_map", x: 0, y: 10, w: 6, h: 5 },
+    { i: "websites", type: "website_summary", x: 6, y: 9, w: 6, h: 4 }
   ]
 };
 
