@@ -83,12 +83,17 @@ function InvalidateOnResize({ containerRef }: { containerRef: RefObject<HTMLDivE
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
-      map.invalidateSize({ animate: false });
-    });
+    const kick = () => map.invalidateSize({ animate: false });
+    kick();
+    const t1 = window.setTimeout(kick, 100);
+    const t2 = window.setTimeout(kick, 400);
+    const ro = new ResizeObserver(kick);
     ro.observe(el);
-    map.invalidateSize({ animate: false });
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
   }, [map, containerRef]);
   return null;
 }

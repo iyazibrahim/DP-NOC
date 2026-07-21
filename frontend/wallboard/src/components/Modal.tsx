@@ -16,33 +16,52 @@ export function Modal({
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const didFocusRef = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      didFocusRef.current = false;
+      return;
+    }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    // Focus first focusable in panel
-    const t = window.setTimeout(() => {
-      const el = panelRef.current?.querySelector<HTMLElement>(
-        "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])"
-      );
-      el?.focus();
-    }, 0);
+
+    // Focus first field once — never re-run on parent re-renders (that stole focus to ×).
+    if (!didFocusRef.current) {
+      didFocusRef.current = true;
+      const t = window.setTimeout(() => {
+        const el = panelRef.current?.querySelector<HTMLElement>(
+          "input, select, textarea, button:not(.modalClose), [href], [tabindex]:not([tabindex='-1'])"
+        );
+        el?.focus();
+      }, 0);
+      return () => {
+        document.removeEventListener("keydown", onKey);
+        document.body.style.overflow = prev;
+        window.clearTimeout(t);
+      };
+    }
+
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
-      window.clearTimeout(t);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
   return createPortal(
-    <div className="modalOverlay" role="presentation" onClick={onClose}>
+    <div
+      className="modalOverlay"
+      role="presentation"
+      onClick={() => onCloseRef.current()}
+    >
       <div
         ref={panelRef}
         className={`modalPanel${wide ? " modalPanel--wide" : ""}`}
@@ -55,7 +74,12 @@ export function Modal({
           <h2 id={titleId} className="modalTitle">
             {title}
           </h2>
-          <button type="button" className="iconBtn modalClose" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="iconBtn modalClose"
+            onClick={() => onCloseRef.current()}
+            aria-label="Close"
+          >
             ×
           </button>
         </div>

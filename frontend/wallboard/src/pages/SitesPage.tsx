@@ -500,12 +500,9 @@ export function SiteDetailPage() {
       {msg ? <p className="muted">{msg}</p> : null}
 
       <div className="siteBento">
-        <section className="bentoTile bentoHero">
-          <div className="bentoHeroMain">
-            <div className="tableTitle">Overview</div>
-            <p className="muted" style={{ margin: "0 0 12px" }}>
-              {site.notes?.trim() || "No notes yet."}
-            </p>
+        <section className="bentoTile bentoHealth">
+          <div className="bentoTileHeader">
+            <div className="tableTitle">Health</div>
             <div className="formActions">
               <button type="button" onClick={() => setEditSiteOpen(true)}>
                 Edit details
@@ -515,10 +512,6 @@ export function SiteDetailPage() {
               </button>
             </div>
           </div>
-        </section>
-
-        <section className="bentoTile bentoHealth">
-          <div className="tableTitle">Health</div>
           <div className="healthMiniGrid">
             <div className={`healthMini healthMini--${col.state}`}>
               <span className="healthMiniLabel">Collector</span>
@@ -543,6 +536,7 @@ export function SiteDetailPage() {
           </div>
           <p className="muted" style={{ marginTop: 10, marginBottom: 0 }}>
             Alerts: {status?.alerts.firing ?? 0} firing / {status?.alerts.resolved ?? 0} resolved
+            {site.notes?.trim() ? ` · ${site.notes.trim()}` : ""}
           </p>
         </section>
 
@@ -550,12 +544,17 @@ export function SiteDetailPage() {
           <div className="tableTitle">Location</div>
           <div className="bentoMapFrame">
             <SitesLeafletMap
+              key={`site-map-${site.id}`}
               sites={[site]}
               statuses={status ? [status] : []}
-              height={220}
+              height="100%"
               selectedSiteId={site.id}
             />
           </div>
+          <p className="muted" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
+            {site.lat.toFixed(5)}, {site.lng.toFixed(5)}
+            {site.address ? ` · ${site.address}` : ""}
+          </p>
         </section>
 
         <section className="bentoTile bentoDevices">
@@ -661,7 +660,7 @@ export function SiteDetailPage() {
               {(site.websiteTargets ?? []).length === 0 ? (
                 <tr>
                   <td colSpan={3} className="muted">
-                    No websites — add a public URL to monitor from the central server.
+                    No websites yet — optional public URL checks from the central server.
                   </td>
                 </tr>
               ) : (

@@ -69,6 +69,11 @@ Collector box → Alloy → Prometheus (central)
     - Site detail Bento layout; Add device / website / edit site via modal
     - Devices: hide empty “New devices found” card
     - Website checks: table-first + Add/Edit modal
+  - **UX polish (2026-07-21)**
+    - Modal typing bug fixed (focus no longer jumps to ×)
+    - Site detail: health full-width; map+devices equal row; websites compact; map invalidateSize
+    - Alerts page: live status incidents + Alertmanager section
+    - Settings: tabbed single-column (Notifications / Storage / Exports / Advanced)
 
 ## Local Validation
 1. `docker compose up -d --build`
