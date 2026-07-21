@@ -51,7 +51,7 @@ See [`docs/ALLOY_COLLECTOR.md`](docs/ALLOY_COLLECTOR.md).
 Summary:
 
 1. Cloudflare Tunnel: `metrics.` CNAME → tunnel → `http://127.0.0.1:9090` + Access Service Token
-2. On a NUC: `cd sites/templates/site-box && ./deploy.sh` (checks Docker, picks one site, adds devices)
+2. On a NUC: `cd sites/templates/site-box && ./deploy.sh && docker compose up -d --build` — then open **Collector Console** at `http://<nuc-ip>:8090`
 3. Or Dokploy on the NUC: deploy that folder’s `docker-compose.yml` after `.env` exists
 4. Verify: `probe_success{site="site-N"}` in Prometheus
 

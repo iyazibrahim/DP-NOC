@@ -706,15 +706,15 @@ export function SiteDetailPage() {
             </tbody>
           </table>
           <p className="muted" style={{ marginTop: 10 }}>
-            Network inventory syncs to the site collector every 1–2 minutes when a collector token is
-            configured.
+            Network inventory syncs to the site collector automatically when the Collector Console is
+            configured and running (typically every 90 seconds).
           </p>
 
           <div className="collectorSyncPanel" style={{ marginTop: 16 }}>
             <div className="tableTitle">Collector inventory sync</div>
             <p className="muted">
               {site.hasCollectorToken
-                ? "Token configured. Put COLLECTOR_TOKEN + NOC_API_URL on the site box and run sync-devices.sh."
+                ? "Token configured. Open the Collector Console on the site box (http://<collector-ip>:8090), paste this token, and save. Sync runs automatically."
                 : "Generate a token so this site’s Alloy box can pull SNMP targets from the UI."}
             </p>
             {site.collectorDevicesSyncedAt ? (

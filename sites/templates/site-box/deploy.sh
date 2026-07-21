@@ -243,12 +243,14 @@ echo "Devices: $(python3 -c "import json; print(len(json.load(open('$SCRIPT_DIR/
 echo "Compose: ${COMPOSE[*]} -f $SCRIPT_DIR/docker-compose.yml"
 echo
 echo "Next:"
-echo "  1) Ensure metrics. tunnel → http://127.0.0.1:9090 on the VPS + Access token works (curl 200)."
-echo "  2) If host inventory is missing: register this collector host in NOC UI."
+echo "  1) Open Collector Console: http://<this-host-ip>:8090"
+echo "     Paste collector token from NOC UI (Sites → this site → Generate token)."
+echo "     Save — inventory sync runs automatically (no sync-devices.sh / cron needed)."
+echo "  2) Ensure metrics. tunnel → http://127.0.0.1:9090 on the VPS + Access token works (curl 200)."
+echo "  3) If host inventory is missing: register this collector host in NOC UI."
 echo "     Device id is ${SITE_ID}-nuc (type server)."
-echo "  3) SNMP inventory: generate a collector token in NOC UI (Sites → this site) and set COLLECTOR_TOKEN in .env."
-echo "     Then: ./sync-devices.sh   or   ./sync-devices.sh --loop"
-echo "     Cron example: */2 * * * * cd $SCRIPT_DIR && set -a && . ./.env && set +a && ./sync-devices.sh"
 echo "  4) Logs: docker logs -f noc_site_alloy"
+echo
+echo "Legacy: ./sync-devices.sh still works if you prefer shell/cron over the console."
 echo
 echo "Dokploy: create an app from this folder's docker-compose.yml after .env exists."

@@ -84,6 +84,12 @@ Collector box → Alloy → Prometheus (central)
     - Interface traffic presets (`if_in_bps` / `if_out_bps`)
     - Collector pull sync: site token + `GET /api/collector/:siteId/devices.json` + `sync-devices.sh`
 
+  - **Collector Console web UI (2026-07-21)**
+    - `sites/templates/site-box/collector-console/` — LAN setup UI on port **8090**
+    - Auto-sync inventory from NOC API (~90s), regenerate `config.alloy`, recreate Alloy
+    - Replaces manual `sync-devices.sh` / cron for operators (shell script kept for legacy)
+    - NOC Sites page updated to point operators to Collector Console
+
 ## Local Validation
 1. `docker compose up -d --build`
 2. Open `http://localhost:8080` — login `admin` / `admin`
@@ -91,7 +97,7 @@ Collector box → Alloy → Prometheus (central)
 4. Devices → “New devices found” / auto-adopt when host metrics exist
 5. Dashboard → Edit → add Collector chart (CPU / memory) for a registered collector
 6. Dashboard → **Fullscreen** — chrome hidden; Esc / Exit to leave
-7. Sites → site → Generate collector token; set on site box `.env` + `./sync-devices.sh`
+7. Sites → site → Generate collector token; open Collector Console `http://<collector-ip>:8090`, paste token, save
 8. Grafana → folder NOC → “NOC — Collector & Uplink”
 
 ## Dokploy notes

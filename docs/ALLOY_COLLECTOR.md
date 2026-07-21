@@ -119,9 +119,21 @@ docker compose up -d --force-recreate
 
 `SITE_NAME` must match seed ids (`site-1` … `site-5`) in `backend/noc-api/data/seed-sites.json`.
 
-Mirror the same devices in the **NOC UI** (Sites → site → Add device). With a **collector token**, the site box pulls `devices.json` automatically via `sync-devices.sh` (every 1–2 minutes). Without a token, UI registry and Alloy `devices.json` stay separate — export or re-run deploy manually.
+Mirror the same devices in the **NOC UI** (Sites → site → Add device). With a **collector token**, open **Collector Console** on the site box (`http://<collector-ip>:8090`), paste the token, and save — inventory sync runs automatically every ~90s. Legacy: `./sync-devices.sh` or cron still works.
 
-### Inventory sync (recommended)
+### Collector Console (recommended)
+
+After `docker compose up --build` (or Dokploy deploy), open **http://\<collector-lan-ip\>:8090** on the site LAN:
+
+1. **Setup** — site id, NOC URL, collector token, CF Access credentials, SNMP community, ping targets
+2. **Dashboard** — Alloy status, last sync, device list, **Sync now**
+3. **Settings** — sync interval, view `config.alloy` / Alloy logs
+
+The console pulls `GET /api/collector/:siteId/devices.json`, writes `devices.json`, regenerates `config.alloy`, and recreates Alloy. No SSH or cron required.
+
+**Dokploy:** expose port **8090** on the LAN only — do not publish the collector console to the public internet.
+
+### Legacy inventory sync (shell)
 
 1. In NOC UI: Sites → site → **Generate token** (Collector inventory sync)
 2. On the site box `.env`:

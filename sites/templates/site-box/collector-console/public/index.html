@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NOC Collector Console</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Collector Console</h1>
+      <p class="sub">Configure this site box, sync SNMP devices from NOC, and monitor Alloy.</p>
+    </header>
+
+    <div class="tabs">
+      <button type="button" class="tab active" data-tab="dashboard">Dashboard</button>
+      <button type="button" class="tab" data-tab="setup">Setup</button>
+      <button type="button" class="tab" data-tab="settings">Settings</button>
+    </div>
+
+    <section id="panel-dashboard" class="panel active">
+      <div class="grid" id="status-cards"></div>
+      <div class="actions">
+        <button type="button" id="btn-sync">Sync now</button>
+        <button type="button" class="secondary" id="btn-refresh">Refresh status</button>
+      </div>
+      <div id="sync-msg"></div>
+      <h3 style="margin-top:24px">Local devices</h3>
+      <table>
+        <thead>
+          <tr><th>Name</th><th>ID</th><th>SNMP IP</th><th>Type</th></tr>
+        </thead>
+        <tbody id="devices-body"></tbody>
+      </table>
+    </section>
+
+    <section id="panel-setup" class="panel">
+      <form id="setup-form">
+        <div class="field">
+          <label for="siteName">Site ID</label>
+          <select id="siteName" name="siteName" required></select>
+          <p class="hint">Must match the site id in the NOC wallboard (e.g. site-1).</p>
+        </div>
+        <div class="field">
+          <label for="nocApiUrl">NOC API URL</label>
+          <input id="nocApiUrl" name="nocApiUrl" placeholder="https://noc.example.com" required />
+        </div>
+        <div class="field">
+          <label for="collectorToken">Collector token</label>
+          <input id="collectorToken" name="collectorToken" placeholder="nocc_…" required />
+          <p class="hint">Generate in NOC → Sites → this site → Collector inventory sync.</p>
+        </div>
+        <div class="field">
+          <label for="centralRemoteWriteUrl">Metrics remote write URL</label>
+          <input id="centralRemoteWriteUrl" name="centralRemoteWriteUrl" placeholder="https://metrics.example.com/api/v1/write" required />
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="cfAccessClientId">CF Access Client ID</label>
+            <input id="cfAccessClientId" name="cfAccessClientId" required />
+          </div>
+          <div class="field">
+            <label for="cfAccessClientSecret">CF Access Client Secret</label>
+            <input id="cfAccessClientSecret" name="cfAccessClientSecret" type="password" />
+            <p class="hint">Leave blank to keep existing secret.</p>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="pingTarget1">Ping target 1 (WAN DNS)</label>
+            <input id="pingTarget1" name="pingTarget1" value="1.1.1.1" />
+          </div>
+          <div class="field">
+            <label for="pingTarget2">Ping target 2 (WAN VPS)</label>
+            <input id="pingTarget2" name="pingTarget2" value="139.99.88.174" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="snmpCommunity">SNMP community (v2c)</label>
+          <input id="snmpCommunity" name="snmpCommunity" value="public" />
+        </div>
+        <div class="actions">
+          <button type="submit">Save &amp; sync</button>
+        </div>
+        <div id="setup-msg"></div>
+      </form>
+    </section>
+
+    <section id="panel-settings" class="panel">
+      <div class="row2">
+        <div class="field">
+          <label for="syncIntervalSec">Auto-sync interval (seconds)</label>
+          <input id="syncIntervalSec" name="syncIntervalSec" type="number" min="30" value="90" />
+        </div>
+        <div class="field">
+          <label for="hostDeviceId">Host device ID</label>
+          <input id="hostDeviceId" name="hostDeviceId" placeholder="site-1-nuc" />
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-save-settings">Save settings</button>
+        <button type="button" class="secondary" id="btn-view-alloy">View config.alloy</button>
+        <button type="button" class="secondary" id="btn-view-logs">View Alloy logs</button>
+      </div>
+      <div id="settings-msg"></div>
+      <pre id="settings-output" hidden></pre>
+    </section>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -15,22 +15,36 @@ Labels: set `SITE_NAME=site-1` and `HOST_DEVICE_ID=site-1-nuc` so React can auto
 ```bash
 chmod +x deploy.sh generate-config.sh sync-devices.sh
 ./deploy.sh
+docker compose up -d --build
 ```
 
 Requires: Docker, Docker Compose, python3.
+
+Then open **Collector Console**: `http://<nuc-lan-ip>:8090` — paste collector token from NOC UI, save. Sync runs automatically.
 
 ## Files
 
 | File | Role |
 |---|---|
+| `collector-console/` | **Web UI + API** — setup, auto-sync, Alloy management (port 8090) |
 | `deploy.sh` | Docker check + site/device wizard + `compose up` |
 | `generate-config.sh` | Build `config.alloy` from `devices.json` |
-| `sync-devices.sh` | Pull SNMP inventory from NOC UI (`COLLECTOR_TOKEN`) |
-| `docker-compose.yml` | Grafana Alloy (`host` network + `NET_RAW`) |
+| `sync-devices.sh` | Legacy shell sync (console calls same logic internally) |
+| `docker-compose.yml` | Collector Console + Grafana Alloy (`host` network + `NET_RAW`) |
 | `blackbox.yml` | ICMP probe module (used via `config_file`) |
-| `devices.json` | SNMP targets for this site (cache when sync is enabled) |
+| `devices.json` | SNMP targets for this site (synced from NOC API) |
 | `.env` | Secrets + `SITE_NAME` (gitignored) |
 | `snmp.yml` | SNMPv2c / if_mib module |
+
+## Collector Console
+
+| Page | Purpose |
+|---|---|
+| **Dashboard** | Alloy status, last sync, device list, Sync now |
+| **Setup** | NOC URL, collector token, CF Access, SNMP community, ping targets |
+| **Settings** | Sync interval, view `config.alloy`, Alloy logs |
+
+LAN only — do not expose port 8090 to the public internet.
 
 ## Host metrics (NUC CPU / RAM / disk)
 
@@ -56,12 +70,12 @@ Add the same id in NOC UI (Sites → Add device, type `server`) for inventory.
 ## Outbound connectivity
 
 - HTTPS **443** to `metrics.<your-domain>` (Cloudflare Tunnel)
-- No inbound ports required on the site
+- No inbound ports required on the site (collector console is LAN-only)
 
 ## After UI device changes
 
-With `COLLECTOR_TOKEN` + `NOC_API_URL` set, run `./sync-devices.sh` (or cron / `--loop`). The UI is the source of truth for SNMP targets.
+With Collector Console configured, devices sync automatically (~90s). Use **Sync now** on the dashboard for immediate pull.
 
-Without sync: edit `devices.json` or re-run `deploy.sh`, then `./generate-config.sh && docker compose up -d --force-recreate`.
+Legacy: `./sync-devices.sh` or cron. Without sync: edit `devices.json` or re-run `deploy.sh`, then `./generate-config.sh && docker compose up -d --force-recreate alloy`.
 
 **Never commit real Access token secrets.**

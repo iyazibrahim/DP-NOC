@@ -1,8 +1,22 @@
 # Alloy site collector for NUC / site box (one site at a time).
-# Configure via deploy.sh (writes .env + devices.json + config.alloy).
-# Inventory sync: run ./sync-devices.sh on the host (or cron / --loop). UI is source of truth.
+# Configure via Collector Console (http://<collector-ip>:8090) or deploy.sh.
+# Inventory sync runs automatically in collector-console (no cron required).
 
 services:
+  collector-console:
+    build: ./collector-console
+    container_name: noc_collector_console
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - .:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      DATA_DIR: /data
+      SYNC_INTERVAL_SEC: 90
+      PORT: 8090
+
   alloy:
     image: grafana/alloy:v1.5.1
     container_name: noc_site_alloy
@@ -25,3 +39,5 @@ services:
       - /etc/alloy/config.alloy
       - --storage.path=/var/lib/alloy/data
       - --server.http.listen-addr=127.0.0.1:12345
+    depends_on:
+      - collector-console
