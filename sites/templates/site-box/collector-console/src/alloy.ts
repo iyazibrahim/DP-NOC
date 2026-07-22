@@ -95,15 +95,21 @@ export async function regenerateAlloyConfig(): Promise<string> {
   const dir = dataDir();
   const script = path.join(dir, "generate-config.sh");
   const devices = path.join(dir, "devices.json");
+  const stateDevices = path.join(process.env.STATE_DIR || dir, "devices.json");
+  const devicesFile = fs.existsSync(stateDevices) ? stateDevices : devices;
   const out = path.join(dir, "config.alloy");
 
   if (!fs.existsSync(script)) {
     throw new Error("generate-config.sh not found in data directory");
   }
 
-  return run("bash", [script, devices, out], {
+  // Always write a numeric interval — Alloy rejects "${SCRAPE_INTERVAL_SEC}s"
+  const interval = process.env.SCRAPE_INTERVAL_SEC || "15";
+  const safeInterval = /^\d+$/.test(interval) ? interval : "15";
+
+  return run("bash", [script, devicesFile, out], {
     cwd: dir,
-    env: { SCRAPE_INTERVAL_SEC: process.env.SCRAPE_INTERVAL_SEC || "15" }
+    env: { SCRAPE_INTERVAL_SEC: safeInterval }
   });
 }
 
