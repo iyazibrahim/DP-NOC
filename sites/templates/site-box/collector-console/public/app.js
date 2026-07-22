@@ -61,8 +61,20 @@ function renderStatus(status) {
         ? '<span class="bad">Stale — Force apply</span>'
         : '<span class="ok">Applied</span>'
     }</div></div>
+    <div class="card"><div class="label">Metrics push</div><div class="value">${
+      status.metricsConfigured === false
+        ? '<span class="bad">Missing CF env</span>'
+        : status.metricsConfigured === true
+          ? '<span class="ok">Env set</span>'
+          : "—"
+    }</div></div>
     <div class="card"><div class="label">Last sync</div><div class="value" style="font-size:0.9rem">${fmtTime(sync?.at)}</div></div>
     <div class="card" style="grid-column:1/-1"><div class="label">Sync status</div><div class="value" style="font-size:0.9rem">${syncLabel}</div></div>
+    ${
+      status.warning
+        ? `<div class="card" style="grid-column:1/-1"><div class="label">Warning</div><div class="value" style="font-size:0.9rem;color:#f0c14a">${escapeHtml(status.warning)}</div></div>`
+        : ""
+    }
   `;
 }
 

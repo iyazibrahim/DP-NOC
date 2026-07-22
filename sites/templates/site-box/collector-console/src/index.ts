@@ -16,6 +16,7 @@ import {
   getAlloyLogs,
   isAlloyRunning,
   preserveSecretsFromAlloy,
+  readAlloyContainerEnv,
   regenerateAlloyConfig,
   reloadAlloy
 } from "./alloy";
@@ -49,6 +50,12 @@ app.get("/api/status", async (_req, res) => {
   const alloyRunning = await isAlloyRunning();
   const devices = readDevicesJson();
   const snmpStale = alloySnmpConfigStale(dir);
+  const alloyEnv = await readAlloyContainerEnv();
+  const metricsConfigured = Boolean(
+    alloyEnv.CENTRAL_REMOTE_WRITE_URL &&
+      alloyEnv.CF_ACCESS_CLIENT_ID &&
+      alloyEnv.CF_ACCESS_CLIENT_SECRET
+  );
 
   let nocReachable: boolean | null = null;
   if (config.nocApiUrl) {
@@ -67,12 +74,16 @@ app.get("/api/status", async (_req, res) => {
       config.siteName && config.nocApiUrl && config.collectorToken && config.centralRemoteWriteUrl
     ),
     alloyRunning,
+    metricsConfigured,
     deviceCount: devices.length,
     snmpConfigStale: snmpStale,
     nocReachable,
     lastSync: last,
     siteName: config.siteName,
-    hostDeviceId: config.hostDeviceId
+    hostDeviceId: config.hostDeviceId,
+    warning: !metricsConfigured
+      ? "Alloy missing CF Access / remote_write env — NOC will show Collector/Uplink DOWN (No recent samples). Set vars in Dokploy Environment."
+      : null
   });
 });
 
@@ -165,7 +176,7 @@ app.get("/api/devices", (_req, res) => {
   res.json(readDevicesJson());
 });
 
-app.get("/api/diagnostics", (_req, res) => {
+app.get("/api/diagnostics", async (_req, res) => {
   const devices = readDevicesJson() as Array<{ id?: string; snmpIp?: string }>;
   const alloyPath = path.join(dir, "config.alloy");
   const alloy = fs.existsSync(alloyPath) ? fs.readFileSync(alloyPath, "utf8") : "";
@@ -175,17 +186,63 @@ app.get("/api/diagnostics", (_req, res) => {
     .filter((d) => !alloy.includes(`device = "${d.id}"`))
     .map((d) => d.id);
 
+  const alloyEnv = await readAlloyContainerEnv();
+  const metricsEnv = {
+    hasRemoteWriteUrl: Boolean(alloyEnv.CENTRAL_REMOTE_WRITE_URL),
+    hasCfClientId: Boolean(alloyEnv.CF_ACCESS_CLIENT_ID),
+    hasCfClientSecret: Boolean(alloyEnv.CF_ACCESS_CLIENT_SECRET),
+    siteName: alloyEnv.SITE_NAME || "",
+    remoteWriteUrl: alloyEnv.CENTRAL_REMOTE_WRITE_URL
+      ? alloyEnv.CENTRAL_REMOTE_WRITE_URL.replace(/\/\/.*@/, "//***@")
+      : ""
+  };
+  const metricsOk =
+    metricsEnv.hasRemoteWriteUrl && metricsEnv.hasCfClientId && metricsEnv.hasCfClientSecret;
+
+  const logs = await getAlloyLogs(40);
+  const logLower = logs.toLowerCase();
+  const remoteWriteHints: string[] = [];
+  if (logLower.includes("403") || logLower.includes("forbidden")) {
+    remoteWriteHints.push("Alloy logs show 403 — CF Access Client ID/Secret wrong or missing");
+  }
+  if (logLower.includes("401") || logLower.includes("unauthorized")) {
+    remoteWriteHints.push("Alloy logs show 401 — auth rejected on metrics endpoint");
+  }
+  if (logLower.includes("502") || logLower.includes("503")) {
+    remoteWriteHints.push("Alloy logs show 502/503 — metrics tunnel/Prometheus origin down");
+  }
+  if (logLower.includes("remote_write") && (logLower.includes("error") || logLower.includes("failed"))) {
+    remoteWriteHints.push("Alloy logs mention remote_write errors — open Settings → View Alloy logs");
+  }
+
+  let hint: string;
+  if (!metricsOk) {
+    hint =
+      "NOC shows DOWN because Alloy cannot remote_write metrics. Set CENTRAL_REMOTE_WRITE_URL + CF_ACCESS_CLIENT_ID + CF_ACCESS_CLIENT_SECRET in Dokploy → Environment, then redeploy/restart noc_site_alloy.";
+  } else if (remoteWriteHints.length > 0) {
+    hint = remoteWriteHints.join(" | ");
+  } else if (missingInAlloy.length > 0 || (devices.length > 0 && !hasSnmpBlock)) {
+    hint = "SNMP targets missing in Alloy — click Force apply SNMP";
+  } else {
+    hint =
+      "Metrics env present on Alloy. If NOC still says No recent samples: check Alloy logs for remote_write 403. If SNMP UNKNOWN after collector is healthy: Fortinet community / UDP 161 + Prometheus snmp_up{site=\"site-1\"}";
+  }
+
   res.json({
+    whyNocDown:
+      !metricsOk || remoteWriteHints.length > 0
+        ? "Collector container is running, but metrics are not reaching central Prometheus (No recent samples)."
+        : null,
+    metricsEnv,
+    remoteWriteHints,
     deviceCount: devices.length,
     devices,
     hasSnmpBlock,
     snmpConfigStale: alloySnmpConfigStale(dir),
     missingDeviceLabelsInAlloy: missingInAlloy,
     siteName: readConfig().siteName,
-    hint:
-      missingInAlloy.length > 0 || (devices.length > 0 && !hasSnmpBlock)
-        ? "SNMP targets missing in Alloy — click Sync now (force apply)"
-        : "Alloy config has SNMP targets. If NOC still shows UNKNOWN: check Fortinet SNMPv2c community (must match snmp.yml), UDP 161 from NUC, then query snmp_up{site=\"site-1\"} in Prometheus"
+    hint,
+    alloyLogTail: logs.slice(-1500)
   });
 });
 
