@@ -34,8 +34,75 @@ const SECRET_ENV_KEYS = new Set(["CF_ACCESS_CLIENT_SECRET", "COLLECTOR_TOKEN"]);
 
 const PROCESS_ENV_KEYS = [...Object.values(CONFIG_TO_ENV), "SNMP_DEFAULT_COMMUNITY"];
 
+const BUNDLED_TOOLKIT = process.env.SITEBOX_TOOLKIT_DIR || "/opt/sitebox";
+
+let resolvedDataDir: string | null = null;
+
+/**
+ * Host bind for site-box files. Dokploy often mounts the monorepo root at /data
+ * (wrong) — detect sites/templates/site-box and use that instead.
+ */
 export function dataDir(): string {
-  return process.env.DATA_DIR || "/data";
+  if (resolvedDataDir) return resolvedDataDir;
+  const raw = process.env.DATA_DIR || "/data";
+  const nested = path.join(raw, "sites", "templates", "site-box");
+  if (
+    fs.existsSync(path.join(nested, "generate-config.sh")) ||
+    fs.existsSync(path.join(nested, "docker-compose.yml")) ||
+    fs.existsSync(path.join(nested, "snmp.yml"))
+  ) {
+    resolvedDataDir = nested;
+    return resolvedDataDir;
+  }
+  resolvedDataDir = raw;
+  return resolvedDataDir;
+}
+
+/** Copy generate-config.sh (+ friends) from image into work dir if missing / stale. */
+export function ensureBundledToolkit(): string {
+  const dir = dataDir();
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch {
+    /* ignore */
+  }
+
+  const scripts = ["generate-config.sh", "validate-config.sh"] as const;
+  const seeds = ["blackbox.yml", "snmp.yml"] as const;
+
+  for (const name of scripts) {
+    const src = path.join(BUNDLED_TOOLKIT, name);
+    const dest = path.join(dir, name);
+    if (!fs.existsSync(src)) continue;
+    try {
+      fs.copyFileSync(src, dest);
+      fs.chmodSync(dest, 0o755);
+    } catch {
+      /* data dir may be read-only; regenerate will still try /opt/sitebox */
+    }
+  }
+
+  for (const name of seeds) {
+    const src = path.join(BUNDLED_TOOLKIT, name);
+    const dest = path.join(dir, name);
+    if (!fs.existsSync(src) || fs.existsSync(dest)) continue;
+    try {
+      fs.copyFileSync(src, dest);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return dir;
+}
+
+export function toolkitScript(name: string): string | null {
+  const dir = ensureBundledToolkit();
+  const inData = path.join(dir, name);
+  if (fs.existsSync(inData)) return inData;
+  const bundled = path.join(BUNDLED_TOOLKIT, name);
+  if (fs.existsSync(bundled)) return bundled;
+  return null;
 }
 
 /** Persists across Dokploy redeploys (named volume). Falls back to dataDir. */

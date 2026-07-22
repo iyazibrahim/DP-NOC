@@ -1,0 +1,5 @@
+collector-console/node_modules
+collector-console/dist
+**/npm-debug.log
+.git
+*.md

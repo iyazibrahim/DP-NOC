@@ -23,7 +23,8 @@ Host metrics may still use `integrations/unix` dual-read in NOC until all sites 
 2. **Patches — delete or replace**
    - Any patch that injects legacy Alloy config with `integrations.snmp` / job names `integrations/snmp/site_1_*`
    - Any hand-edited live `config.alloy` patch (Console sync regenerates it)
-   - Keep only: site-box `docker-compose.yml` (console + alloy) matching git; optional community note
+   - Keep only: repo-root `docker-compose.site-box.yml` (Dokploy Compose Path) + Environment secrets; optional community note
+   - Do **not** use `sites/templates/site-box/docker-compose.yml` as Dokploy Compose Path (`.:/data` mounts monorepo → generate-config missing)
 
 3. **Redeploy** site-box from git with **rebuild** (`collector-console` + `noc_site_alloy`).
 

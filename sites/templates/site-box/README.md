@@ -26,6 +26,16 @@ Then open **Collector Console**: `http://<nuc-lan-ip>:8090` — paste collector 
 
 ## Dokploy operating rules (non-negotiable)
 
+### Compose Path
+
+Set Dokploy **Compose Path** to the **repo-root** file:
+
+```text
+docker-compose.site-box.yml
+```
+
+Do **not** use `sites/templates/site-box/docker-compose.yml` in Dokploy. That file uses `.:/data`, and Dokploy’s working directory is the monorepo root — `/data` becomes the whole repo and Console fails with `generate-config.sh not found`.
+
 ### Environment only (survives redeploy)
 
 Set **once** in Dokploy → **Environment** — never rely on a Setup-written `.env` in the git checkout alone:

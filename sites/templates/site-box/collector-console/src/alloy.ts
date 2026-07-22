@@ -2,7 +2,13 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import path from "path";
-import { dataDir, readEnvFile, readSnmpCommunity } from "./config";
+import {
+  dataDir,
+  ensureBundledToolkit,
+  readEnvFile,
+  readSnmpCommunity,
+  toolkitScript
+} from "./config";
 
 const execFileAsync = promisify(execFile);
 
@@ -114,16 +120,19 @@ export function assertAlloyConfigSafe(alloyText: string): void {
 }
 
 export async function regenerateAlloyConfig(): Promise<string> {
-  const dir = dataDir();
-  const script = path.join(dir, "generate-config.sh");
-  const validate = path.join(dir, "validate-config.sh");
+  const dir = ensureBundledToolkit();
+  const script = toolkitScript("generate-config.sh");
+  const validate = toolkitScript("validate-config.sh");
   const devices = path.join(dir, "devices.json");
   const stateDevices = path.join(process.env.STATE_DIR || dir, "devices.json");
   const devicesFile = fs.existsSync(stateDevices) ? stateDevices : devices;
   const out = path.join(dir, "config.alloy");
 
-  if (!fs.existsSync(script)) {
-    throw new Error("generate-config.sh not found in data directory");
+  if (!script) {
+    throw new Error(
+      "generate-config.sh not found (checked /data, sites/templates/site-box, /opt/sitebox). " +
+        "Set Dokploy Compose Path to docker-compose.site-box.yml and rebuild."
+    );
   }
 
   // Always write a numeric interval — Alloy rejects "${SCRAPE_INTERVAL_SEC}s"
@@ -131,20 +140,35 @@ export async function regenerateAlloyConfig(): Promise<string> {
   const safeInterval = /^\d+$/.test(interval) ? interval : "15";
   const defaultCommunity = readSnmpCommunity();
 
+  // cwd must be script dir so generate-config.sh updates snmp.yml beside itself —
+  // prefer work dir copy; if running from /opt/sitebox, copy snmp back to work dir after.
+  const scriptDir = path.dirname(script);
   const msg = await run("bash", [script, devicesFile, out], {
-    cwd: dir,
+    cwd: scriptDir,
     env: {
       SCRAPE_INTERVAL_SEC: safeInterval,
       SNMP_DEFAULT_COMMUNITY: defaultCommunity
     }
   });
 
+  if (scriptDir !== dir) {
+    const snmpSrc = path.join(scriptDir, "snmp.yml");
+    const snmpDest = path.join(dir, "snmp.yml");
+    if (fs.existsSync(snmpSrc)) {
+      try {
+        fs.copyFileSync(snmpSrc, snmpDest);
+      } catch {
+        /* alloy may still mount host snmp.yml from site-box */
+      }
+    }
+  }
+
   const written = fs.readFileSync(out, "utf8");
   assertAlloyConfigSafe(written);
 
-  if (fs.existsSync(validate)) {
+  if (validate) {
     try {
-      await run("bash", [validate, out], { cwd: dir });
+      await run("bash", [validate, out], { cwd: scriptDir });
     } catch (err) {
       throw new Error(
         `validate-config.sh failed: ${err instanceof Error ? err.message : String(err)}`

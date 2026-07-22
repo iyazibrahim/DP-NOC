@@ -110,6 +110,9 @@ Collector box → Alloy → Prometheus (central)
     - Docs + Console ban `integrations/snmp` (no `snmp_up` → NOC UNKNOWN)
     - Canonical: `job=site_snmp_if_mib` + `snmp_up`
     - `CUTOVER_SITEBOX_SNMP.md` + `cutover-sitebox-snmp.sh`
+  - **Dokploy /data mount fix (2026-07-22)**
+    - Root `docker-compose.site-box.yml` mounts `./sites/templates/site-box:/data`
+    - Console image bakes toolkit; detects monorepo-mounted `/data`
 
 ## Local Validation
 1. `docker compose up -d --build`
@@ -129,3 +132,5 @@ Collector box → Alloy → Prometheus (central)
 - Volumes: `noc_runtime` (sites + retention flags), `noc_exports`, `prometheus_data`
 - Site-box: secrets in Dokploy **Environment** only; do not patch live `config.alloy` when Console sync is used
 - Site-box SNMP: never patch `integrations/snmp`; use site-box compose only (see CUTOVER_SITEBOX_SNMP.md)
+- **Dokploy Compose Path (required):** `docker-compose.site-box.yml` (repo root) — NOT `sites/templates/site-box/docker-compose.yml` (that `.:/data` mounts monorepo → `generate-config.sh not found`)
+- Console bakes `generate-config.sh` into image (`/opt/sitebox`) and auto-detects nested `sites/templates/site-box` under `/data`

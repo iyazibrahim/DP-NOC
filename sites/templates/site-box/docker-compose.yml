@@ -1,4 +1,9 @@
-# Alloy site collector for NUC / site box (one site at a time).
+# Alloy site collector for NUC / site box (local: cd here && docker compose up).
+#
+# DOKPLOY: do NOT use this file as Compose Path. Use repo-root:
+#   docker-compose.site-box.yml
+# Otherwise `.:/data` can mount the whole monorepo and Console fails with
+# "generate-config.sh not found in data directory".
 #
 # WHY COLLECTOR GOES DOWN AFTER REDEPLOY:
 # Dokploy replaces the git checkout — a Setup-written .env in the project folder is LOST.
@@ -33,8 +38,9 @@ x-collector-env: &collector-env
 services:
   collector-console:
     build:
-      context: ./collector-console
-      dockerfile: Dockerfile
+      # Parent folder so Dockerfile can COPY generate-config.sh into the image
+      context: .
+      dockerfile: collector-console/Dockerfile
       args:
         # Avoid flaky docker.io pulls on the NUC; AWS public mirror of official node
         NODE_IMAGE: public.ecr.aws/docker/library/node:20-bookworm-slim

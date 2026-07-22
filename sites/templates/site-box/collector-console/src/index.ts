@@ -4,7 +4,7 @@ import fs from "fs";
 import {
   alloyReloadNeeded,
   bootstrapPersistentEnv,
-  dataDir,
+  ensureBundledToolkit,
   maskConfig,
   readConfig,
   readConfigAlloy,
@@ -25,7 +25,7 @@ import { alloySnmpConfigStale, getLastSync, startSyncLoop, syncDevices } from ".
 import { pushDeviceToNoc } from "./pushDevice";
 
 const PORT = Number(process.env.PORT || "8090");
-const dir = dataDir();
+const dir = ensureBundledToolkit();
 
 const app = express();
 app.use(express.json({ limit: "64kb" }));

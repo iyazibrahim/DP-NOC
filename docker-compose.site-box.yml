@@ -1,0 +1,73 @@
+# Dokploy site-box collector (use THIS file as Compose Path).
+#
+# Dokploy always runs from the git repo root. The nested compose under
+# sites/templates/site-box/ with `.:/data` can mount the whole monorepo into
+# /data — then Console looks for /data/generate-config.sh and fails.
+#
+# Dokploy → Compose Path:
+#   docker-compose.site-box.yml
+#
+# Environment (required): CENTRAL_REMOTE_WRITE_URL, CF_ACCESS_CLIENT_ID,
+# CF_ACCESS_CLIENT_SECRET, SITE_NAME, HOST_DEVICE_ID, …
+
+x-collector-env: &collector-env
+  CENTRAL_REMOTE_WRITE_URL: ${CENTRAL_REMOTE_WRITE_URL:-}
+  CF_ACCESS_CLIENT_ID: ${CF_ACCESS_CLIENT_ID:-}
+  CF_ACCESS_CLIENT_SECRET: ${CF_ACCESS_CLIENT_SECRET:-}
+  SITE_NAME: ${SITE_NAME:-site-1}
+  HOST_DEVICE_ID: ${HOST_DEVICE_ID:-site-1-nuc}
+  PING_TARGET_1: ${PING_TARGET_1:-1.1.1.1}
+  PING_TARGET_2: ${PING_TARGET_2:-139.99.88.174}
+  NOC_API_URL: ${NOC_API_URL:-}
+  COLLECTOR_TOKEN: ${COLLECTOR_TOKEN:-}
+  SCRAPE_INTERVAL_SEC: ${SCRAPE_INTERVAL_SEC:-15}
+  SYNC_INTERVAL_SEC: ${SYNC_INTERVAL_SEC:-90}
+
+services:
+  collector-console:
+    build:
+      context: ./sites/templates/site-box
+      dockerfile: collector-console/Dockerfile
+      args:
+        NODE_IMAGE: public.ecr.aws/docker/library/node:20-bookworm-slim
+    container_name: noc_collector_console
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./sites/templates/site-box:/data
+      - noc_sitebox_state:/state
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      <<: *collector-env
+      DATA_DIR: /data
+      STATE_DIR: /state
+      SYNC_INTERVAL_SEC: ${SYNC_INTERVAL_SEC:-90}
+      PORT: "8090"
+
+  alloy:
+    image: grafana/alloy:v1.5.1
+    container_name: noc_site_alloy
+    restart: unless-stopped
+    pid: host
+    cap_add:
+      - NET_RAW
+    network_mode: host
+    environment:
+      <<: *collector-env
+    volumes:
+      - ./sites/templates/site-box/config.alloy:/etc/alloy/config.alloy:ro
+      - ./sites/templates/site-box/blackbox.yml:/etc/alloy/blackbox.yml:ro
+      - ./sites/templates/site-box/snmp.yml:/etc/alloy/snmp.yml:ro
+      - /:/rootfs:ro
+    working_dir: /etc/alloy
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=127.0.0.1:12345
+    depends_on:
+      - collector-console
+
+volumes:
+  noc_sitebox_state:
