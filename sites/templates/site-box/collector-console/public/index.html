@@ -23,9 +23,12 @@
       <div class="grid" id="status-cards"></div>
       <div class="actions">
         <button type="button" id="btn-sync">Sync now</button>
+        <button type="button" class="secondary" id="btn-force-sync">Force apply SNMP</button>
         <button type="button" class="secondary" id="btn-refresh">Refresh status</button>
+        <button type="button" class="secondary" id="btn-diag">Diagnostics</button>
       </div>
       <div id="sync-msg"></div>
+      <pre id="diag-out" hidden></pre>
 
       <h3 style="margin-top:24px">Add SNMP device</h3>
       <p class="hint">Adds the device on NOC, then syncs it to this collector for SNMP polling.</p>

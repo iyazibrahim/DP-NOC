@@ -10,6 +10,7 @@ export type SyncResult = {
   deviceCount?: number;
   changed: boolean;
   at: string;
+  alloyReloaded?: boolean;
 };
 
 let lastSync: SyncResult | null = null;
@@ -23,7 +24,71 @@ function etagPath(dataDir: string): string {
   return path.join(dataDir, ".devices.etag");
 }
 
-export async function syncDevices(dataDir: string): Promise<SyncResult> {
+function devicesPath(dataDir: string): string {
+  return path.join(dataDir, "devices.json");
+}
+
+function configAlloyPath(dataDir: string): string {
+  return path.join(dataDir, "config.alloy");
+}
+
+function readLocalDevices(dataDir: string): Array<{ id?: string; snmpIp?: string }> {
+  const file = devicesPath(dataDir);
+  if (!fs.existsSync(file)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** True if config.alloy is missing SNMP exporter or any device id from devices.json. */
+export function alloySnmpConfigStale(dataDir: string): boolean {
+  const devices = readLocalDevices(dataDir).filter((d) => d.id && d.snmpIp);
+  const alloyFile = configAlloyPath(dataDir);
+  if (!fs.existsSync(alloyFile)) return devices.length > 0;
+
+  const alloy = fs.readFileSync(alloyFile, "utf8");
+  if (devices.length === 0) {
+    // No SNMP devices — stale only if an old SNMP block is harmless; no reload required
+    return false;
+  }
+  if (!alloy.includes("prometheus.exporter.snmp")) return true;
+  for (const d of devices) {
+    const id = d.id!;
+    // generate-config embeds: device = "<id>"
+    if (!alloy.includes(`device = "${id}"`)) return true;
+  }
+  return false;
+}
+
+/**
+ * Ensure config.alloy matches devices.json and Alloy has reloaded.
+ * Fixes the case where inventory is synced but SNMP block was never applied
+ * (304 / content-identical short-circuit, or Dokploy patch overwrote config.alloy).
+ */
+export async function ensureAlloySnmpApplied(
+  dataDir: string,
+  force = false
+): Promise<{ reloaded: boolean; message: string }> {
+  const stale = force || alloySnmpConfigStale(dataDir);
+  if (!stale) {
+    return { reloaded: false, message: "Alloy SNMP config already matches devices.json" };
+  }
+
+  const genMsg = await regenerateAlloyConfig();
+  const reloadMsg = await reloadAlloy({ forceRecreate: false });
+  return {
+    reloaded: true,
+    message: `${genMsg}; ${reloadMsg}`
+  };
+}
+
+export async function syncDevices(
+  dataDir: string,
+  opts?: { forceAlloyReload?: boolean }
+): Promise<SyncResult> {
   if (syncInFlight) {
     return {
       ok: false,
@@ -35,6 +100,7 @@ export async function syncDevices(dataDir: string): Promise<SyncResult> {
 
   syncInFlight = true;
   const at = new Date().toISOString();
+  const forceAlloyReload = opts?.forceAlloyReload === true;
 
   try {
     const config = readConfig();
@@ -56,37 +122,19 @@ export async function syncDevices(dataDir: string): Promise<SyncResult> {
     };
 
     const etagFile = etagPath(dataDir);
-    if (fs.existsSync(etagFile)) {
+    // Force full body when we need to re-apply Alloy SNMP
+    if (!forceAlloyReload && fs.existsSync(etagFile) && !alloySnmpConfigStale(dataDir)) {
       headers["If-None-Match"] = fs.readFileSync(etagFile, "utf8").trim();
     }
 
     const res = await fetch(url, { headers });
     const httpCode = res.status;
+    let inventoryChanged = false;
+    let deviceCount = 0;
 
     if (httpCode === 304) {
-      let deviceCount = 0;
-      const devicesFile304 = path.join(dataDir, "devices.json");
-      if (fs.existsSync(devicesFile304)) {
-        try {
-          const parsed = JSON.parse(fs.readFileSync(devicesFile304, "utf8"));
-          deviceCount = Array.isArray(parsed) ? parsed.length : 0;
-        } catch {
-          deviceCount = 0;
-        }
-      }
-      const result: SyncResult = {
-        ok: true,
-        httpCode,
-        message: "Inventory unchanged (304)",
-        deviceCount,
-        changed: false,
-        at
-      };
-      lastSync = result;
-      return result;
-    }
-
-    if (httpCode !== 200) {
+      deviceCount = readLocalDevices(dataDir).length;
+    } else if (httpCode !== 200) {
       const body = await res.text();
       const result: SyncResult = {
         ok: false,
@@ -97,52 +145,53 @@ export async function syncDevices(dataDir: string): Promise<SyncResult> {
       };
       lastSync = result;
       return result;
-    }
+    } else {
+      const etag = res.headers.get("etag");
+      if (etag) {
+        fs.writeFileSync(etagFile, etag, "utf8");
+      }
 
-    const etag = res.headers.get("etag");
-    if (etag) {
-      fs.writeFileSync(etagFile, etag, "utf8");
-    }
+      const body = await res.text();
+      const devicesFile = devicesPath(dataDir);
 
-    const body = await res.text();
-    const devicesFile = path.join(dataDir, "devices.json");
-    let changed = true;
+      if (fs.existsSync(devicesFile)) {
+        try {
+          inventoryChanged = !fs.readFileSync(devicesFile).equals(Buffer.from(body));
+        } catch {
+          inventoryChanged = true;
+        }
+      } else {
+        inventoryChanged = true;
+      }
 
-    if (fs.existsSync(devicesFile)) {
+      if (inventoryChanged) {
+        fs.writeFileSync(devicesFile, body, "utf8");
+      }
+
       try {
-        changed = !fs.readFileSync(devicesFile).equals(Buffer.from(body));
+        const devices = JSON.parse(body);
+        deviceCount = Array.isArray(devices) ? devices.length : 0;
       } catch {
-        changed = true;
+        deviceCount = 0;
       }
     }
 
-    if (!changed) {
-      const devices = JSON.parse(body);
-      const result: SyncResult = {
-        ok: true,
-        httpCode,
-        message: "Content identical — no Alloy restart needed",
-        deviceCount: Array.isArray(devices) ? devices.length : 0,
-        changed: false,
-        at
-      };
-      lastSync = result;
-      return result;
-    }
+    // Always ensure Alloy SNMP targets match devices.json (even on 304 / identical)
+    const ensure = await ensureAlloySnmpApplied(dataDir, forceAlloyReload || inventoryChanged);
 
-    fs.writeFileSync(devicesFile, body, "utf8");
-    const devices = JSON.parse(body);
-    const deviceCount = Array.isArray(devices) ? devices.length : 0;
-
-    const genMsg = await regenerateAlloyConfig();
-    const recreateMsg = await reloadAlloy({ forceRecreate: false });
+    const parts: string[] = [];
+    if (httpCode === 304) parts.push("Inventory unchanged (304)");
+    else if (!inventoryChanged) parts.push("Inventory content identical");
+    else parts.push(`Synced ${deviceCount} device(s)`);
+    parts.push(ensure.message);
 
     const result: SyncResult = {
       ok: true,
       httpCode,
-      message: `Synced ${deviceCount} device(s). ${genMsg} ${recreateMsg}`.trim(),
+      message: parts.join(" — "),
       deviceCount,
-      changed: true,
+      changed: inventoryChanged || ensure.reloaded,
+      alloyReloaded: ensure.reloaded,
       at
     };
     lastSync = result;

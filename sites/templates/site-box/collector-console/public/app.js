@@ -56,6 +56,11 @@ function renderStatus(status) {
     <div class="card"><div class="label">Alloy</div><div class="value">${alloy}</div></div>
     <div class="card"><div class="label">NOC API</div><div class="value">${noc}</div></div>
     <div class="card"><div class="label">Devices</div><div class="value">${status.deviceCount ?? 0}</div></div>
+    <div class="card"><div class="label">SNMP config</div><div class="value">${
+      status.snmpConfigStale
+        ? '<span class="bad">Stale — Force apply</span>'
+        : '<span class="ok">Applied</span>'
+    }</div></div>
     <div class="card"><div class="label">Last sync</div><div class="value" style="font-size:0.9rem">${fmtTime(sync?.at)}</div></div>
     <div class="card" style="grid-column:1/-1"><div class="label">Sync status</div><div class="value" style="font-size:0.9rem">${syncLabel}</div></div>
   `;
@@ -136,13 +141,42 @@ document.getElementById("btn-sync").addEventListener("click", async () => {
   const btn = document.getElementById("btn-sync");
   btn.disabled = true;
   try {
-    const result = await api("/api/sync", { method: "POST" });
+    const result = await api("/api/sync", { method: "POST", body: JSON.stringify({}) });
     showMsg(msg, result.message || "Sync complete", result.ok);
     await refreshDashboard();
   } catch (e) {
     showMsg(msg, e.message, false);
   } finally {
     btn.disabled = false;
+  }
+});
+
+document.getElementById("btn-force-sync").addEventListener("click", async () => {
+  const msg = document.getElementById("sync-msg");
+  const btn = document.getElementById("btn-force-sync");
+  btn.disabled = true;
+  try {
+    const result = await api("/api/sync", {
+      method: "POST",
+      body: JSON.stringify({ force: true })
+    });
+    showMsg(msg, result.message || "Force apply complete", result.ok);
+    await refreshDashboard();
+  } catch (e) {
+    showMsg(msg, e.message, false);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("btn-diag").addEventListener("click", async () => {
+  const out = document.getElementById("diag-out");
+  out.hidden = false;
+  try {
+    const diag = await api("/api/diagnostics");
+    out.textContent = JSON.stringify(diag, null, 2);
+  } catch (e) {
+    out.textContent = e.message;
   }
 });
 

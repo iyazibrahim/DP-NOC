@@ -18,7 +18,7 @@ import {
   regenerateAlloyConfig,
   reloadAlloy
 } from "./alloy";
-import { getLastSync, startSyncLoop, syncDevices } from "./sync";
+import { alloySnmpConfigStale, getLastSync, startSyncLoop, syncDevices } from "./sync";
 import { pushDeviceToNoc } from "./pushDevice";
 
 const PORT = Number(process.env.PORT || "8090");
@@ -47,6 +47,7 @@ app.get("/api/status", async (_req, res) => {
   const last = getLastSync();
   const alloyRunning = await isAlloyRunning();
   const devices = readDevicesJson();
+  const snmpStale = alloySnmpConfigStale(dir);
 
   let nocReachable: boolean | null = null;
   if (config.nocApiUrl) {
@@ -62,13 +63,11 @@ app.get("/api/status", async (_req, res) => {
 
   res.json({
     configured: Boolean(
-      config.siteName &&
-        config.nocApiUrl &&
-        config.collectorToken &&
-        config.centralRemoteWriteUrl
+      config.siteName && config.nocApiUrl && config.collectorToken && config.centralRemoteWriteUrl
     ),
     alloyRunning,
     deviceCount: devices.length,
+    snmpConfigStale: snmpStale,
     nocReachable,
     lastSync: last,
     siteName: config.siteName,
@@ -82,7 +81,6 @@ app.get("/api/config", (_req, res) => {
 
 app.post("/api/config", async (req, res) => {
   try {
-    // Pull CF secrets from running Alloy into .env before any write (Dokploy recovery)
     const preserved = await preserveSecretsFromAlloy();
 
     const body = req.body as Partial<CollectorConfig>;
@@ -124,11 +122,8 @@ app.post("/api/config", async (req, res) => {
     let regenMsg = "";
     if (needsAlloyReload) {
       try {
-        // Env secret changes need recreate; otherwise restart (keep Dokploy env)
         const envChanged = Boolean(
-          patch.centralRemoteWriteUrl ||
-            patch.cfAccessClientId ||
-            patch.cfAccessClientSecret
+          patch.centralRemoteWriteUrl || patch.cfAccessClientId || patch.cfAccessClientSecret
         );
         regenMsg = await regenerateAlloyConfig();
         regenMsg += " | " + (await reloadAlloy({ forceRecreate: envChanged }));
@@ -139,7 +134,7 @@ app.post("/api/config", async (req, res) => {
       regenMsg = "Alloy unchanged (only NOC sync settings updated)";
     }
 
-    const syncResult = await syncDevices(dir);
+    const syncResult = await syncDevices(dir, { forceAlloyReload: true });
 
     res.json({
       ok: true,
@@ -156,13 +151,41 @@ app.post("/api/config", async (req, res) => {
   }
 });
 
-app.post("/api/sync", async (_req, res) => {
-  const result = await syncDevices(dir);
+app.post("/api/sync", async (req, res) => {
+  const force =
+    req.query.force === "1" ||
+    req.query.force === "true" ||
+    (req.body && typeof req.body === "object" && (req.body as { force?: boolean }).force === true);
+  const result = await syncDevices(dir, { forceAlloyReload: Boolean(force) });
   res.status(result.ok ? 200 : 502).json(result);
 });
 
 app.get("/api/devices", (_req, res) => {
   res.json(readDevicesJson());
+});
+
+app.get("/api/diagnostics", (_req, res) => {
+  const devices = readDevicesJson() as Array<{ id?: string; snmpIp?: string }>;
+  const alloyPath = path.join(dir, "config.alloy");
+  const alloy = fs.existsSync(alloyPath) ? fs.readFileSync(alloyPath, "utf8") : "";
+  const hasSnmpBlock = alloy.includes("prometheus.exporter.snmp");
+  const missingInAlloy = devices
+    .filter((d) => d.id && d.snmpIp)
+    .filter((d) => !alloy.includes(`device = "${d.id}"`))
+    .map((d) => d.id);
+
+  res.json({
+    deviceCount: devices.length,
+    devices,
+    hasSnmpBlock,
+    snmpConfigStale: alloySnmpConfigStale(dir),
+    missingDeviceLabelsInAlloy: missingInAlloy,
+    siteName: readConfig().siteName,
+    hint:
+      missingInAlloy.length > 0 || (devices.length > 0 && !hasSnmpBlock)
+        ? "SNMP targets missing in Alloy — click Sync now (force apply)"
+        : "Alloy config has SNMP targets. If NOC still shows UNKNOWN: check Fortinet SNMPv2c community (must match snmp.yml), UDP 161 from NUC, then query snmp_up{site=\"site-1\"} in Prometheus"
+  });
 });
 
 app.post("/api/devices", async (req, res) => {
