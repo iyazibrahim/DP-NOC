@@ -133,6 +133,8 @@ The console pulls `GET /api/collector/:siteId/devices.json`, writes `devices.jso
 
 **Dokploy:** expose port **8090** on the LAN only — do not publish the collector console to the public internet.
 
+If Dokploy shows only `noc_site_alloy`, your **Patches** still override `docker-compose.yml` with the old one-service file. Delete or update that patch to include `collector-console`, ensure `collector-console/` is in the git source, then rebuild. See [`sites/templates/site-box/README.md`](../sites/templates/site-box/README.md).
+
 ### Legacy inventory sync (shell)
 
 1. In NOC UI: Sites → site → **Generate token** (Collector inventory sync)

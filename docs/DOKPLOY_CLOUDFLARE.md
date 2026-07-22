@@ -104,6 +104,8 @@ Then protect with Cloudflare Access **Service Token** and point Alloy at:
 **403** without token = Access OK. **502** with token = origin/tunnel broken.
 
 NUC collector: `sites/templates/site-box/deploy.sh`  
+Collector Console: port **8090** on the NUC LAN (second compose service).  
+If Dokploy only shows Alloy: update/delete the `docker-compose.yml` patch — see [`sites/templates/site-box/README.md`](../sites/templates/site-box/README.md).  
 Full steps: **[ALLOY_COLLECTOR.md](ALLOY_COLLECTOR.md)**.
 
 ## Rebuild note (Dokploy)

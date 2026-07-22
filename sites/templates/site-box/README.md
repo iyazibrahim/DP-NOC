@@ -22,6 +22,29 @@ Requires: Docker, Docker Compose, python3.
 
 Then open **Collector Console**: `http://<nuc-lan-ip>:8090` — paste collector token from NOC UI, save. Sync runs automatically.
 
+## Dokploy (why you only see `noc_site_alloy`)
+
+This compose defines **two** containers:
+
+| Container | Role |
+|---|---|
+| `noc_collector_console` | Web UI on port **8090** + auto-sync |
+| `noc_site_alloy` | SNMP / ICMP / host metrics |
+
+If Dokploy shows only Alloy, your **Patches → `docker-compose.yml`** is still the old Alloy-only file and overrides git.
+
+**Fix:**
+
+1. Push this repo (including `sites/templates/site-box/collector-console/`) to the git remote Dokploy uses.
+2. In Dokploy → Sitebox → **Patches** → edit `sites/templates/site-box/docker-compose.yml`:
+   - Either **delete** that patch so git’s compose is used, or
+   - Replace the patch contents with the full two-service compose from this repo.
+3. Redeploy with **rebuild** (Collector Console uses `build: ./collector-console`).
+4. Confirm Containers tab shows **both** `noc_collector_console` and `noc_site_alloy`.
+5. On the NUC LAN, open `http://<nuc-ip>:8090` (do **not** put 8090 on a public Cloudflare domain).
+
+Build context must be the **site-box** folder (where `docker-compose.yml` and `collector-console/` live), not the monorepo root.
+
 ## Files
 
 | File | Role |
