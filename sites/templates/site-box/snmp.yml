@@ -1,6 +1,8 @@
-# SNMPv2c config for Grafana Alloy prometheus.exporter.snmp (Alloy v1.5.x).
-# Do NOT use config_merge_strategy — that attribute requires newer Alloy.
-# This file fully replaces the embedded snmp_exporter config (default behavior).
+# SNMPv2c config for Grafana Alloy prometheus.exporter.snmp
+# Contract: grafana/alloy:v1.5.1 ONLY
+# Do NOT use config_merge_strategy — unsupported on Alloy v1.5.1 (causes crash / no SNMP data).
+# This file fully replaces the embedded snmp_exporter config (default replace behavior).
+# Must include auths + modules.if_mib.metrics (walk-only is not enough for usable series).
 #
 # Set community to match your Fortinet / switch SNMPv2c string.
 

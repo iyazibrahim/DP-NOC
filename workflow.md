@@ -96,6 +96,12 @@ Collector box → Alloy → Prometheus (central)
   - **Dokploy redeploy resilience (2026-07-22)**
     - Alloy uses Dokploy Environment (not only `.env` file) so metrics survive redeploy
     - Named volume `noc_sitebox_state` persists token/devices; console bootstraps Setup from env
+  - **SNMP stabilize / Alloy v1.5.1 contract (2026-07-22)**
+    - Pin `grafana/alloy:v1.5.1`; ban `config_merge_strategy`; full `snmp.yml` only
+    - Fail-closed `validate-config.sh` + harder `generate-config.sh` / Console regenerate
+    - Dokploy ops: Environment-only secrets; ban live `config.alloy` patches when sync is used
+    - Console: Metrics push + SNMP scrape hint; crash/unsafe config warnings
+    - `repair-alloy.sh` / `verify-snmp-queries.sh` — 3-query Grafana prove list
 
 ## Local Validation
 1. `docker compose up -d --build`
@@ -106,9 +112,11 @@ Collector box → Alloy → Prometheus (central)
 6. Dashboard → **Fullscreen** — chrome hidden; Esc / Exit to leave
 7. Sites → site → Generate collector token; open Collector Console `http://<collector-ip>:8090`, paste token, save
 8. Grafana → folder NOC → “NOC — Collector & Uplink”
+9. Site-box: `VERIFY_SAMPLE=1 ./verify-snmp-queries.sh site-1-firewall1` then on NUC `./repair-alloy.sh` + Grafana 3-query prove
 
 ## Dokploy notes
 - Publish `noc-app:8080` and optionally `grafana:3000`
 - Keep Prometheus on `127.0.0.1:9090`; expose only via Cloudflare Tunnel `metrics.` + Access Service Token
 - Optional: `PROMETHEUS_APPLY_CMD=docker restart noc_prometheus` on noc-app (Docker socket required)
 - Volumes: `noc_runtime` (sites + retention flags), `noc_exports`, `prometheus_data`
+- Site-box: secrets in Dokploy **Environment** only; do not patch live `config.alloy` when Console sync is used

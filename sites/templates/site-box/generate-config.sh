@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # Generate config.alloy from devices.json + ICMP/remote_write/host base.
+#
+# Alloy contract: grafana/alloy:v1.5.1 ONLY
+# - Never emit config_merge_strategy (unsupported on 1.5.1)
+# - Always emit numeric scrape_interval (e.g. "15s"), never ${SCRAPE_INTERVAL_SEC}
+# - SNMP uses full snmp.yml (auths + if_mib metrics) mounted beside config.alloy
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,6 +16,28 @@ SCRAPE_INTERVAL_SEC="${SCRAPE_INTERVAL_SEC:-15}"
 if ! [[ "$SCRAPE_INTERVAL_SEC" =~ ^[0-9]+$ ]]; then
   SCRAPE_INTERVAL_SEC=15
 fi
+
+validate_out() {
+  if [[ -x "$SCRIPT_DIR/validate-config.sh" ]]; then
+    "$SCRIPT_DIR/validate-config.sh" "$OUT_FILE"
+  elif [[ -f "$SCRIPT_DIR/validate-config.sh" ]]; then
+    bash "$SCRIPT_DIR/validate-config.sh" "$OUT_FILE"
+  else
+    # Inline fail-closed if validate script missing on NUC
+    if grep -qE '\$\{[A-Za-z0-9_]+\}' "$OUT_FILE"; then
+      echo "ERROR: config.alloy still contains unexpanded \${...}" >&2
+      exit 1
+    fi
+    if grep -qE '^[[:space:]]*config_merge_strategy[[:space:]]*=' "$OUT_FILE"; then
+      echo "ERROR: config_merge_strategy not supported on Alloy v1.5.1" >&2
+      exit 1
+    fi
+    if ! grep -qE 'scrape_interval = "[0-9]+s"' "$OUT_FILE"; then
+      echo "ERROR: config.alloy missing numeric scrape_interval" >&2
+      exit 1
+    fi
+  fi
+}
 
 if [[ ! -f "$DEVICES_FILE" ]]; then
   echo "[]" > "$DEVICES_FILE"
@@ -104,10 +131,7 @@ DEVICE_COUNT="$(python3 -c "import json; print(len(json.load(open('$DEVICES_FILE
 
 if [[ "$DEVICE_COUNT" -eq 0 ]]; then
   echo "// No SNMP devices in devices.json." >> "$OUT_FILE"
-  if grep -q '\${SCRAPE_INTERVAL_SEC}' "$OUT_FILE"; then
-    echo "ERROR: config.alloy still contains \${SCRAPE_INTERVAL_SEC}" >&2
-    exit 1
-  fi
+  validate_out
   echo "Wrote $OUT_FILE (ICMP + host metrics; no SNMP)"
   exit 0
 fi
@@ -115,7 +139,7 @@ fi
 {
   echo ""
   echo "prometheus.exporter.snmp \"site_devices\" {"
-  echo "  // Full snmp.yml (auths + if_mib). Alloy v1.5.x has no config_merge_strategy."
+  echo "  // Alloy v1.5.1: full snmp.yml only — never set merge strategy attribute"
   echo "  config_file = \"snmp.yml\""
   echo ""
 } >> "$OUT_FILE"
@@ -158,14 +182,5 @@ PY
   echo "}"
 } >> "$OUT_FILE"
 
-# Guard: Alloy cannot parse shell placeholders as durations
-if grep -q '\${SCRAPE_INTERVAL_SEC}' "$OUT_FILE"; then
-  echo "ERROR: config.alloy still contains \${SCRAPE_INTERVAL_SEC} — refusing to leave broken config" >&2
-  exit 1
-fi
-if ! grep -qE 'scrape_interval = "[0-9]+s"' "$OUT_FILE"; then
-  echo "ERROR: config.alloy missing a numeric scrape_interval" >&2
-  exit 1
-fi
-
+validate_out
 echo "Wrote $OUT_FILE (ICMP + host + $DEVICE_COUNT SNMP device(s))"

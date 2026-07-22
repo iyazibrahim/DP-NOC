@@ -91,9 +91,27 @@ export async function preserveSecretsFromAlloy(): Promise<string[]> {
   return added;
 }
 
+/** Fail-closed checks matching validate-config.sh (Alloy v1.5.1). */
+export function assertAlloyConfigSafe(alloyText: string): void {
+  if (/\$\{[A-Za-z0-9_]+\}/.test(alloyText)) {
+    throw new Error(
+      "Generated config.alloy has unexpanded ${...} placeholders — update generate-config.sh on the NUC and Force apply again"
+    );
+  }
+  if (/^\s*config_merge_strategy\s*=/m.test(alloyText)) {
+    throw new Error(
+      "config.alloy contains config_merge_strategy (unsupported on grafana/alloy:v1.5.1) — remove it; use full snmp.yml only"
+    );
+  }
+  if (!/scrape_interval\s*=\s*"[0-9]+s"/.test(alloyText)) {
+    throw new Error('config.alloy missing numeric scrape_interval (expected e.g. "15s")');
+  }
+}
+
 export async function regenerateAlloyConfig(): Promise<string> {
   const dir = dataDir();
   const script = path.join(dir, "generate-config.sh");
+  const validate = path.join(dir, "validate-config.sh");
   const devices = path.join(dir, "devices.json");
   const stateDevices = path.join(process.env.STATE_DIR || dir, "devices.json");
   const devicesFile = fs.existsSync(stateDevices) ? stateDevices : devices;
@@ -113,11 +131,18 @@ export async function regenerateAlloyConfig(): Promise<string> {
   });
 
   const written = fs.readFileSync(out, "utf8");
-  if (written.includes("${SCRAPE_INTERVAL_SEC}")) {
-    throw new Error(
-      'Generated config.alloy still has "${SCRAPE_INTERVAL_SEC}" — update generate-config.sh on the NUC and Force apply again'
-    );
+  assertAlloyConfigSafe(written);
+
+  if (fs.existsSync(validate)) {
+    try {
+      await run("bash", [validate, out], { cwd: dir });
+    } catch (err) {
+      throw new Error(
+        `validate-config.sh failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   }
+
   return msg;
 }
 

@@ -57,9 +57,13 @@ function renderStatus(status) {
     <div class="card"><div class="label">NOC API</div><div class="value">${noc}</div></div>
     <div class="card"><div class="label">Devices</div><div class="value">${status.deviceCount ?? 0}</div></div>
     <div class="card"><div class="label">SNMP config</div><div class="value">${
-      status.snmpConfigStale
-        ? '<span class="bad">Stale — Force apply</span>'
-        : '<span class="ok">Applied</span>'
+      status.configUnsafe
+        ? '<span class="bad">Unsafe — repair</span>'
+        : status.snmpConfigStale
+          ? '<span class="bad">Stale — Force apply</span>'
+          : status.snmpBlockPresent === false && (status.deviceCount ?? 0) > 0
+            ? '<span class="bad">Missing block</span>'
+            : '<span class="ok">Applied</span>'
     }</div></div>
     <div class="card"><div class="label">Metrics push</div><div class="value">${
       status.metricsConfigured === false
@@ -68,12 +72,25 @@ function renderStatus(status) {
           ? '<span class="ok">Env set</span>'
           : "—"
     }</div></div>
+    <div class="card"><div class="label">SNMP scrape</div><div class="value" style="font-size:0.85rem">${
+      status.snmpScrapeHint
+        ? `<code>${escapeHtml(status.snmpScrapeHint)}</code>`
+        : "—"
+    }</div></div>
     <div class="card"><div class="label">Last sync</div><div class="value" style="font-size:0.9rem">${fmtTime(sync?.at)}</div></div>
     <div class="card" style="grid-column:1/-1"><div class="label">Sync status</div><div class="value" style="font-size:0.9rem">${syncLabel}</div></div>
     ${
-      status.warning
-        ? `<div class="card" style="grid-column:1/-1"><div class="label">Warning</div><div class="value" style="font-size:0.9rem;color:#f0c14a">${escapeHtml(status.warning)}</div></div>`
-        : ""
+      (status.warnings && status.warnings.length
+        ? status.warnings
+        : status.warning
+          ? [status.warning]
+          : []
+      )
+        .map(
+          (w) =>
+            `<div class="card" style="grid-column:1/-1"><div class="label">Warning</div><div class="value" style="font-size:0.9rem;color:#f0c14a">${escapeHtml(w)}</div></div>`
+        )
+        .join("")
     }
   `;
 }

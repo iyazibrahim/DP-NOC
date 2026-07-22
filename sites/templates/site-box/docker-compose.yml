@@ -54,6 +54,8 @@ services:
       SYNC_INTERVAL_SEC: ${SYNC_INTERVAL_SEC:-90}
       PORT: "8090"
 
+  # Pin: grafana/alloy:v1.5.1 — do not bump casually.
+  # v1.5.1 has no config_merge_strategy; SNMP requires full snmp.yml (see generate-config.sh).
   alloy:
     image: grafana/alloy:v1.5.1
     container_name: noc_site_alloy

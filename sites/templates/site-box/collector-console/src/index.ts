@@ -18,7 +18,8 @@ import {
   preserveSecretsFromAlloy,
   readAlloyContainerEnv,
   regenerateAlloyConfig,
-  reloadAlloy
+  reloadAlloy,
+  assertAlloyConfigSafe
 } from "./alloy";
 import { alloySnmpConfigStale, getLastSync, startSyncLoop, syncDevices } from "./sync";
 import { pushDeviceToNoc } from "./pushDevice";
@@ -40,6 +41,46 @@ const CATALOG = [
   { id: "site-5", name: "Batu Maung Digital Library" }
 ];
 
+function inspectConfigAlloyHealth(): {
+  hasSnmpBlock: boolean;
+  configUnsafe: boolean;
+  configUnsafeReason: string | null;
+} {
+  const alloyPath = path.join(dir, "config.alloy");
+  if (!fs.existsSync(alloyPath)) {
+    return { hasSnmpBlock: false, configUnsafe: false, configUnsafeReason: null };
+  }
+  const alloy = fs.readFileSync(alloyPath, "utf8");
+  const hasSnmpBlock = alloy.includes("prometheus.exporter.snmp");
+  try {
+    assertAlloyConfigSafe(alloy);
+    return { hasSnmpBlock, configUnsafe: false, configUnsafeReason: null };
+  } catch (err) {
+    return {
+      hasSnmpBlock,
+      configUnsafe: true,
+      configUnsafeReason: err instanceof Error ? err.message : String(err)
+    };
+  }
+}
+
+function alloyLogCrashHints(logs: string): string[] {
+  const logLower = logs.toLowerCase();
+  const hints: string[] = [];
+  if (logLower.includes("config_merge_strategy") || logLower.includes("unrecognized attribute")) {
+    hints.push(
+      "Alloy logs: unsupported attribute (often config_merge_strategy) — regenerate without it (Alloy v1.5.1)"
+    );
+  }
+  if (logLower.includes("invalid duration")) {
+    hints.push("Alloy logs: invalid duration — scrape_interval still has a shell placeholder");
+  }
+  if (logLower.includes("could not perform the initial load")) {
+    hints.push("Alloy could not load config — SNMP scrape will not run until config is fixed");
+  }
+  return hints;
+}
+
 app.get("/api/catalog", (_req, res) => {
   res.json(CATALOG);
 });
@@ -56,6 +97,9 @@ app.get("/api/status", async (_req, res) => {
       alloyEnv.CF_ACCESS_CLIENT_ID &&
       alloyEnv.CF_ACCESS_CLIENT_SECRET
   );
+  const cfgHealth = inspectConfigAlloyHealth();
+  const logs = await getAlloyLogs(30);
+  const crashHints = alloyLogCrashHints(logs);
 
   let nocReachable: boolean | null = null;
   if (config.nocApiUrl) {
@@ -69,6 +113,23 @@ app.get("/api/status", async (_req, res) => {
     }
   }
 
+  const site = config.siteName || "site-1";
+  const warnings: string[] = [];
+  if (!metricsConfigured) {
+    warnings.push(
+      "Alloy missing CF Access / remote_write env — NOC will show Collector/Uplink DOWN (No recent samples). Set vars in Dokploy Environment."
+    );
+  }
+  if (cfgHealth.configUnsafe) {
+    warnings.push(cfgHealth.configUnsafeReason || "config.alloy unsafe for Alloy v1.5.1");
+  }
+  if (crashHints.length > 0) {
+    warnings.push(...crashHints);
+  }
+  if (snmpStale) {
+    warnings.push("SNMP targets in devices.json are not fully applied in config.alloy — click Force apply SNMP.");
+  }
+
   res.json({
     configured: Boolean(
       config.siteName && config.nocApiUrl && config.collectorToken && config.centralRemoteWriteUrl
@@ -77,13 +138,18 @@ app.get("/api/status", async (_req, res) => {
     metricsConfigured,
     deviceCount: devices.length,
     snmpConfigStale: snmpStale,
+    snmpBlockPresent: cfgHealth.hasSnmpBlock,
+    configUnsafe: cfgHealth.configUnsafe,
+    snmpScrapeHint:
+      devices.length > 0
+        ? `Verify in Grafana (not here): up{job="site_snmp_if_mib"} then snmp_up{site="${site}"}`
+        : "No SNMP devices yet",
     nocReachable,
     lastSync: last,
     siteName: config.siteName,
     hostDeviceId: config.hostDeviceId,
-    warning: !metricsConfigured
-      ? "Alloy missing CF Access / remote_write env — NOC will show Collector/Uplink DOWN (No recent samples). Set vars in Dokploy Environment."
-      : null
+    warning: warnings.length > 0 ? warnings[0] : null,
+    warnings
   });
 });
 
@@ -214,11 +280,17 @@ app.get("/api/diagnostics", async (_req, res) => {
   if (logLower.includes("remote_write") && (logLower.includes("error") || logLower.includes("failed"))) {
     remoteWriteHints.push("Alloy logs mention remote_write errors — open Settings → View Alloy logs");
   }
+  const crashHints = alloyLogCrashHints(logs);
+  const cfgHealth = inspectConfigAlloyHealth();
 
   let hint: string;
   if (!metricsOk) {
     hint =
       "NOC shows DOWN because Alloy cannot remote_write metrics. Set CENTRAL_REMOTE_WRITE_URL + CF_ACCESS_CLIENT_ID + CF_ACCESS_CLIENT_SECRET in Dokploy → Environment, then redeploy/restart noc_site_alloy.";
+  } else if (cfgHealth.configUnsafe || crashHints.length > 0) {
+    hint = [cfgHealth.configUnsafeReason, ...crashHints]
+      .filter(Boolean)
+      .join(" | ");
   } else if (remoteWriteHints.length > 0) {
     hint = remoteWriteHints.join(" | ");
   } else if (missingInAlloy.length > 0 || (devices.length > 0 && !hasSnmpBlock)) {
@@ -234,6 +306,10 @@ app.get("/api/diagnostics", async (_req, res) => {
         : null,
     metricsEnv,
     remoteWriteHints,
+    crashHints,
+    configUnsafe: cfgHealth.configUnsafe,
+    configUnsafeReason: cfgHealth.configUnsafeReason,
+    snmpScrapeHint: `up{job="site_snmp_if_mib"} then snmp_up{site="${readConfig().siteName || "site-1"}"}`,
     deviceCount: devices.length,
     devices,
     hasSnmpBlock,

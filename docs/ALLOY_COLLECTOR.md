@@ -164,11 +164,26 @@ sudo setcap cap_net_raw+ep "$(command -v alloy)"
 
 ---
 
+## Alloy version contract (grafana/alloy:v1.5.1)
+
+Pin **`grafana/alloy:v1.5.1`**. Do not bump casually.
+
+- **Forbidden** in `config.alloy`: `config_merge_strategy` (unsupported → Alloy crash → no SNMP series)
+- **Required**: full `snmp.yml` with `auths` + `modules.if_mib.metrics` (not walk-only)
+- **Required**: numeric `scrape_interval = "15s"` (never `${SCRAPE_INTERVAL_SEC}s`)
+- Generators: `generate-config.sh` + fail-closed `validate-config.sh`
+
+### Dokploy: Environment only; ban live `config.alloy` patches
+
+Put secrets in **Dokploy → Environment** (see site-box README). Once Collector Console sync / Force apply is used, **do not patch** live `config.alloy` — sync regenerates it. Optional patch: `snmp.yml` community only. Keep `generate-config.sh` / `snmp.yml` patches aligned with git or delete them.
+
 ## 3. SNMP on the LAN
 
 - Device allows SNMPv2c community matching `snmp.yml` (`public` by default)
 - UDP **161** reachable from the site box
 - Devices come from `devices.json` via `generate-config.sh` (not hardcoded `SNMP_DEVICE_2` blocks)
+- Empty Grafana `up{job="site_snmp_if_mib"}` means scrape never ran (config/crash), not Fortinet yet
+- On NUC after deploy: `./repair-alloy.sh` then prove the three queries below
 
 ### NUC host (CPU / memory / disk)
 
@@ -207,11 +222,31 @@ docker logs -f noc_site_alloy
 # Look for remote_write errors (403 = bad/missing Access token; 502 = metrics origin)
 ```
 
+### Three-query SNMP prove (Grafana Explore or Prometheus)
+
+Run **in order** after `./repair-alloy.sh` (wait ~60s). Gate is query 2.
+
+```promql
+up{job="site_host",site="site-1"}
+up{job="site_snmp_if_mib"}
+snmp_up{site="site-1"}
+snmp_up{site="site-1",device="site-1-firewall1"}
+```
+
+| Result | Meaning |
+|---|---|
+| (2) empty | SNMP scrape not in running Alloy config / never remote_wrote |
+| (2)=1, `snmp_up=0` | Community / UDP 161 / firewall ACL |
+| (2)=1, `snmp_up=1` | SNMP OK — NOC local-device status will follow |
+
+Local dry-run (no Prometheus): `./verify-snmp-queries.sh`
+
 ### On the VPS
 
 ```bash
 curl -sS 'http://127.0.0.1:9090/api/v1/query?query=probe_success'
 curl -sS 'http://127.0.0.1:9090/api/v1/query?query=probe_success{site="site-1"}'
+curl -sS 'http://127.0.0.1:9090/api/v1/query?query=up{job="site_snmp_if_mib"}'
 curl -sS 'http://127.0.0.1:9090/api/v1/query?query=snmp_up{site="site-1"}'
 curl -sS 'http://127.0.0.1:9090/api/v1/query?query=up{job="site_host",site="site-1"}'
 ```
@@ -231,7 +266,9 @@ Open **Sites** → site should leave WAN `unknown` once `probe_success` series e
 | Alloy 403 | Wrong/missing `CF_ACCESS_*` or Access policy |
 | Alloy crash: `preferred_ip_protocol not found` | Old inline blackbox YAML — use `config_file = "blackbox.yml"` (site-box mounts `blackbox.yml`). Redeploy with updated files; Dokploy must not keep a stale `config.alloy`. |
 | `probe_success` missing | ICMP / `NET_RAW` / wrong `PING_TARGET_*` |
-| `snmp_up` missing | Community, UDP 161, empty `devices.json` |
+| `up{job="site_snmp_if_mib"}` empty | SNMP scrape missing / Alloy crash (`config_merge_strategy`, invalid duration) / stale Dokploy patch |
+| `snmp_up` missing but scrape `up=1` | Community, UDP 161 |
+| `snmp_up` missing and scrape empty | Fix Alloy config first (`./repair-alloy.sh`); empty `devices.json` |
 | `stat /rootfs/proc: no such file` | Missing host volume `/:/rootfs:ro` on alloy (Dokploy) |
 | Series under wrong site | `SITE_NAME` ≠ seed registry id |
 | Writing to noc. domain | Wrong URL — use `metrics.` + `/api/v1/write` |
