@@ -115,9 +115,8 @@ fi
 {
   echo ""
   echo "prometheus.exporter.snmp \"site_devices\" {"
-  echo "  // Merge custom auths with Alloy embedded modules (if_mib). Do not replace."
+  echo "  // Full snmp.yml (auths + if_mib). Alloy v1.5.x has no config_merge_strategy."
   echo "  config_file = \"snmp.yml\""
-  echo "  config_merge_strategy = \"merge\""
   echo ""
 } >> "$OUT_FILE"
 
@@ -137,7 +136,6 @@ for d in devices:
     vendor = d.get("vendor", "generic").replace('"', '\\"')
     print(f'  target "{tid}" {{')
     print(f'    address = "{ip}"')
-    # Embedded Alloy/snmp_exporter module — requires config_merge_strategy = merge
     print(f'    module  = "if_mib"')
     print(f'    auth    = "public_v2"')
     print(f'    labels  = {{')
