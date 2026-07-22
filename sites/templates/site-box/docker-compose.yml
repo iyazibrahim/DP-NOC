@@ -35,6 +35,9 @@ services:
     build:
       context: ./collector-console
       dockerfile: Dockerfile
+      args:
+        # Avoid flaky docker.io pulls on the NUC; AWS public mirror of official node
+        NODE_IMAGE: public.ecr.aws/docker/library/node:20-bookworm-slim
     container_name: noc_collector_console
     restart: unless-stopped
     ports:

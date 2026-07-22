@@ -1,4 +1,8 @@
-FROM node:20-bookworm-slim AS build
+# Prefer AWS Public ECR mirror of Docker Hub official images (more reliable than registry-1.docker.io).
+# Override at build time: --build-arg NODE_IMAGE=node:20-bookworm-slim
+ARG NODE_IMAGE=public.ecr.aws/docker/library/node:20-bookworm-slim
+
+FROM ${NODE_IMAGE} AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install
@@ -6,19 +10,10 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
-FROM node:20-bookworm-slim
-# docker CLI for socket access + compose standalone (plugin often missing in docker.io)
+FROM ${NODE_IMAGE}
+# docker CLI for socket access (restart/logs). Compose binary optional — we prefer `docker restart`.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash python3 curl ca-certificates docker.io \
-  && ARCH="$(dpkg --print-architecture)" \
-  && case "$ARCH" in \
-       amd64) CARCH=x86_64 ;; \
-       arm64) CARCH=aarch64 ;; \
-       *) CARCH=x86_64 ;; \
-     esac \
-  && curl -fsSL "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-${CARCH}" \
-       -o /usr/local/bin/docker-compose \
-  && chmod +x /usr/local/bin/docker-compose \
+  && apt-get install -y --no-install-recommends bash python3 ca-certificates docker.io \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json* ./
