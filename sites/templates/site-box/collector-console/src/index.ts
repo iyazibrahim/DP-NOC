@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import {
   alloyReloadNeeded,
+  bootstrapPersistentEnv,
   dataDir,
   maskConfig,
   readConfig,
@@ -226,6 +227,9 @@ app.get("*", (_req, res) => {
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`collector-console listening on :${PORT} (data dir: ${dir})`);
+  const boot = bootstrapPersistentEnv();
+  console.log(
+    `collector-console listening on :${PORT} (data=${dir} state=${process.env.STATE_DIR || dir} boot=${boot.source} keys=${boot.keys.length})`
+  );
   startSyncLoop(dir);
 });

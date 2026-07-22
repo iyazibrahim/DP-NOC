@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { readConfig } from "./config";
+import { dataDir, readConfig, stateDir, writeDevicesJson } from "./config";
 import { regenerateAlloyConfig, reloadAlloy } from "./alloy";
 
 export type SyncResult = {
@@ -20,23 +20,25 @@ export function getLastSync(): SyncResult | null {
   return lastSync;
 }
 
-function etagPath(dataDir: string): string {
-  return path.join(dataDir, ".devices.etag");
+function etagPath(): string {
+  return path.join(stateDir(), ".devices.etag");
 }
 
-function devicesPath(dataDir: string): string {
-  return path.join(dataDir, "devices.json");
+function devicesPath(): string {
+  return path.join(stateDir(), "devices.json");
 }
 
-function configAlloyPath(dataDir: string): string {
-  return path.join(dataDir, "config.alloy");
+function configAlloyPath(): string {
+  return path.join(dataDir(), "config.alloy");
 }
 
-function readLocalDevices(dataDir: string): Array<{ id?: string; snmpIp?: string }> {
-  const file = devicesPath(dataDir);
-  if (!fs.existsSync(file)) return [];
+function readLocalDevices(): Array<{ id?: string; snmpIp?: string }> {
+  const file = devicesPath();
+  const fallback = path.join(dataDir(), "devices.json");
+  const use = fs.existsSync(file) ? file : fallback;
+  if (!fs.existsSync(use)) return [];
   try {
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    const parsed = JSON.parse(fs.readFileSync(use, "utf8"));
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -44,35 +46,25 @@ function readLocalDevices(dataDir: string): Array<{ id?: string; snmpIp?: string
 }
 
 /** True if config.alloy is missing SNMP exporter or any device id from devices.json. */
-export function alloySnmpConfigStale(dataDir: string): boolean {
-  const devices = readLocalDevices(dataDir).filter((d) => d.id && d.snmpIp);
-  const alloyFile = configAlloyPath(dataDir);
+export function alloySnmpConfigStale(_dataDir?: string): boolean {
+  const devices = readLocalDevices().filter((d) => d.id && d.snmpIp);
+  const alloyFile = configAlloyPath();
   if (!fs.existsSync(alloyFile)) return devices.length > 0;
 
   const alloy = fs.readFileSync(alloyFile, "utf8");
-  if (devices.length === 0) {
-    // No SNMP devices — stale only if an old SNMP block is harmless; no reload required
-    return false;
-  }
+  if (devices.length === 0) return false;
   if (!alloy.includes("prometheus.exporter.snmp")) return true;
   for (const d of devices) {
-    const id = d.id!;
-    // generate-config embeds: device = "<id>"
-    if (!alloy.includes(`device = "${id}"`)) return true;
+    if (!alloy.includes(`device = "${d.id}"`)) return true;
   }
   return false;
 }
 
-/**
- * Ensure config.alloy matches devices.json and Alloy has reloaded.
- * Fixes the case where inventory is synced but SNMP block was never applied
- * (304 / content-identical short-circuit, or Dokploy patch overwrote config.alloy).
- */
 export async function ensureAlloySnmpApplied(
-  dataDir: string,
+  _dataDir?: string,
   force = false
 ): Promise<{ reloaded: boolean; message: string }> {
-  const stale = force || alloySnmpConfigStale(dataDir);
+  const stale = force || alloySnmpConfigStale();
   if (!stale) {
     return { reloaded: false, message: "Alloy SNMP config already matches devices.json" };
   }
@@ -86,7 +78,7 @@ export async function ensureAlloySnmpApplied(
 }
 
 export async function syncDevices(
-  dataDir: string,
+  _dataDir?: string,
   opts?: { forceAlloyReload?: boolean }
 ): Promise<SyncResult> {
   if (syncInFlight) {
@@ -121,9 +113,8 @@ export async function syncDevices(
       Accept: "application/json"
     };
 
-    const etagFile = etagPath(dataDir);
-    // Force full body when we need to re-apply Alloy SNMP
-    if (!forceAlloyReload && fs.existsSync(etagFile) && !alloySnmpConfigStale(dataDir)) {
+    const etagFile = etagPath();
+    if (!forceAlloyReload && fs.existsSync(etagFile) && !alloySnmpConfigStale()) {
       headers["If-None-Match"] = fs.readFileSync(etagFile, "utf8").trim();
     }
 
@@ -133,7 +124,7 @@ export async function syncDevices(
     let deviceCount = 0;
 
     if (httpCode === 304) {
-      deviceCount = readLocalDevices(dataDir).length;
+      deviceCount = readLocalDevices().length;
     } else if (httpCode !== 200) {
       const body = await res.text();
       const result: SyncResult = {
@@ -152,11 +143,13 @@ export async function syncDevices(
       }
 
       const body = await res.text();
-      const devicesFile = devicesPath(dataDir);
+      const existingPath = fs.existsSync(devicesPath())
+        ? devicesPath()
+        : path.join(dataDir(), "devices.json");
 
-      if (fs.existsSync(devicesFile)) {
+      if (fs.existsSync(existingPath)) {
         try {
-          inventoryChanged = !fs.readFileSync(devicesFile).equals(Buffer.from(body));
+          inventoryChanged = !fs.readFileSync(existingPath).equals(Buffer.from(body));
         } catch {
           inventoryChanged = true;
         }
@@ -165,7 +158,7 @@ export async function syncDevices(
       }
 
       if (inventoryChanged) {
-        fs.writeFileSync(devicesFile, body, "utf8");
+        writeDevicesJson(body.endsWith("\n") ? body : body + "\n");
       }
 
       try {
@@ -176,8 +169,7 @@ export async function syncDevices(
       }
     }
 
-    // Always ensure Alloy SNMP targets match devices.json (even on 304 / identical)
-    const ensure = await ensureAlloySnmpApplied(dataDir, forceAlloyReload || inventoryChanged);
+    const ensure = await ensureAlloySnmpApplied(undefined, forceAlloyReload || inventoryChanged);
 
     const parts: string[] = [];
     if (httpCode === 304) parts.push("Inventory unchanged (304)");
@@ -210,13 +202,13 @@ export async function syncDevices(
   }
 }
 
-export function startSyncLoop(dataDir: string): void {
+export function startSyncLoop(_dataDir?: string): void {
   const config = readConfig();
   const intervalSec = Number(config.syncIntervalSec || process.env.SYNC_INTERVAL_SEC || "90");
   const ms = Math.max(30, intervalSec) * 1000;
 
   const tick = () => {
-    void syncDevices(dataDir).catch(() => undefined);
+    void syncDevices().catch(() => undefined);
   };
 
   setTimeout(tick, 5000);

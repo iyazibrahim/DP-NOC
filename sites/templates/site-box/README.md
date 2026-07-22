@@ -45,6 +45,26 @@ If Dokploy shows only Alloy, your **Patches → `docker-compose.yml`** is still 
 
 Build context must be the **site-box** folder (where `docker-compose.yml` and `collector-console/` live), not the monorepo root.
 
+### Why collector goes DOWN after redeploy / Setup empty
+
+Dokploy replaces the git checkout — `.env` written only by Collector Console is deleted.
+
+**Set once in Dokploy → Environment** (survives redeploy):
+
+```text
+CENTRAL_REMOTE_WRITE_URL=https://metrics.iyazbrhm.cloud/api/v1/write
+CF_ACCESS_CLIENT_ID=...
+CF_ACCESS_CLIENT_SECRET=...
+SITE_NAME=site-1
+HOST_DEVICE_ID=site-1-nuc
+PING_TARGET_1=1.1.1.1
+PING_TARGET_2=...
+NOC_API_URL=https://noc.iyazbrhm.cloud
+COLLECTOR_TOKEN=nocc_...
+```
+
+Compose also mounts named volume `noc_sitebox_state` for token/devices backup.
+
 ## Files
 
 | File | Role |

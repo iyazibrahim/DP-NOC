@@ -93,6 +93,9 @@ Collector box → Alloy → Prometheus (central)
     - Dashboard form pushes SNMP devices to `POST /api/collector/:siteId/devices`
     - NOC upserts inventory; collector pulls + reloads Alloy
     - Sync now still pulls devices already on NOC
+  - **Dokploy redeploy resilience (2026-07-22)**
+    - Alloy uses Dokploy Environment (not only `.env` file) so metrics survive redeploy
+    - Named volume `noc_sitebox_state` persists token/devices; console bootstraps Setup from env
 
 ## Local Validation
 1. `docker compose up -d --build`

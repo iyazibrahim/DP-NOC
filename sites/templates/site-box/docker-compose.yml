@@ -1,15 +1,36 @@
 # Alloy site collector for NUC / site box (one site at a time).
-# Configure via Collector Console (http://<collector-ip>:8090) or deploy.sh.
-# Inventory sync runs automatically in collector-console (no cron required).
 #
-# Dokploy: this compose has TWO services. If you only see noc_site_alloy:
-#   1) Update your Patches → docker-compose.yml to match THIS file (include collector-console)
-#   2) Ensure the collector-console/ folder is in the deployed git source (not only patches)
-#   3) Redeploy / rebuild so Dokploy builds collector-console from ./collector-console/Dockerfile
-#   4) Publish port 8090 on the LAN only (do not put Collector Console on a public domain)
+# WHY COLLECTOR GOES DOWN AFTER REDEPLOY:
+# Dokploy replaces the git checkout — a Setup-written .env in the project folder is LOST.
+# Fix: put metrics secrets in Dokploy → Environment (they survive redeploy), AND use the
+# named volume below for collector token / devices.json / .env backup.
+#
+# Dokploy Environment (set once — required for Alloy metrics after redeploy):
+#   CENTRAL_REMOTE_WRITE_URL=https://metrics.iyazbrhm.cloud/api/v1/write
+#   CF_ACCESS_CLIENT_ID=...
+#   CF_ACCESS_CLIENT_SECRET=...
+#   SITE_NAME=site-1
+#   HOST_DEVICE_ID=site-1-nuc
+#   PING_TARGET_1=1.1.1.1
+#   PING_TARGET_2=...
+# Optional (or set once in Collector Console — stored in volume):
+#   NOC_API_URL=https://noc.iyazbrhm.cloud
+#   COLLECTOR_TOKEN=nocc_...
+
+x-collector-env: &collector-env
+  CENTRAL_REMOTE_WRITE_URL: ${CENTRAL_REMOTE_WRITE_URL:-}
+  CF_ACCESS_CLIENT_ID: ${CF_ACCESS_CLIENT_ID:-}
+  CF_ACCESS_CLIENT_SECRET: ${CF_ACCESS_CLIENT_SECRET:-}
+  SITE_NAME: ${SITE_NAME:-site-1}
+  HOST_DEVICE_ID: ${HOST_DEVICE_ID:-site-1-nuc}
+  PING_TARGET_1: ${PING_TARGET_1:-1.1.1.1}
+  PING_TARGET_2: ${PING_TARGET_2:-139.99.88.174}
+  NOC_API_URL: ${NOC_API_URL:-}
+  COLLECTOR_TOKEN: ${COLLECTOR_TOKEN:-}
+  SCRAPE_INTERVAL_SEC: ${SCRAPE_INTERVAL_SEC:-15}
+  SYNC_INTERVAL_SEC: ${SYNC_INTERVAL_SEC:-90}
 
 services:
-  # Web UI for setup + auto-sync (LAN :8090)
   collector-console:
     build:
       context: ./collector-console
@@ -19,16 +40,17 @@ services:
     ports:
       - "8090:8090"
     volumes:
-      # Same folder Alloy mounts from — .env, devices.json, snmp.yml, config.alloy, scripts
       - .:/data
-      # Needed to recreate Alloy after inventory sync
+      # Survives Dokploy redeploy (Setup token, devices.json, .env backup)
+      - noc_sitebox_state:/state
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
+      <<: *collector-env
       DATA_DIR: /data
-      SYNC_INTERVAL_SEC: "90"
+      STATE_DIR: /state
+      SYNC_INTERVAL_SEC: ${SYNC_INTERVAL_SEC:-90}
       PORT: "8090"
 
-  # SNMP + ICMP + host metrics → central Prometheus
   alloy:
     image: grafana/alloy:v1.5.1
     container_name: noc_site_alloy
@@ -37,13 +59,13 @@ services:
     cap_add:
       - NET_RAW
     network_mode: host
-    env_file:
-      - .env
+    // Dokploy Environment is injected here — survives redeploy
+    environment:
+      <<: *collector-env
     volumes:
       - ./config.alloy:/etc/alloy/config.alloy:ro
       - ./blackbox.yml:/etc/alloy/blackbox.yml:ro
       - ./snmp.yml:/etc/alloy/snmp.yml:ro
-      # Host metrics — REQUIRED for CPU/RAM/disk
       - /:/rootfs:ro
     working_dir: /etc/alloy
     command:
@@ -51,3 +73,8 @@ services:
       - /etc/alloy/config.alloy
       - --storage.path=/var/lib/alloy/data
       - --server.http.listen-addr=127.0.0.1:12345
+    depends_on:
+      - collector-console
+
+volumes:
+  noc_sitebox_state:

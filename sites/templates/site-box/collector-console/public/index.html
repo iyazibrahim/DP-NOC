@@ -88,12 +88,13 @@
         </div>
         <div class="field">
           <label for="nocApiUrl">NOC API URL</label>
-          <input id="nocApiUrl" name="nocApiUrl" placeholder="https://noc.example.com" required />
+          <input id="nocApiUrl" name="nocApiUrl" placeholder="https://noc.example.com" />
+          <p class="hint">Leave blank if already set in Dokploy Environment (survives redeploy).</p>
         </div>
         <div class="field">
           <label for="collectorToken">Collector token</label>
-          <input id="collectorToken" name="collectorToken" placeholder="nocc_…" required />
-          <p class="hint">Generate in NOC → Sites → this site → Collector inventory sync.</p>
+          <input id="collectorToken" name="collectorToken" placeholder="nocc_…" />
+          <p class="hint">Saved on the NUC volume — you should not need to re-enter after redeploy.</p>
         </div>
         <div class="field">
           <label for="centralRemoteWriteUrl">Metrics remote write URL (optional if already working)</label>
