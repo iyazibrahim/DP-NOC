@@ -78,6 +78,11 @@ function alloyLogCrashHints(logs: string): string[] {
   if (logLower.includes("could not perform the initial load")) {
     hints.push("Alloy could not load config — SNMP scrape will not run until config is fixed");
   }
+  if (logLower.includes("integrations/snmp")) {
+    hints.push(
+      "Legacy integrations/snmp in logs — cut over to site-box (CUTOVER_SITEBOX_SNMP.md); NOC needs snmp_up from job site_snmp_if_mib"
+    );
+  }
   return hints;
 }
 
@@ -100,6 +105,9 @@ app.get("/api/status", async (_req, res) => {
   const cfgHealth = inspectConfigAlloyHealth();
   const logs = await getAlloyLogs(30);
   const crashHints = alloyLogCrashHints(logs);
+  const alloyText = fs.existsSync(path.join(dir, "config.alloy"))
+    ? fs.readFileSync(path.join(dir, "config.alloy"), "utf8")
+    : "";
 
   let nocReachable: boolean | null = null;
   if (config.nocApiUrl) {
@@ -123,6 +131,11 @@ app.get("/api/status", async (_req, res) => {
   if (cfgHealth.configUnsafe) {
     warnings.push(cfgHealth.configUnsafeReason || "config.alloy unsafe for Alloy v1.5.1");
   }
+  if (alloyText.includes("integrations/snmp") || alloyText.includes("integrations.snmp")) {
+    warnings.push(
+      "config.alloy still has legacy integrations/snmp — follow CUTOVER_SITEBOX_SNMP.md (need site_snmp_if_mib + snmp_up)"
+    );
+  }
   if (crashHints.length > 0) {
     warnings.push(...crashHints);
   }
@@ -142,7 +155,7 @@ app.get("/api/status", async (_req, res) => {
     configUnsafe: cfgHealth.configUnsafe,
     snmpScrapeHint:
       devices.length > 0
-        ? `Verify in Grafana (not here): up{job="site_snmp_if_mib"} then snmp_up{site="${site}"}`
+        ? `Verify in Grafana (not here): up{job="site_snmp_if_mib"} then snmp_up{site="${site}",device="site-1-fw1"}`
         : "No SNMP devices yet",
     nocReachable,
     lastSync: last,
@@ -297,7 +310,7 @@ app.get("/api/diagnostics", async (_req, res) => {
     hint = "SNMP targets missing in Alloy — click Force apply SNMP";
   } else {
     hint =
-      "Metrics env present on Alloy. Check SNMP scrape: up{job=\"site_snmp_if_mib\"} then snmp_up{site=\"site-1\"}. If scrape up=0: Fortinet community in snmp.yml / UDP 161. Device id must match exactly (e.g. site-1-firewall1).";
+      "Metrics env present on Alloy. Check site-box SNMP only: up{job=\"site_snmp_if_mib\"} then snmp_up{site=\"site-1\",device=\"site-1-fw1\"}. Do not use integrations/snmp. If scrape up=0: Fortinet community / UDP 161.";
   }
   res.json({
     whyNocDown:
@@ -329,7 +342,8 @@ app.post("/api/devices", async (req, res) => {
       snmpIp: typeof body.snmpIp === "string" ? body.snmpIp : "",
       type: typeof body.type === "string" ? body.type : "switch",
       vendor: typeof body.vendor === "string" ? body.vendor : "generic",
-      id: typeof body.id === "string" ? body.id : undefined
+      id: typeof body.id === "string" ? body.id : undefined,
+      snmpCommunity: typeof body.snmpCommunity === "string" ? body.snmpCommunity : undefined
     });
     res.status(result.ok ? (result.created ? 201 : 200) : 502).json(result);
   } catch (err) {

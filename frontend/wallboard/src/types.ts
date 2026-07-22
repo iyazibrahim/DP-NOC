@@ -45,6 +45,8 @@ export type SiteDevice = {
   type: string;
   kind: DeviceKind;
   snmpIp?: string;
+  /** Optional per-device SNMPv2c community; collector uses site default if omitted */
+  snmpCommunity?: string;
   hostMetricId?: string;
   vendor: string;
 };

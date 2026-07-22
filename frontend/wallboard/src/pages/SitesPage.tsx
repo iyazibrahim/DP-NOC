@@ -169,6 +169,7 @@ const emptyForm = {
   type: "switch",
   kind: "network" as DeviceKind,
   snmpIp: "",
+  snmpCommunity: "",
   hostMetricId: "",
   vendor: "generic"
 };
@@ -226,6 +227,7 @@ export function SiteDetailPage() {
       type: d.type,
       kind: d.kind ?? "network",
       snmpIp: d.snmpIp ?? "",
+      snmpCommunity: d.snmpCommunity ?? "",
       hostMetricId: d.hostMetricId ?? d.id,
       vendor: d.vendor
     });
@@ -286,6 +288,12 @@ export function SiteDetailPage() {
         kind: form.kind,
         vendor: form.vendor,
         snmpIp: form.kind === "network" ? form.snmpIp : undefined,
+        snmpCommunity:
+          form.kind === "network" && form.snmpCommunity.trim()
+            ? form.snmpCommunity.trim()
+            : form.kind === "network"
+              ? ""
+              : undefined,
         hostMetricId: form.kind === "server" ? form.hostMetricId || form.id : undefined
       };
       if (editingId) {
@@ -312,6 +320,7 @@ export function SiteDetailPage() {
         type: d.suggestedType,
         kind: "network",
         snmpIp: "",
+        snmpCommunity: "",
         hostMetricId: "",
         vendor: "generic"
       });
@@ -869,6 +878,16 @@ export function SiteDetailPage() {
                 placeholder="192.168.1.1"
                 required
               />
+              <label className="label">SNMP community (optional)</label>
+              <input
+                value={form.snmpCommunity}
+                onChange={(e) => setForm((f) => ({ ...f, snmpCommunity: e.target.value }))}
+                placeholder="Leave blank to use collector default"
+                autoComplete="off"
+              />
+              <p className="hint" style={{ marginTop: 4 }}>
+                Per-device SNMPv2c string. Blank = Collector Console default community.
+              </p>
             </>
           ) : (
             <>

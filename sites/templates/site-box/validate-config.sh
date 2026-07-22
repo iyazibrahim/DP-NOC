@@ -37,18 +37,20 @@ fi
 # Soft checks (warn only) when devices.json has SNMP targets
 DEVICES="${SCRIPT_DIR}/devices.json"
 if [[ -f "$DEVICES" ]]; then
-  count="$(python3 -c "import json; print(len(json.load(open('$DEVICES'))))" 2>/dev/null || echo 0)"
+  count="$(python3 -c "import json; print(len(json.load(open('$DEVICES', encoding='utf-8-sig'))))" 2>/dev/null || echo 0)"
   if [[ "$count" =~ ^[0-9]+$ ]] && [[ "$count" -gt 0 ]]; then
     if ! grep -q 'prometheus.exporter.snmp' "$CFG"; then
       fail "devices.json has $count device(s) but config.alloy has no prometheus.exporter.snmp block"
     fi
-    if ! grep -q 'job_name.*=.*"site_snmp_if_mib"' "$CFG" && ! grep -q 'job_name        = "site_snmp_if_mib"' "$CFG"; then
-      # tolerate spacing variants
-      if ! grep -q 'site_snmp_if_mib' "$CFG"; then
-        fail "SNMP devices present but job site_snmp_if_mib missing from config.alloy"
-      fi
+    if ! grep -q 'site_snmp_if_mib' "$CFG"; then
+      fail "SNMP devices present but job site_snmp_if_mib missing from config.alloy"
     fi
   fi
+fi
+
+# Legacy integrations SNMP must never appear in site-box generated config
+if grep -qiE 'integrations\.snmp|integrations/snmp|job_name.*=.*"integrations/snmp' "$CFG"; then
+  fail "legacy integrations/snmp found in config.alloy — use site-box site_snmp_if_mib only (see CUTOVER_SITEBOX_SNMP.md)"
 fi
 
 if [[ "$errors" -gt 0 ]]; then

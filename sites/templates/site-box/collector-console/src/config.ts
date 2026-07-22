@@ -32,7 +32,7 @@ const CONFIG_TO_ENV: Record<keyof Omit<CollectorConfig, "snmpCommunity">, string
 
 const SECRET_ENV_KEYS = new Set(["CF_ACCESS_CLIENT_SECRET", "COLLECTOR_TOKEN"]);
 
-const PROCESS_ENV_KEYS = Object.values(CONFIG_TO_ENV);
+const PROCESS_ENV_KEYS = [...Object.values(CONFIG_TO_ENV), "SNMP_DEFAULT_COMMUNITY"];
 
 export function dataDir(): string {
   return process.env.DATA_DIR || "/data";
@@ -158,10 +158,21 @@ export function bootstrapPersistentEnv(): { keys: string[]; source: string } {
 }
 
 export function readSnmpCommunity(): string {
+  const fromEnv =
+    process.env.SNMP_DEFAULT_COMMUNITY?.trim() ||
+    readEnvFile().SNMP_DEFAULT_COMMUNITY?.trim() ||
+    "";
+  if (fromEnv) return fromEnv;
+
   const file = snmpPath();
   if (!fs.existsSync(file)) return "public";
-  const match = fs.readFileSync(file, "utf8").match(/^\s*community:\s*(.+)\s*$/m);
-  return match?.[1]?.trim() || "public";
+  const text = fs.readFileSync(file, "utf8");
+  const defaultMatch = text.match(/default_v2:\s*\n\s*community:\s*(.+)\s*$/m);
+  if (defaultMatch?.[1]) return defaultMatch[1].trim();
+  const publicMatch = text.match(/public_v2:\s*\n\s*community:\s*(.+)\s*$/m);
+  if (publicMatch?.[1]) return publicMatch[1].trim();
+  const any = text.match(/^\s*community:\s*(.+)\s*$/m);
+  return any?.[1]?.trim() || "public";
 }
 
 export function readConfig(): CollectorConfig {
@@ -226,6 +237,10 @@ export function writeConfig(input: Partial<CollectorConfig>): CollectorConfig {
     next.COLLECTOR_TOKEN = current.collectorToken;
   }
 
+  if (input.snmpCommunity !== undefined && input.snmpCommunity.trim()) {
+    next.SNMP_DEFAULT_COMMUNITY = input.snmpCommunity.trim();
+  }
+
   writeEnvMaps(next);
 
   if (input.snmpCommunity !== undefined && input.snmpCommunity.trim()) {
@@ -259,13 +274,31 @@ export function writeSnmpCommunity(community: string): void {
   let content: string;
   if (fs.existsSync(file)) {
     content = fs.readFileSync(file, "utf8");
-    if (/^\s*community:/m.test(content)) {
+    // Prefer updating default_v2 / public_v2; generate-config.sh expands per-device auths.
+    if (/default_v2:\s*\n\s*community:/m.test(content)) {
+      content = content.replace(
+        /(default_v2:\s*\n\s*community:\s*).*/m,
+        `$1${community}`
+      );
+    } else if (/public_v2:\s*\n\s*community:/m.test(content)) {
+      content = content.replace(
+        /(public_v2:\s*\n\s*community:\s*).*/m,
+        `$1${community}`
+      );
+    } else if (/^\s*community:/m.test(content)) {
       content = content.replace(/^\s*community:.*$/m, `    community: ${community}`);
     } else {
-      content = content.replace(/(public_v2:\s*\n)/, `$1    community: ${community}\n`);
+      content = content.replace(
+        /^auths:\s*$/m,
+        `auths:\n  default_v2:\n    community: ${community}\n    security_level: noAuthNoPriv\n    version: 2\n  public_v2:\n    community: ${community}\n    security_level: noAuthNoPriv\n    version: 2`
+      );
     }
   } else {
     content = `auths:
+  default_v2:
+    community: ${community}
+    security_level: noAuthNoPriv
+    version: 2
   public_v2:
     community: ${community}
     security_level: noAuthNoPriv

@@ -56,6 +56,10 @@ function parseDeviceBody(body: unknown): SiteDevice | { error: string } {
   const snmpIp = typeof b.snmpIp === "string" ? b.snmpIp.trim() : "";
   const hostMetricId = typeof b.hostMetricId === "string" ? b.hostMetricId.trim() : "";
   const vendor = typeof b.vendor === "string" ? b.vendor.trim() : "generic";
+  const snmpCommunity =
+    typeof b.snmpCommunity === "string" && b.snmpCommunity.trim()
+      ? b.snmpCommunity.trim()
+      : undefined;
   if (!id) return { error: "id is required" };
   if (!name) return { error: "name is required" };
   if (kind === "network" && !snmpIp) return { error: "snmpIp is required for network devices" };
@@ -75,6 +79,7 @@ function parseDeviceBody(body: unknown): SiteDevice | { error: string } {
     type: type || (kind === "server" ? "server" : "switch"),
     kind,
     snmpIp: kind === "network" ? snmpIp : undefined,
+    snmpCommunity: kind === "network" ? snmpCommunity : undefined,
     hostMetricId: kind === "server" ? hostMetricId || id : undefined,
     vendor: vendor || "generic"
   };
@@ -315,6 +320,10 @@ sitesRouter.patch("/:id/devices/:deviceId", requireJwt(["operator"]), async (req
   if (typeof body.type === "string") patch.type = body.type.trim();
   if (body.kind === "server" || body.kind === "network") patch.kind = body.kind;
   if (typeof body.snmpIp === "string") patch.snmpIp = body.snmpIp.trim();
+  if (typeof body.snmpCommunity === "string") {
+    const c = body.snmpCommunity.trim();
+    patch.snmpCommunity = c || undefined;
+  }
   if (typeof body.hostMetricId === "string") patch.hostMetricId = body.hostMetricId.trim();
   if (typeof body.vendor === "string") patch.vendor = body.vendor.trim();
   const site = updateDevice(siteId, deviceId, patch);

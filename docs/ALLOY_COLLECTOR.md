@@ -17,7 +17,10 @@ Collector box (NUC / Pi / mini-PC / server)
 
 **Preferred (this repo template):** `job=site_host`, `device=$HOST_DEVICE_ID`, `site=$SITE_NAME`.
 
-**Legacy Alloy integrations** (still supported by the React app):
+**SNMP (required):** site-box only — `job=site_snmp_if_mib` and metric **`snmp_up{site,device}`**.  
+**Do not use** Grafana Alloy/Agent **`integrations/snmp/*`** for SNMP (may export `ifDescr` without `snmp_up`; NOC will stay UNKNOWN). See [`sites/templates/site-box/CUTOVER_SITEBOX_SNMP.md`](../sites/templates/site-box/CUTOVER_SITEBOX_SNMP.md).
+
+**Legacy Alloy integrations** (host/uplink only — still readable by the React app):
 - Host metrics: `job=integrations/unix`, often only `instance=<hostname>` (no `device`)
 - Uplink: `job=integrations/blackbox/ping_*`, `check=wan_dns|wan_vps`
 
@@ -25,7 +28,7 @@ If ICMP scrape is left at Alloy’s default (~60s) while NOC freshness is 45s (3
 
 The wallboard refreshes status every **~5s**; that only updates the UI. Detection still depends on scrape + 45s freshness (~30–60s). Do **not** set scrape to 60s.
 
-If you use a legacy integrations config, add a relabel so series also carry `device="$HOST_DEVICE_ID"`. Until then, the app adopts the collector using the hostname `instance` value.
+If you use a legacy **host** integrations config, add a relabel so series also carry `device="$HOST_DEVICE_ID"`. Until then, the app adopts the collector using the hostname `instance` value.
 
 Do **not** point Alloy at `noc.iyazbrhm.cloud` (that is the UI on port 8080).
 
@@ -177,13 +180,30 @@ Pin **`grafana/alloy:v1.5.1`**. Do not bump casually.
 
 Put secrets in **Dokploy → Environment** (see site-box README). Once Collector Console sync / Force apply is used, **do not patch** live `config.alloy` — sync regenerates it. Optional patch: `snmp.yml` community only. Keep `generate-config.sh` / `snmp.yml` patches aligned with git or delete them.
 
+**Ban:** Dokploy patches that inject Grafana Agent/Alloy **`integrations.snmp`** / jobs `integrations/snmp/*`. Those never feed NOC (`snmp_up`). Cut over using [`sites/templates/site-box/CUTOVER_SITEBOX_SNMP.md`](../sites/templates/site-box/CUTOVER_SITEBOX_SNMP.md).
+
 ## 3. SNMP on the LAN
 
-- Device allows SNMPv2c community matching `snmp.yml` (`public` by default)
+- Device allows SNMPv2c community matching `snmp.yml` / Console **Default SNMP community** (or per-device `snmpCommunity`)
 - UDP **161** reachable from the site box
 - Devices come from `devices.json` via `generate-config.sh` (not hardcoded `SNMP_DEVICE_2` blocks)
 - Empty Grafana `up{job="site_snmp_if_mib"}` means scrape never ran (config/crash), not Fortinet yet
 - On NUC after deploy: `./repair-alloy.sh` then prove the three queries below
+
+### Per-device communities
+
+Each network device may set optional `snmpCommunity`. Collector Console Setup → **Default SNMP community** is the fallback.
+
+Example `devices.json`:
+
+```json
+[
+  { "id": "site-1-fw1", "name": "Fortigate", "snmpIp": "192.168.1.1", "type": "firewall", "vendor": "fortinet", "snmpCommunity": "FortiSNMP" },
+  { "id": "site-1-sw1", "name": "Core switch", "snmpIp": "192.168.1.2", "type": "switch", "vendor": "generic" }
+]
+```
+
+`generate-config.sh` writes `snmp.yml` auths `auth_site_1_fw1` (FortiSNMP) and `auth_site_1_sw1` (Setup default), and Alloy targets use those auth names.
 
 ### NUC host (CPU / memory / disk)
 
@@ -266,8 +286,9 @@ Open **Sites** → site should leave WAN `unknown` once `probe_success` series e
 | Alloy 403 | Wrong/missing `CF_ACCESS_*` or Access policy |
 | Alloy crash: `preferred_ip_protocol not found` | Old inline blackbox YAML — use `config_file = "blackbox.yml"` (site-box mounts `blackbox.yml`). Redeploy with updated files; Dokploy must not keep a stale `config.alloy`. |
 | `probe_success` missing | ICMP / `NET_RAW` / wrong `PING_TARGET_*` |
-| `up{job="site_snmp_if_mib"}` empty | SNMP scrape missing / Alloy crash (`config_merge_strategy`, invalid duration) / stale Dokploy patch |
-| `snmp_up` missing but scrape `up=1` | Community, UDP 161 |
+| `up{job="site_snmp_if_mib"}` empty | SNMP scrape missing / Alloy crash / stale Dokploy patch / still on `integrations/snmp` |
+| `snmp_up` missing but `integrations/snmp` has ifDescr | **Wrong stack** — cut over to site-box (`CUTOVER_SITEBOX_SNMP.md`) |
+| `snmp_up` missing but scrape `up=1` on `site_snmp_if_mib` | Community, UDP 161 |
 | `snmp_up` missing and scrape empty | Fix Alloy config first (`./repair-alloy.sh`); empty `devices.json` |
 | `stat /rootfs/proc: no such file` | Missing host volume `/:/rootfs:ro` on alloy (Dokploy) |
 | Series under wrong site | `SITE_NAME` ≠ seed registry id |

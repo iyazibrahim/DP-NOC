@@ -59,7 +59,7 @@ collectorRouter.get("/:siteId/devices.json", (req, res) => {
 
 /**
  * Collector Console → NOC: register or update a network SNMP device.
- * Body: { id?, name, snmpIp, type?, vendor? }
+ * Body: { id?, name, snmpIp, type?, vendor?, snmpCommunity? }
  * If id omitted, derived as {siteId}-{slug(name)}.
  */
 collectorRouter.post("/:siteId/devices", (req, res) => {
@@ -71,6 +71,8 @@ collectorRouter.post("/:siteId/devices", (req, res) => {
   const snmpIp = typeof body.snmpIp === "string" ? body.snmpIp.trim() : "";
   const type = typeof body.type === "string" ? body.type.trim() : "switch";
   const vendor = typeof body.vendor === "string" ? body.vendor.trim() : "generic";
+  const snmpCommunity =
+    typeof body.snmpCommunity === "string" ? body.snmpCommunity.trim() : undefined;
   let id = typeof body.id === "string" ? body.id.trim() : "";
 
   if (!name) return res.status(400).json({ error: "name is required" });
@@ -85,7 +87,14 @@ collectorRouter.post("/:siteId/devices", (req, res) => {
     id = `${siteId}-${slug || "device"}`;
   }
 
-  const result = upsertNetworkDevice(siteId, { id, name, type, snmpIp, vendor });
+  const result = upsertNetworkDevice(siteId, {
+    id,
+    name,
+    type,
+    snmpIp,
+    vendor,
+    snmpCommunity
+  });
   if (!result) return res.status(404).json({ error: "Site not found" });
 
   markCollectorDevicesSynced(siteId);

@@ -2,7 +2,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import path from "path";
-import { dataDir, readEnvFile } from "./config";
+import { dataDir, readEnvFile, readSnmpCommunity } from "./config";
 
 const execFileAsync = promisify(execFile);
 
@@ -103,6 +103,11 @@ export function assertAlloyConfigSafe(alloyText: string): void {
       "config.alloy contains config_merge_strategy (unsupported on grafana/alloy:v1.5.1) — remove it; use full snmp.yml only"
     );
   }
+  if (/integrations\/snmp|integrations\.snmp/.test(alloyText)) {
+    throw new Error(
+      "config.alloy contains legacy integrations/snmp — cut over to site-box (job site_snmp_if_mib + snmp_up). See CUTOVER_SITEBOX_SNMP.md"
+    );
+  }
   if (!/scrape_interval\s*=\s*"[0-9]+s"/.test(alloyText)) {
     throw new Error('config.alloy missing numeric scrape_interval (expected e.g. "15s")');
   }
@@ -124,10 +129,14 @@ export async function regenerateAlloyConfig(): Promise<string> {
   // Always write a numeric interval — Alloy rejects "${SCRAPE_INTERVAL_SEC}s"
   const interval = process.env.SCRAPE_INTERVAL_SEC || "15";
   const safeInterval = /^\d+$/.test(interval) ? interval : "15";
+  const defaultCommunity = readSnmpCommunity();
 
   const msg = await run("bash", [script, devicesFile, out], {
     cwd: dir,
-    env: { SCRAPE_INTERVAL_SEC: safeInterval }
+    env: {
+      SCRAPE_INTERVAL_SEC: safeInterval,
+      SNMP_DEFAULT_COMMUNITY: defaultCommunity
+    }
   });
 
   const written = fs.readFileSync(out, "utf8");

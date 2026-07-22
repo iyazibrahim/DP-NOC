@@ -64,6 +64,11 @@
           <input id="dev-id" name="id" placeholder="auto: site-1-dp-firewall" />
           <p class="hint">Leave blank to auto-generate from site + name.</p>
         </div>
+        <div class="field">
+          <label for="dev-snmpCommunity">SNMP community (optional)</label>
+          <input id="dev-snmpCommunity" name="snmpCommunity" placeholder="Leave blank → default from Setup" autocomplete="off" />
+          <p class="hint">Per-device SNMPv2c string. Blank uses Setup → Default SNMP community.</p>
+        </div>
         <div class="actions">
           <button type="submit">Add device → NOC</button>
         </div>
@@ -73,7 +78,7 @@
       <h3 style="margin-top:24px">Local devices</h3>
       <table>
         <thead>
-          <tr><th>Name</th><th>ID</th><th>SNMP IP</th><th>Type</th></tr>
+          <tr><th>Name</th><th>ID</th><th>SNMP IP</th><th>Community</th><th>Type</th></tr>
         </thead>
         <tbody id="devices-body"></tbody>
       </table>
@@ -124,8 +129,9 @@
           </div>
         </div>
         <div class="field">
-          <label for="snmpCommunity">SNMP community (v2c)</label>
-          <input id="snmpCommunity" name="snmpCommunity" value="public" />
+          <label for="snmpCommunity">Default SNMP community (v2c)</label>
+          <input id="snmpCommunity" name="snmpCommunity" value="public" autocomplete="off" />
+          <p class="hint">Used when a device has no per-device community. Example: FortiSNMP.</p>
         </div>
         <div class="actions">
           <button type="submit">Save &amp; sync</button>

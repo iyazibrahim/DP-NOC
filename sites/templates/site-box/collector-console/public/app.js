@@ -99,13 +99,13 @@ async function loadDevices() {
   const devices = await api("/api/devices");
   const body = document.getElementById("devices-body");
   if (!Array.isArray(devices) || devices.length === 0) {
-    body.innerHTML = '<tr><td colspan="4" class="hint">No devices yet — use Add SNMP device above, or Sync now to pull from NOC.</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" class="hint">No devices yet — use Add SNMP device above, or Sync now to pull from NOC.</td></tr>';
     return;
   }
   body.innerHTML = devices
     .map(
       (d) =>
-        `<tr><td>${escapeHtml(d.name || "")}</td><td><code>${escapeHtml(d.id || "")}</code></td><td>${escapeHtml(d.snmpIp || "")}</td><td>${escapeHtml(d.type || "")}</td></tr>`
+        `<tr><td>${escapeHtml(d.name || "")}</td><td><code>${escapeHtml(d.id || "")}</code></td><td>${escapeHtml(d.snmpIp || "")}</td><td>${escapeHtml(d.snmpCommunity || "default")}</td><td>${escapeHtml(d.type || "")}</td></tr>`
     )
     .join("");
 }
@@ -220,7 +220,8 @@ document.getElementById("add-device-form").addEventListener("submit", async (e) 
     snmpIp: String(fd.get("snmpIp") || "").trim(),
     type: String(fd.get("type") || "switch").trim(),
     vendor: String(fd.get("vendor") || "generic").trim(),
-    id: String(fd.get("id") || "").trim() || undefined
+    id: String(fd.get("id") || "").trim() || undefined,
+    snmpCommunity: String(fd.get("snmpCommunity") || "").trim() || undefined
   };
   btn.disabled = true;
   try {

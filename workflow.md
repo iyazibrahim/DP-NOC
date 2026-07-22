@@ -102,6 +102,14 @@ Collector box → Alloy → Prometheus (central)
     - Dokploy ops: Environment-only secrets; ban live `config.alloy` patches when sync is used
     - Console: Metrics push + SNMP scrape hint; crash/unsafe config warnings
     - `repair-alloy.sh` / `verify-snmp-queries.sh` — 3-query Grafana prove list
+  - **Per-device SNMP communities (2026-07-22)**
+    - Optional `snmpCommunity` on NOC network devices + collector `devices.json`
+    - Console Add device field; Setup = **Default SNMP community**
+    - `generate-config.sh` writes `auth_<deviceId>` in `snmp.yml` + Alloy target `auth`
+  - **Cut over site-box SNMP / drop integrations/snmp (2026-07-22)**
+    - Docs + Console ban `integrations/snmp` (no `snmp_up` → NOC UNKNOWN)
+    - Canonical: `job=site_snmp_if_mib` + `snmp_up`
+    - `CUTOVER_SITEBOX_SNMP.md` + `cutover-sitebox-snmp.sh`
 
 ## Local Validation
 1. `docker compose up -d --build`
@@ -112,7 +120,7 @@ Collector box → Alloy → Prometheus (central)
 6. Dashboard → **Fullscreen** — chrome hidden; Esc / Exit to leave
 7. Sites → site → Generate collector token; open Collector Console `http://<collector-ip>:8090`, paste token, save
 8. Grafana → folder NOC → “NOC — Collector & Uplink”
-9. Site-box: `VERIFY_SAMPLE=1 ./verify-snmp-queries.sh site-1-firewall1` then on NUC `./repair-alloy.sh` + Grafana 3-query prove
+9. Site-box cutover: delete Dokploy legacy SNMP patches → rebuild → Default community FortiSNMP → Force apply → `./cutover-sitebox-snmp.sh site-1-fw1` → Grafana `snmp_up=1`
 
 ## Dokploy notes
 - Publish `noc-app:8080` and optionally `grafana:3000`
@@ -120,3 +128,4 @@ Collector box → Alloy → Prometheus (central)
 - Optional: `PROMETHEUS_APPLY_CMD=docker restart noc_prometheus` on noc-app (Docker socket required)
 - Volumes: `noc_runtime` (sites + retention flags), `noc_exports`, `prometheus_data`
 - Site-box: secrets in Dokploy **Environment** only; do not patch live `config.alloy` when Console sync is used
+- Site-box SNMP: never patch `integrations/snmp`; use site-box compose only (see CUTOVER_SITEBOX_SNMP.md)

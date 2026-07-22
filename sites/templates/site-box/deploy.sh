@@ -164,7 +164,8 @@ SYNC_INTERVAL_SEC=90
 EOF
 
 chmod +x "$SCRIPT_DIR/generate-config.sh" "$SCRIPT_DIR/sync-devices.sh" \
-  "$SCRIPT_DIR/validate-config.sh" "$SCRIPT_DIR/repair-alloy.sh" "$SCRIPT_DIR/verify-snmp-queries.sh" 2>/dev/null || true
+  "$SCRIPT_DIR/validate-config.sh" "$SCRIPT_DIR/repair-alloy.sh" \
+  "$SCRIPT_DIR/verify-snmp-queries.sh" "$SCRIPT_DIR/cutover-sitebox-snmp.sh" 2>/dev/null || true
 "$SCRIPT_DIR/generate-config.sh" "$SCRIPT_DIR/devices.json" "$SCRIPT_DIR/config.alloy"
 
 if [[ -n "$NOC_URL" && -n "$COLLECTOR_TOKEN" ]]; then

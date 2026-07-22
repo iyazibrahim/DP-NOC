@@ -9,6 +9,7 @@ export type PushDeviceInput = {
   type?: string;
   vendor?: string;
   id?: string;
+  snmpCommunity?: string;
 };
 
 export type PushDeviceResult = {
@@ -51,7 +52,8 @@ export async function pushDeviceToNoc(
       snmpIp,
       type: (input.type || "switch").trim() || "switch",
       vendor: (input.vendor || "generic").trim() || "generic",
-      id: input.id?.trim() || undefined
+      id: input.id?.trim() || undefined,
+      snmpCommunity: input.snmpCommunity?.trim() || undefined
     })
   });
 

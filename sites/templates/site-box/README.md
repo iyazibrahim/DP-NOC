@@ -15,7 +15,7 @@ Labels: set `SITE_NAME=site-1` and `HOST_DEVICE_ID=site-1-nuc` so React can auto
 ## Quick deploy (NUC)
 
 ```bash
-chmod +x deploy.sh generate-config.sh sync-devices.sh validate-config.sh repair-alloy.sh verify-snmp-queries.sh
+chmod +x deploy.sh generate-config.sh sync-devices.sh validate-config.sh repair-alloy.sh verify-snmp-queries.sh cutover-sitebox-snmp.sh
 ./deploy.sh
 docker compose up -d --build
 ```
@@ -58,17 +58,19 @@ If Patches still ship an old `generate-config.sh` with `config_merge_strategy` o
 
 After updating generators: delete conflicting patches → redeploy → on NUC run `./repair-alloy.sh`.
 
+**Cut over from legacy SNMP:** if Grafana shows `job="integrations/snmp/..."` and no `snmp_up`, follow [`CUTOVER_SITEBOX_SNMP.md`](CUTOVER_SITEBOX_SNMP.md). Do not patch integrations SNMP back in.
+
 ## Why SNMP “never sends data”
 
-Host metrics (`up{job="site_host"}`) can be UP while SNMP is empty. Empty `up{job="site_snmp_if_mib"}` means the SNMP scrape job never ran (bad/missing config or Alloy crash), not Fortinet yet.
+Host metrics (`up{job="site_host"}`) can be UP while SNMP is empty. Empty `up{job="site_snmp_if_mib"}` means the SNMP scrape job never ran (bad/missing config, Alloy crash, or still on legacy `integrations/snmp`), not Fortinet yet.
 
 Prove in Grafana after repair (wait ~60s):
 
 1. `up{job="site_host",site="site-1"}`
-2. `up{job="site_snmp_if_mib"}` ← gate
-3. `snmp_up{site="site-1"}` then exact `device` id (e.g. `site-1-firewall1`, no spaces)
+2. `up{job="site_snmp_if_mib"}` ← gate (must be this job, not `integrations/snmp`)
+3. `snmp_up{site="site-1"}` then exact `device` id (e.g. `site-1-fw1`, no spaces)
 
-Local check: `./verify-snmp-queries.sh` or `VERIFY_SAMPLE=1 ./verify-snmp-queries.sh site-1-firewall1`
+Local check: `./verify-snmp-queries.sh site-1-fw1`
 
 ## Dokploy (why you only see `noc_site_alloy`)
 
@@ -102,20 +104,22 @@ Build context must be the **site-box** folder (where `docker-compose.yml` and `c
 | `generate-config.sh` | Build `config.alloy` from `devices.json` (v1.5.1-safe) |
 | `validate-config.sh` | Fail-closed crash-pattern checks before Alloy restart |
 | `repair-alloy.sh` | Regenerate + validate + restart Alloy; print Grafana checklist |
-| `verify-snmp-queries.sh` | Local generate/validate + print 3-query prove list |
+| `verify-snmp-queries.sh` | Local generate/validate + print site-box prove queries |
+| `CUTOVER_SITEBOX_SNMP.md` | Drop legacy `integrations/snmp` → site-box `site_snmp_if_mib` + `snmp_up` |
+| `cutover-sitebox-snmp.sh` | NUC checklist: reject legacy config, repair Alloy, print Grafana prove |
 | `sync-devices.sh` | Legacy shell sync (console calls same logic internally) |
 | `docker-compose.yml` | Collector Console + Grafana Alloy **v1.5.1** |
 | `blackbox.yml` | ICMP probe module (used via `config_file`) |
 | `devices.json` | SNMP targets for this site (synced from NOC API) |
 | `.env` | Secrets + `SITE_NAME` (gitignored) |
-| `snmp.yml` | Full SNMPv2c / if_mib module (required on Alloy 1.5.1) |
+| `snmp.yml` | SNMPv2c if_mib module; auths rewritten by `generate-config.sh` (default + per-device) |
 
 ## Collector Console
 
 | Page | Purpose |
 |---|---|
 | **Dashboard** | Add SNMP device → NOC, Alloy status, Metrics push, SNMP scrape hint, Sync / Force apply |
-| **Setup** | NOC URL, collector token, CF Access, SNMP community, ping targets |
+| **Setup** | NOC URL, collector token, CF Access, **Default SNMP community**, ping targets |
 | **Settings** | Sync interval, view `config.alloy`, Alloy logs |
 
 Green **Alloy Running** does **not** mean Prometheus has `snmp_up`. Use the **SNMP scrape** card hint and Grafana.

@@ -11,6 +11,8 @@ export type SiteDevice = {
   type: string;
   kind: DeviceKind;
   snmpIp?: string;
+  /** Optional SNMPv2c community for this device; collector falls back to site default */
+  snmpCommunity?: string;
   hostMetricId?: string;
   vendor: string;
 };
@@ -86,11 +88,16 @@ function loadSeed(): Site[] {
 
 function normalizeDevice(d: SiteDevice): SiteDevice {
   const kind: DeviceKind = d.kind ?? (d.hostMetricId ? "server" : "network");
+  const community =
+    kind === "network" && typeof d.snmpCommunity === "string" && d.snmpCommunity.trim()
+      ? d.snmpCommunity.trim()
+      : undefined;
   return {
     ...d,
     kind,
     vendor: d.vendor || "generic",
     snmpIp: kind === "network" ? d.snmpIp : d.snmpIp || undefined,
+    snmpCommunity: community,
     hostMetricId: kind === "server" ? d.hostMetricId || `${d.id}` : d.hostMetricId
   };
 }
@@ -324,7 +331,14 @@ export function addDevice(siteId: string, device: SiteDevice): Site | null {
 /** Add or update a network SNMP device (used by collector console push). */
 export function upsertNetworkDevice(
   siteId: string,
-  input: { id: string; name: string; type?: string; snmpIp: string; vendor?: string }
+  input: {
+    id: string;
+    name: string;
+    type?: string;
+    snmpIp: string;
+    vendor?: string;
+    snmpCommunity?: string;
+  }
 ): { site: Site; created: boolean } | null {
   const site = getSiteById(siteId);
   if (!site) return null;
@@ -336,12 +350,27 @@ export function upsertNetworkDevice(
     type: (input.type || "switch").trim() || "switch",
     kind: "network",
     snmpIp: input.snmpIp.trim(),
-    vendor: (input.vendor || "generic").trim() || "generic"
+    vendor: (input.vendor || "generic").trim() || "generic",
+    snmpCommunity:
+      typeof input.snmpCommunity === "string" && input.snmpCommunity.trim()
+        ? input.snmpCommunity.trim()
+        : undefined
   };
 
   const idx = site.devices.findIndex((d) => d.id === device.id);
   if (idx >= 0) {
-    site.devices[idx] = normalizeDevice({ ...site.devices[idx], ...device, id: device.id });
+    const prev = site.devices[idx];
+    const merged: SiteDevice = {
+      ...prev,
+      ...device,
+      id: device.id,
+      // Allow clearing community by sending empty string from collector
+      snmpCommunity:
+        input.snmpCommunity === undefined
+          ? prev.snmpCommunity
+          : device.snmpCommunity
+    };
+    site.devices[idx] = normalizeDevice(merged);
     persist();
     return { site, created: false };
   }
@@ -381,18 +410,30 @@ export function exportNetworkDevicesJson(siteId: string): Array<{
   type: string;
   snmpIp: string;
   vendor: string;
+  snmpCommunity?: string;
 }> {
   const site = getSiteById(siteId);
   if (!site) return [];
   return (site.devices ?? [])
     .filter((d) => d.kind === "network" && d.snmpIp)
-    .map((d) => ({
-      id: d.id,
-      name: d.name,
-      type: d.type,
-      snmpIp: d.snmpIp!,
-      vendor: d.vendor
-    }));
+    .map((d) => {
+      const row: {
+        id: string;
+        name: string;
+        type: string;
+        snmpIp: string;
+        vendor: string;
+        snmpCommunity?: string;
+      } = {
+        id: d.id,
+        name: d.name,
+        type: d.type,
+        snmpIp: d.snmpIp!,
+        vendor: d.vendor
+      };
+      if (d.snmpCommunity) row.snmpCommunity = d.snmpCommunity;
+      return row;
+    });
 }
 
 export function addWebsite(

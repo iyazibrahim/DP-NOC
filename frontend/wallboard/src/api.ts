@@ -128,6 +128,7 @@ export async function addSiteDevice(
     type: string;
     kind: SiteDevice["kind"];
     snmpIp?: string;
+    snmpCommunity?: string;
     hostMetricId?: string;
     vendor: string;
   }
