@@ -113,6 +113,8 @@ Collector box → Alloy → Prometheus (central)
   - **Dokploy /data mount fix (2026-07-22)**
     - Root `docker-compose.site-box.yml` mounts `./sites/templates/site-box:/data`
     - Console image bakes toolkit; detects monorepo-mounted `/data`
+  - **Temporary SNMP status bridge (2026-07-22)**
+    - While `site_snmp_if_mib` / `snmp_up` empty, NOC Local devices use `up{job=~"integrations/snmp/.*"}`
 
 ## Local Validation
 1. `docker compose up -d --build`

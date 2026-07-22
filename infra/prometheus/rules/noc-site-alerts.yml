@@ -49,11 +49,21 @@ groups:
           summary: "Collector offline at {{ $labels.site }} (device={{ $labels.device }}, instance={{ $labels.instance }})"
 
       - alert: SiteLocalDeviceDown
+        # Prefer snmp_up; while site-box cutover is incomplete, also honor legacy integrations/snmp up.
+        # Do not fire absent(snmp_up) when legacy up is still healthy for that device.
         expr: |
           (
             (snmp_up{site=~".+"} == 0)
             or
-            absent_over_time(snmp_up{site=~".+"}[5m])
+            (
+              absent_over_time(snmp_up{site=~".+"}[5m])
+              unless on(device) (up{job=~"integrations/snmp/.*"} == 1)
+            )
+            or
+            (
+              (up{job=~"integrations/snmp/.*"} == 0)
+              unless on(device) (snmp_up)
+            )
           )
         for: 2m
         labels:

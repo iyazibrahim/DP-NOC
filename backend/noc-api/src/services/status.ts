@@ -341,9 +341,32 @@ export async function computeSiteStatus(
         });
         continue;
       }
-      const st = await queryBooleanMetricState(`snmp_up{site="${siteId}",device="${d.id}"}`);
-      if (st.state === "unknown" && !st.notes) {
-        st.notes = "Not polled yet — waiting for collector SNMP scrape";
+      // Prefer site-box snmp_up; fall back to legacy integrations/snmp up while cutover incomplete.
+      let st = await queryBooleanMetricState(`snmp_up{site="${siteId}",device="${d.id}"}`);
+      if (st.state === "unknown") {
+        const legacySelectors = [
+          `up{job=~"integrations/snmp/.*",device="${d.id}"}`,
+          `up{job=~"integrations/snmp/.*",site="${siteId}",device="${d.id}"}`
+        ];
+        if (d.snmpIp) {
+          const ipRe = d.snmpIp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          legacySelectors.push(`up{job=~"integrations/snmp/.*",instance=~".*${ipRe}.*"}`);
+        }
+        for (const sel of legacySelectors) {
+          const legacy = await queryBooleanMetricState(sel);
+          if (legacy.state === "unknown") continue;
+          st = {
+            ...legacy,
+            notes:
+              legacy.state === "healthy"
+                ? "OK via legacy integrations/snmp up (site-box snmp_up not publishing yet)"
+                : legacy.notes ?? "Legacy SNMP scrape reports down"
+          };
+          break;
+        }
+        if (st.state === "unknown" && !st.notes) {
+          st.notes = "Not polled yet — waiting for collector SNMP scrape";
+        }
       }
       deviceStatuses.push(st);
       localDeviceStates.push({

@@ -2,6 +2,7 @@ import { promQuery, promQueryRange } from "./prometheus";
 import {
   dualHostMetric,
   dualHostUpFresh,
+  dualSnmpUpFresh,
   hostFreshGuard,
   METRIC_FRESH_WINDOW,
   probeSuccessFresh
@@ -134,7 +135,7 @@ export function buildQuery(presetId: string, siteId: string, deviceId: string): 
     case "wan_vps":
       return probeSuccessFresh(siteId, "wan_vps", METRIC_FRESH_WINDOW);
     case "snmp_up":
-      return `last_over_time(snmp_up{site="${siteId}",device="${deviceId}"}[${METRIC_FRESH_WINDOW}])`;
+      return dualSnmpUpFresh(siteId, deviceId, METRIC_FRESH_WINDOW);
     case "if_in_bps":
       return `sum(rate(ifHCInOctets{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
     case "if_out_bps":

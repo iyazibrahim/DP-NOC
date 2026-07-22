@@ -4,6 +4,7 @@ import { siteList } from "../data/sites";
 import { computeAllSitesStatus } from "./status";
 import { promQuery, parseFirstVectorValue } from "./prometheus";
 import { getActiveAlerts } from "./alertmanager";
+import { dualSnmpUpAvg } from "./promLabels";
 
 export type ExportPeriod = "weekly" | "monthly";
 
@@ -98,7 +99,7 @@ export async function runExport(period: ExportPeriod): Promise<ExportRecord> {
         );
         up = await avgQuery(`avg_over_time(up{job="site_host",site="${site.id}",device="${metricId}"}[${rangeDays}d])`);
       } else {
-        up = await avgQuery(`avg_over_time(snmp_up{site="${site.id}",device="${metricId}"}[${rangeDays}d])`);
+        up = await avgQuery(dualSnmpUpAvg(site.id, metricId, `${rangeDays}d`));
       }
       deviceRows.push({
         siteId: site.id,
