@@ -34,6 +34,21 @@ if ! grep -qE 'scrape_interval = "[0-9]+s"' "$CFG"; then
   fail "missing numeric scrape_interval (expected e.g. scrape_interval = \"15s\")"
 fi
 
+# scrape_timeout must not exceed scrape_interval (Alloy rejects initial load)
+python3 - "$CFG" <<'PY' || fail "scrape_timeout >= scrape_interval (Alloy will not load config)"
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+# Check each scrape block roughly: if both present in file, compare SNMP block pairs
+blocks = re.split(r'prometheus\.scrape\s+"[^"]+"\s*\{', text)[1:]
+for b in blocks:
+  body = b.split("}", 1)[0]
+  mi = re.search(r'scrape_interval\s*=\s*"(\d+)s"', body)
+  mt = re.search(r'scrape_timeout\s*=\s*"(\d+)s"', body)
+  if mi and mt and int(mt.group(1)) > int(mi.group(1)):
+    sys.exit(1)
+sys.exit(0)
+PY
+
 # Soft checks (warn only) when devices.json has SNMP targets
 DEVICES="${SCRIPT_DIR}/devices.json"
 if [[ -f "$DEVICES" ]]; then
