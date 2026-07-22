@@ -93,18 +93,20 @@
           <p class="hint">Generate in NOC → Sites → this site → Collector inventory sync.</p>
         </div>
         <div class="field">
-          <label for="centralRemoteWriteUrl">Metrics remote write URL</label>
-          <input id="centralRemoteWriteUrl" name="centralRemoteWriteUrl" placeholder="https://metrics.example.com/api/v1/write" required />
+          <label for="centralRemoteWriteUrl">Metrics remote write URL (optional if already working)</label>
+          <input id="centralRemoteWriteUrl" name="centralRemoteWriteUrl" placeholder="https://metrics.example.com/api/v1/write" />
+          <p class="hint">Leave blank if Collector was already healthy before setup.</p>
         </div>
         <div class="row2">
           <div class="field">
-            <label for="cfAccessClientId">CF Access Client ID</label>
-            <input id="cfAccessClientId" name="cfAccessClientId" required />
+            <label for="cfAccessClientId">CF Access Client ID (optional if already in Dokploy)</label>
+            <input id="cfAccessClientId" name="cfAccessClientId" />
+            <p class="hint">Leave blank if Alloy was already pushing metrics.</p>
           </div>
           <div class="field">
             <label for="cfAccessClientSecret">CF Access Client Secret</label>
             <input id="cfAccessClientSecret" name="cfAccessClientSecret" type="password" />
-            <p class="hint">Leave blank to keep existing secret.</p>
+            <p class="hint">Leave blank to keep existing — do not clear Dokploy secrets.</p>
           </div>
         </div>
         <div class="row2">

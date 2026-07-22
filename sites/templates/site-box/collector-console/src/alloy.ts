@@ -2,7 +2,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import path from "path";
-import { dataDir } from "./config";
+import { dataDir, readEnvFile } from "./config";
 
 const execFileAsync = promisify(execFile);
 
@@ -41,6 +41,56 @@ export async function getAlloyLogs(lines = 50): Promise<string> {
   }
 }
 
+/** Read CF Access / remote-write secrets from the running Alloy container env. */
+export async function readAlloyContainerEnv(): Promise<Record<string, string>> {
+  try {
+    const out = await run("docker", [
+      "inspect",
+      "-f",
+      "{{range .Config.Env}}{{println .}}{{end}}",
+      "noc_site_alloy"
+    ]);
+    const result: Record<string, string> = {};
+    for (const line of out.split("\n")) {
+      const idx = line.indexOf("=");
+      if (idx === -1) continue;
+      result[line.slice(0, idx)] = line.slice(idx + 1);
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * If .env is missing CF secrets (common when Dokploy injects env in UI),
+ * copy them from the running Alloy container so a later recreate does not wipe metrics.
+ */
+export async function preserveSecretsFromAlloy(): Promise<string[]> {
+  const file = path.join(dataDir(), ".env");
+  const existing = readEnvFile();
+  const fromAlloy = await readAlloyContainerEnv();
+  const keys = [
+    "CF_ACCESS_CLIENT_ID",
+    "CF_ACCESS_CLIENT_SECRET",
+    "CENTRAL_REMOTE_WRITE_URL"
+  ];
+  const added: string[] = [];
+  const next = { ...existing };
+  for (const key of keys) {
+    if (!next[key] && fromAlloy[key]) {
+      next[key] = fromAlloy[key];
+      added.push(key);
+    }
+  }
+  if (added.length === 0) return added;
+
+  const lines = Object.entries(next).map(([k, v]) => `${k}=${v}`);
+  lines.push("");
+  fs.writeFileSync(file, lines.join("\n"), "utf8");
+  return added;
+}
+
 export async function regenerateAlloyConfig(): Promise<string> {
   const dir = dataDir();
   const script = path.join(dir, "generate-config.sh");
@@ -58,16 +108,25 @@ export async function regenerateAlloyConfig(): Promise<string> {
 }
 
 /**
- * Reload Alloy after devices.json / config.alloy / .env changes.
- * Prefer compose recreate; fall back to restart (config.alloy is bind-mounted).
- * Dokploy images often ship docker CLI without the compose plugin.
+ * Reload Alloy after config.alloy / devices change.
+ * Default: docker restart (safe — keeps Dokploy-injected env).
+ * forceRecreate: only when .env metrics secrets actually changed.
  */
-export async function recreateAlloy(): Promise<string> {
+export async function reloadAlloy(opts?: { forceRecreate?: boolean }): Promise<string> {
+  const forceRecreate = opts?.forceRecreate === true;
   const dir = dataDir();
   const composeFile = path.join(dir, "docker-compose.yml");
+
+  if (!forceRecreate) {
+    const out = await run("docker", ["restart", "noc_site_alloy"]);
+    return out || "restarted noc_site_alloy";
+  }
+
+  // Preserve secrets into .env before recreate so env_file does not blank them
+  await preserveSecretsFromAlloy();
+
   const errors: string[] = [];
 
-  // 1) docker compose (plugin v2)
   try {
     const out = await run(
       "docker",
@@ -79,7 +138,6 @@ export async function recreateAlloy(): Promise<string> {
     errors.push(`docker compose: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  // 2) docker-compose standalone binary
   try {
     const out = await run(
       "docker-compose",
@@ -91,15 +149,20 @@ export async function recreateAlloy(): Promise<string> {
     errors.push(`docker-compose: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  // 3) restart — enough when only config.alloy / snmp.yml changed (bind mounts)
+  // Last resort: restart keeps existing container env
   try {
     const out = await run("docker", ["restart", "noc_site_alloy"]);
     return (
       (out || "restarted noc_site_alloy") +
-      " (compose unavailable; restart used — remounts config.alloy)"
+      " (recreate failed; restart used to keep existing env)"
     );
   } catch (err) {
     errors.push(`docker restart: ${err instanceof Error ? err.message : String(err)}`);
     throw new Error(`Failed to reload Alloy:\n${errors.join("\n")}`);
   }
+}
+
+/** @deprecated use reloadAlloy */
+export async function recreateAlloy(): Promise<string> {
+  return reloadAlloy({ forceRecreate: false });
 }

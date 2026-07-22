@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { readConfig } from "./config";
-import { regenerateAlloyConfig, recreateAlloy } from "./alloy";
+import { regenerateAlloyConfig, reloadAlloy } from "./alloy";
 
 export type SyncResult = {
   ok: boolean;
@@ -135,7 +135,7 @@ export async function syncDevices(dataDir: string): Promise<SyncResult> {
     const deviceCount = Array.isArray(devices) ? devices.length : 0;
 
     const genMsg = await regenerateAlloyConfig();
-    const recreateMsg = await recreateAlloy();
+    const recreateMsg = await reloadAlloy({ forceRecreate: false });
 
     const result: SyncResult = {
       ok: true,

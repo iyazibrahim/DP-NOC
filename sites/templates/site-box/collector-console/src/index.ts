@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import {
+  alloyReloadNeeded,
   dataDir,
   maskConfig,
   readConfig,
@@ -10,7 +11,13 @@ import {
   writeConfig,
   type CollectorConfig
 } from "./config";
-import { getAlloyLogs, isAlloyRunning, regenerateAlloyConfig, recreateAlloy } from "./alloy";
+import {
+  getAlloyLogs,
+  isAlloyRunning,
+  preserveSecretsFromAlloy,
+  regenerateAlloyConfig,
+  reloadAlloy
+} from "./alloy";
 import { getLastSync, startSyncLoop, syncDevices } from "./sync";
 import { pushDeviceToNoc } from "./pushDevice";
 
@@ -75,8 +82,11 @@ app.get("/api/config", (_req, res) => {
 
 app.post("/api/config", async (req, res) => {
   try {
+    // Pull CF secrets from running Alloy into .env before any write (Dokploy recovery)
+    const preserved = await preserveSecretsFromAlloy();
+
     const body = req.body as Partial<CollectorConfig>;
-    const current = readConfig();
+    const before = readConfig();
 
     const patch: Partial<CollectorConfig> = {};
     const assign = <K extends keyof CollectorConfig>(key: K, val: unknown) => {
@@ -85,17 +95,23 @@ app.post("/api/config", async (req, res) => {
 
     assign("centralRemoteWriteUrl", body.centralRemoteWriteUrl);
     assign("cfAccessClientId", body.cfAccessClientId);
-    if (typeof body.cfAccessClientSecret === "string" && body.cfAccessClientSecret && body.cfAccessClientSecret !== "***") {
+    if (
+      typeof body.cfAccessClientSecret === "string" &&
+      body.cfAccessClientSecret &&
+      body.cfAccessClientSecret !== "***"
+    ) {
       patch.cfAccessClientSecret = body.cfAccessClientSecret.trim();
-    } else if (!current.cfAccessClientSecret && body.cfAccessClientSecret) {
-      patch.cfAccessClientSecret = String(body.cfAccessClientSecret).trim();
     }
     assign("siteName", body.siteName);
     assign("hostDeviceId", body.hostDeviceId);
     assign("pingTarget1", body.pingTarget1);
     assign("pingTarget2", body.pingTarget2);
     assign("nocApiUrl", body.nocApiUrl);
-    if (typeof body.collectorToken === "string" && body.collectorToken && !body.collectorToken.endsWith("…")) {
+    if (
+      typeof body.collectorToken === "string" &&
+      body.collectorToken &&
+      !body.collectorToken.endsWith("…")
+    ) {
       patch.collectorToken = body.collectorToken.trim();
     }
     assign("scrapeIntervalSec", body.scrapeIntervalSec);
@@ -103,13 +119,24 @@ app.post("/api/config", async (req, res) => {
     assign("snmpCommunity", body.snmpCommunity);
 
     const saved = writeConfig(patch);
+    const needsAlloyReload = alloyReloadNeeded(before, saved, patch);
 
     let regenMsg = "";
-    try {
-      regenMsg = await regenerateAlloyConfig();
-      await recreateAlloy();
-    } catch (err) {
-      regenMsg = err instanceof Error ? err.message : String(err);
+    if (needsAlloyReload) {
+      try {
+        // Env secret changes need recreate; otherwise restart (keep Dokploy env)
+        const envChanged = Boolean(
+          patch.centralRemoteWriteUrl ||
+            patch.cfAccessClientId ||
+            patch.cfAccessClientSecret
+        );
+        regenMsg = await regenerateAlloyConfig();
+        regenMsg += " | " + (await reloadAlloy({ forceRecreate: envChanged }));
+      } catch (err) {
+        regenMsg = err instanceof Error ? err.message : String(err);
+      }
+    } else {
+      regenMsg = "Alloy unchanged (only NOC sync settings updated)";
     }
 
     const syncResult = await syncDevices(dir);
@@ -118,6 +145,7 @@ app.post("/api/config", async (req, res) => {
       ok: true,
       config: maskConfig(saved),
       regen: regenMsg,
+      preservedSecrets: preserved,
       sync: syncResult
     });
   } catch (err) {
