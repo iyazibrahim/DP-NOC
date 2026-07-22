@@ -45,11 +45,15 @@ if [[ -f "$DEVICES" ]]; then
     if ! grep -q 'site_snmp_if_mib' "$CFG"; then
       fail "SNMP devices present but job site_snmp_if_mib missing from config.alloy"
     fi
+    # Alloy SNMP exporter defaults job to integrations/snmp/<target>; must relabel.
+    if ! grep -q 'discovery.relabel "snmp_job"' "$CFG" && ! grep -q 'prometheus.relabel "snmp_canonical"' "$CFG"; then
+      fail "SNMP present but missing snmp_job/snmp_canonical relabel (job would stay integrations/snmp/*)"
+    fi
   fi
 fi
 
-# Legacy integrations SNMP must never appear in site-box generated config
-if grep -qiE 'integrations\.snmp|integrations/snmp|job_name.*=.*"integrations/snmp' "$CFG"; then
+# Legacy integrations SNMP blocks must never appear (job string in comments/relabel notes OK)
+if grep -qiE 'integrations\.snmp|job_name.*=.*"integrations/snmp' "$CFG"; then
   fail "legacy integrations/snmp found in config.alloy — use site-box site_snmp_if_mib only (see CUTOVER_SITEBOX_SNMP.md)"
 fi
 

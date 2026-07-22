@@ -80,7 +80,7 @@ function alloyLogCrashHints(logs: string): string[] {
   }
   if (logLower.includes("integrations/snmp")) {
     hints.push(
-      "Legacy integrations/snmp in logs — cut over to site-box (CUTOVER_SITEBOX_SNMP.md); NOC needs snmp_up from job site_snmp_if_mib"
+      "Legacy integrations/snmp job names in logs — ensure generate-config relabels to site_snmp_if_mib (CUTOVER_SITEBOX_SNMP.md)"
     );
   }
   return hints;
@@ -155,7 +155,7 @@ app.get("/api/status", async (_req, res) => {
     configUnsafe: cfgHealth.configUnsafe,
     snmpScrapeHint:
       devices.length > 0
-        ? `Verify in Grafana (not here): up{job="site_snmp_if_mib"} then snmp_up{site="${site}",device="site-1-fw1"}`
+        ? `Verify in Grafana: up{job="site_snmp_if_mib",device="site-1-fw1"} (and snmp_up if present)`
         : "No SNMP devices yet",
     nocReachable,
     lastSync: last,
@@ -310,7 +310,7 @@ app.get("/api/diagnostics", async (_req, res) => {
     hint = "SNMP targets missing in Alloy — click Force apply SNMP";
   } else {
     hint =
-      "Metrics env present on Alloy. Check site-box SNMP only: up{job=\"site_snmp_if_mib\"} then snmp_up{site=\"site-1\",device=\"site-1-fw1\"}. Do not use integrations/snmp. If scrape up=0: Fortinet community / UDP 161.";
+      "Metrics env present on Alloy. Prove: up{job=\"site_snmp_if_mib\",device=\"site-1-fw1\"}=1. Config must have discovery.relabel snmp_job. If still integrations/snmp only: rebuild console + Force apply.";
   }
   res.json({
     whyNocDown:
@@ -322,7 +322,7 @@ app.get("/api/diagnostics", async (_req, res) => {
     crashHints,
     configUnsafe: cfgHealth.configUnsafe,
     configUnsafeReason: cfgHealth.configUnsafeReason,
-    snmpScrapeHint: `up{job="site_snmp_if_mib"} then snmp_up{site="${readConfig().siteName || "site-1"}"}`,
+    snmpScrapeHint: `up{job="site_snmp_if_mib",device=...} (need discovery.relabel snmp_job in config.alloy)`,
     deviceCount: devices.length,
     devices,
     hasSnmpBlock,

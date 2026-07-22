@@ -8,6 +8,9 @@
 
 export const HOST_UP_JOB_SELECTOR = 'job=~"site_host|integrations/unix"';
 
+/** Canonical site-box SNMP scrape job (after generate-config relabel). */
+export const SITE_SNMP_JOB_SELECTOR = 'job="site_snmp_if_mib"';
+
 /** Legacy Grafana Agent/Alloy SNMP scrape jobs (temporary bridge until site_snmp_if_mib). */
 export const LEGACY_SNMP_JOB_SELECTOR = 'job=~"integrations/snmp/.*"';
 
@@ -19,20 +22,26 @@ export const METRIC_FRESH_WINDOW = "45s";
 export const METRIC_HISTORY_WINDOW = "30m";
 
 /**
- * Local-device online: prefer site-box `snmp_up`, fall back to legacy integrations `up`.
+ * Local-device online:
+ * 1) snmp_up (exporter walk success) when present
+ * 2) up{job=site_snmp_if_mib,device} — Alloy may omit snmp_up; scrape up + device labels still mean poll ran
+ * 3) legacy integrations/snmp up while old series remain
  * last_over_time cannot wrap `(a or b)` — expand both sides.
  */
 export function dualSnmpUpFresh(siteId: string, deviceId: string, window = METRIC_FRESH_WINDOW): string {
   const preferred = `last_over_time(snmp_up{site="${siteId}",device="${deviceId}"}[${window}])`;
+  const siteScrape = `last_over_time(up{${SITE_SNMP_JOB_SELECTOR},site="${siteId}",device="${deviceId}"}[${window}])`;
+  const siteScrapeDevice = `last_over_time(up{${SITE_SNMP_JOB_SELECTOR},device="${deviceId}"}[${window}])`;
   const legacyDevice = `last_over_time(up{${LEGACY_SNMP_JOB_SELECTOR},device="${deviceId}"}[${window}])`;
   const legacySiteDevice = `last_over_time(up{${LEGACY_SNMP_JOB_SELECTOR},site="${siteId}",device="${deviceId}"}[${window}])`;
-  return `(${preferred} or ${legacySiteDevice} or ${legacyDevice})`;
+  return `(${preferred} or ${siteScrape} or ${siteScrapeDevice} or ${legacySiteDevice} or ${legacyDevice})`;
 }
 
 export function dualSnmpUpAvg(siteId: string, deviceId: string, range: string): string {
   const preferred = `avg_over_time(snmp_up{site="${siteId}",device="${deviceId}"}[${range}])`;
+  const siteScrape = `avg_over_time(up{${SITE_SNMP_JOB_SELECTOR},device="${deviceId}"}[${range}])`;
   const legacy = `avg_over_time(up{${LEGACY_SNMP_JOB_SELECTOR},device="${deviceId}"}[${range}])`;
-  return `(${preferred} or ${legacy})`;
+  return `(${preferred} or ${siteScrape} or ${legacy})`;
 }
 
 /** Dual-selector: device label OR instance label (legacy integrations Alloy). */

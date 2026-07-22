@@ -292,11 +292,35 @@ for d in devices:
 
 print("}")
 print()
+# Alloy prometheus.exporter.snmp sets job = "integrations/snmp" + "/" + target_name
+# (Agent-compatible). scrape job_name is ignored when job is already set — without
+# relabel, Prometheus never sees job=site_snmp_if_mib and NOC looks "broken".
+print('discovery.relabel "snmp_job" {')
+print("  targets = prometheus.exporter.snmp.site_devices.targets")
+print()
+print("  rule {")
+print('    target_label = "job"')
+print('    replacement  = "site_snmp_if_mib"')
+print("  }")
+print("}")
+print()
 print('prometheus.scrape "snmp_scrape" {')
-print("  targets    = prometheus.exporter.snmp.site_devices.targets")
-print("  forward_to = [prometheus.remote_write.central.receiver]")
-print('  job_name   = "site_snmp_if_mib"')
+print("  targets         = discovery.relabel.snmp_job.output")
+print("  forward_to      = [prometheus.relabel.snmp_canonical.receiver]")
+print('  job_name        = "site_snmp_if_mib"')
 print(f'  scrape_interval = "{scrape_sec}s"')
+print('  scrape_timeout  = "30s"')
+print("}")
+print()
+print('prometheus.relabel "snmp_canonical" {')
+print("  forward_to = [prometheus.remote_write.central.receiver]")
+print()
+print("  rule {")
+print('    source_labels = ["job"]')
+print('    regex         = ".*"')
+print('    target_label  = "job"')
+print('    replacement   = "site_snmp_if_mib"')
+print("  }")
 print("}")
 PY
 

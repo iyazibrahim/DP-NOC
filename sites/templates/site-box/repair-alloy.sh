@@ -41,10 +41,10 @@ fi
 echo
 echo "Done. Prove SNMP in Grafana Explore (site-box only, wait ~60s):"
 echo '  1) up{job="site_host",site="site-1"}'
-echo '  2) up{job="site_snmp_if_mib"}              # must be 1 before snmp_up'
-echo '  3) snmp_up{site="site-1"}'
-echo '  4) snmp_up{site="site-1",device="site-1-fw1"}  # exact device id'
+echo '  2) up{job="site_snmp_if_mib"}'
+echo '  3) up{job="site_snmp_if_mib",device="site-1-fw1"}'
+echo '  4) snmp_up{site="site-1",device="site-1-fw1"}  # optional — NOC also accepts (3)'
 echo
-echo "Do NOT use job=integrations/snmp/* for NOC health (no snmp_up)."
-echo "If (2) empty: still on legacy Alloy or generate failed — see CUTOVER_SITEBOX_SNMP.md"
-echo "If (2)=1 and snmp_up=0: Fortinet community / UDP 161 (Default SNMP community e.g. FortiSNMP)."
+echo "Config must include discovery.relabel snmp_job (else job stays integrations/snmp/<target>)."
+echo "If (2) empty: regenerate/Force apply with updated generate-config.sh — see CUTOVER_SITEBOX_SNMP.md"
+echo "If (2)=1 and device down: Fortinet community / UDP 161 (Default SNMP community e.g. FortiSNMP)."

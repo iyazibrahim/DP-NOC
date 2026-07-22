@@ -111,7 +111,7 @@ export function assertAlloyConfigSafe(alloyText: string): void {
   }
   if (/integrations\/snmp|integrations\.snmp/.test(alloyText)) {
     throw new Error(
-      "config.alloy contains legacy integrations/snmp — cut over to site-box (job site_snmp_if_mib + snmp_up). See CUTOVER_SITEBOX_SNMP.md"
+      "config.alloy contains legacy integrations/snmp scrape — cut over to site-box (relabel job to site_snmp_if_mib). See CUTOVER_SITEBOX_SNMP.md"
     );
   }
   if (!/scrape_interval\s*=\s*"[0-9]+s"/.test(alloyText)) {

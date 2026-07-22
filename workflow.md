@@ -115,6 +115,11 @@ Collector box → Alloy → Prometheus (central)
     - Console image bakes toolkit; detects monorepo-mounted `/data`
   - **Temporary SNMP status bridge (2026-07-22)**
     - While `site_snmp_if_mib` / `snmp_up` empty, NOC Local devices use `up{job=~"integrations/snmp/.*"}`
+  - **Alloy SNMP job relabel fix (2026-07-22)**
+    - Root cause: Alloy `prometheus.exporter.snmp` sets `job=integrations/snmp/<target>`; scrape `job_name` ignored
+    - `generate-config.sh`: `discovery.relabel snmp_job` + `prometheus.relabel snmp_canonical` → `job=site_snmp_if_mib`
+    - NOC status also accepts `up{job="site_snmp_if_mib",device}` when `snmp_up` metric absent
+    - Rebuild `collector-console` on NUC + Force apply SNMP; prove `up{job="site_snmp_if_mib",device="site-1-fw1"}`
 
 ## Local Validation
 1. `docker compose up -d --build`

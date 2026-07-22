@@ -341,26 +341,31 @@ export async function computeSiteStatus(
         });
         continue;
       }
-      // Prefer site-box snmp_up; fall back to legacy integrations/snmp up while cutover incomplete.
+      // Prefer snmp_up; then site_snmp_if_mib scrape up (Alloy may omit snmp_up); then legacy job name.
       let st = await queryBooleanMetricState(`snmp_up{site="${siteId}",device="${d.id}"}`);
       if (st.state === "unknown") {
-        const legacySelectors = [
+        const fallbackSelectors = [
+          `up{job="site_snmp_if_mib",site="${siteId}",device="${d.id}"}`,
+          `up{job="site_snmp_if_mib",device="${d.id}"}`,
           `up{job=~"integrations/snmp/.*",device="${d.id}"}`,
           `up{job=~"integrations/snmp/.*",site="${siteId}",device="${d.id}"}`
         ];
         if (d.snmpIp) {
           const ipRe = d.snmpIp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          legacySelectors.push(`up{job=~"integrations/snmp/.*",instance=~".*${ipRe}.*"}`);
+          fallbackSelectors.push(`up{job=~"integrations/snmp/.*",instance=~".*${ipRe}.*"}`);
         }
-        for (const sel of legacySelectors) {
-          const legacy = await queryBooleanMetricState(sel);
-          if (legacy.state === "unknown") continue;
+        for (const sel of fallbackSelectors) {
+          const fb = await queryBooleanMetricState(sel);
+          if (fb.state === "unknown") continue;
+          const viaSiteJob = sel.includes('job="site_snmp_if_mib"');
           st = {
-            ...legacy,
+            ...fb,
             notes:
-              legacy.state === "healthy"
-                ? "OK via legacy integrations/snmp up (site-box snmp_up not publishing yet)"
-                : legacy.notes ?? "Legacy SNMP scrape reports down"
+              fb.state === "healthy"
+                ? viaSiteJob
+                  ? "OK via site_snmp_if_mib scrape up (snmp_up metric not present)"
+                  : "OK via legacy integrations/snmp up (site-box snmp_up not publishing yet)"
+                : fb.notes ?? "SNMP scrape reports down"
           };
           break;
         }

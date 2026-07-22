@@ -1,8 +1,10 @@
 # Cut over to site-box SNMP (drop legacy `integrations/snmp`)
 
-**Canonical path only:** `job="site_snmp_if_mib"` + metric **`snmp_up`**.
+**Canonical path only:** `job="site_snmp_if_mib"` + **`up{job="site_snmp_if_mib",device=...}`** (and `snmp_up` when the exporter emits it).
 
-**Unsupported:** Grafana Agent/Alloy **`integrations/snmp/*`** (may show `ifDescr` / `up=1` but **no `snmp_up`** → NOC Local devices stay UNKNOWN).
+**Important (Alloy v1.5.1):** `prometheus.exporter.snmp` sets `job = "integrations/snmp/" + target_name` automatically. Plain `job_name = "site_snmp_if_mib"` on the scrape is **ignored**. Site-box `generate-config.sh` must include `discovery.relabel "snmp_job"` + `prometheus.relabel "snmp_canonical"` to force `job="site_snmp_if_mib"`. Without that, Grafana only shows `integrations/snmp/site_1_fw1` and looks like “legacy only”.
+
+**Unsupported:** leaving that default job as-is for NOC health (NOC prefers `snmp_up` / `site_snmp_if_mib`).
 
 Host metrics may still use `integrations/unix` dual-read in NOC until all sites use `site_host` — that is separate from SNMP.
 
@@ -11,10 +13,10 @@ Host metrics may still use `integrations/unix` dual-read in NOC until all sites 
 | Item | Value |
 |------|--------|
 | Alloy | `grafana/alloy:v1.5.1` via site-box compose |
-| SNMP job | `site_snmp_if_mib` |
+| SNMP job | `site_snmp_if_mib` (forced via relabel) |
 | Device id | `site-1-fw1` @ `192.168.1.1` |
 | Community | `FortiSNMP` (Console Default / per-device) |
-| NOC status | `snmp_up{site="site-1",device="site-1-fw1"}` |
+| NOC status | `snmp_up` **or** `up{job="site_snmp_if_mib",device="site-1-fw1"}` |
 
 ## Dokploy cutover checklist (NUC)
 
@@ -26,7 +28,7 @@ Host metrics may still use `integrations/unix` dual-read in NOC until all sites 
    - Keep only: repo-root `docker-compose.site-box.yml` (Dokploy Compose Path) + Environment secrets; optional community note
    - Do **not** use `sites/templates/site-box/docker-compose.yml` as Dokploy Compose Path (`.:/data` mounts monorepo → generate-config missing)
 
-3. **Redeploy** site-box from git with **rebuild** (`collector-console` + `noc_site_alloy`).
+3. **Redeploy** site-box from git with **rebuild** (`collector-console` + `noc_site_alloy`) so `/opt/sitebox/generate-config.sh` includes SNMP job relabel.
 
 4. Confirm containers: `noc_collector_console` **and** `noc_site_alloy`.
 
@@ -38,25 +40,21 @@ Host metrics may still use `integrations/unix` dual-read in NOC until all sites 
 6. Optional on host: `./repair-alloy.sh` then `./verify-snmp-queries.sh site-1-fw1`
 
 7. Alloy logs must **not** contain `config_merge_strategy` / `invalid duration` / `could not perform the initial load`.
-   Config must contain `prometheus.exporter.snmp` and `site_snmp_if_mib`.
+   Config must contain `prometheus.exporter.snmp`, `discovery.relabel "snmp_job"`, and `site_snmp_if_mib`.
 
 ## Grafana prove (after ~2 minutes)
 
 ```promql
 up{job="site_host",site="site-1"}
 up{job="site_snmp_if_mib",site="site-1"}
+up{job="site_snmp_if_mib",device="site-1-fw1"}
 snmp_up{site="site-1",device="site-1-fw1"}
+time() - timestamp(up{job="integrations/snmp/site_1_fw1"})
 ```
 
-Success: scrape `up` = 1 and **`snmp_up` = 1**. NOC Sites → Local devices → HEALTHY.
+Success: `up{job="site_snmp_if_mib",device="site-1-fw1"}` = 1 (fresh). `snmp_up` may also appear; NOC accepts either. Legacy `integrations/snmp/...` age should grow (>60s) after relabel.
 
-Legacy should go stale (no new points):
-
-```promql
-up{job="integrations/snmp/site_1_fw1"}
-```
-
-Do **not** use that series for NOC health.
+Do **not** use legacy series for NOC health once site_snmp_if_mib is fresh.
 
 ## Fortinet reminder
 

@@ -1,0 +1,12 @@
+# Synthetic snmp_up for site-box Alloy when the embedded SNMP exporter
+# does not emit snmp_up (observed on Alloy v1.5.1 integrations path).
+# Requires generate-config relabel so scrapes use job=site_snmp_if_mib.
+groups:
+  - name: noc_snmp_up_synthetic
+    interval: 15s
+    rules:
+      - record: snmp_up
+        expr: |
+          max by (site, device, vendor, instance) (
+            up{job="site_snmp_if_mib", device=~".+"}
+          )
