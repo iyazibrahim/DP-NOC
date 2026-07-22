@@ -98,6 +98,39 @@ export function SiteSignalBoard({
   );
 }
 
+/** Big green/red card for one local SNMP device. */
+export function SnmpDeviceStatusCard({
+  site,
+  status,
+  deviceId,
+  title
+}: {
+  site?: Site;
+  status?: SiteStatus | null;
+  deviceId?: string;
+  title?: string;
+}) {
+  const inventory = site?.devices?.find((d) => d.id === deviceId);
+  const live = status?.localDeviceStates?.find((d) => d.deviceId === deviceId);
+  const state = live?.state ?? "unknown";
+  const tone = stateTone(state);
+  const name = live?.name ?? inventory?.name ?? "Pick a device";
+  const snmpIp = live?.snmpIp ?? inventory?.snmpIp;
+  return (
+    <div className={`signalCard signalCard--${tone}`}>
+      <div className="signalCardEyebrow">{title?.trim() || "SNMP device"}</div>
+      <div className="signalCardName">{name}</div>
+      <div className="signalCardSub">
+        {site?.name ?? "—"}
+        {snmpIp ? ` · ${snmpIp}` : ""}
+      </div>
+      <div className="signalCardState">{stateLabel(state)}</div>
+      {live?.notes ? <div className="signalCardNotes">{live.notes}</div> : null}
+      <div className="signalCardHint">Green = SNMP reachable · Red = down · Grey = no data</div>
+    </div>
+  );
+}
+
 /** Per-device SNMP LEDs — one site or all sites. */
 export function LocalDevicesSignalBoard({
   sites,

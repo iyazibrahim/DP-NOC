@@ -14,6 +14,7 @@ import {
   CollectorStatusCard,
   LocalDevicesSignalBoard,
   SiteSignalBoard,
+  SnmpDeviceStatusCard,
   UplinkStatusCard
 } from "./StatusVisualWidgets";
 
@@ -30,10 +31,17 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   { type: "site_signal_board", label: "Sites signal board", description: "Green/red LEDs for collector + uplink", defaultW: 6, defaultH: 7 },
   {
     type: "local_devices_board",
-    label: "Local devices (SNMP)",
-    description: "Per-device SNMP up/down LEDs",
+    label: "Local devices board (SNMP)",
+    description: "LED board — every firewall/switch SNMP up/down",
     defaultW: 6,
     defaultH: 7
+  },
+  {
+    type: "snmp_device_status",
+    label: "SNMP device status",
+    description: "Big UP/DOWN for one firewall or switch",
+    defaultW: 3,
+    defaultH: 4
   },
   { type: "uplink_status", label: "Uplink status", description: "Big UP/DOWN for one site’s internet", defaultW: 3, defaultH: 4 },
   { type: "collector_status", label: "Collector status", description: "Big UP/DOWN for one site’s collector", defaultW: 3, defaultH: 4 },
@@ -44,22 +52,22 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   { type: "site_card", label: "Single site card", defaultW: 4, defaultH: 4 },
   {
     type: "device_metric_chart",
-    label: "Collector line chart",
-    description: "CPU, memory, disk over time",
+    label: "Device line chart",
+    description: "CPU/mem/disk (collector) or SNMP traffic / online",
     defaultW: 6,
     defaultH: 5
   },
   {
     type: "device_metric_bar",
-    label: "Collector bar chart",
-    description: "Same metrics as bars",
+    label: "Device bar chart",
+    description: "Same metrics as bars — works for SNMP traffic too",
     defaultW: 6,
     defaultH: 5
   },
   {
     type: "device_stat_gauge",
-    label: "Collector gauge",
-    description: "Percent gauge / UP-DOWN for probes",
+    label: "Device gauge / online",
+    description: "Percent gauge or SNMP/collector UP-DOWN",
     defaultW: 3,
     defaultH: 4
   },
@@ -86,13 +94,18 @@ export const WIDGET_GROUPS: Array<{ label: string; widgets: WidgetCatalogEntry[]
       [
         "site_status_grid",
         "site_signal_board",
-        "local_devices_board",
         "uplink_status",
         "collector_status",
         "site_card",
         "alerts_table",
         "website_summary"
       ].includes(w.type)
+    )
+  },
+  {
+    label: "SNMP / local devices",
+    widgets: WIDGET_CATALOG.filter((w) =>
+      ["local_devices_board", "snmp_device_status"].includes(w.type)
     )
   },
   {
@@ -174,6 +187,19 @@ export function WidgetBody({
           sites={sites}
           statuses={statuses}
           siteId={config?.siteId || undefined}
+          title={config?.title}
+        />
+      </div>
+    );
+  }
+
+  if (type === "snmp_device_status") {
+    return (
+      <div className="widgetInner flush">
+        <SnmpDeviceStatusCard
+          site={site}
+          status={st}
+          deviceId={config?.deviceId}
           title={config?.title}
         />
       </div>

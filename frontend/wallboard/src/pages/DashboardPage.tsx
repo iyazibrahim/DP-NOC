@@ -64,7 +64,8 @@ function widgetHasConfig(type: DashboardWidget["type"]) {
     type === "device_detail" ||
     type === "uplink_status" ||
     type === "collector_status" ||
-    type === "local_devices_board"
+    type === "local_devices_board" ||
+    type === "snmp_device_status"
   );
 }
 
@@ -278,6 +279,14 @@ export function DashboardPage() {
       config = { siteId: firstSite?.id ?? "" };
     } else if (type === "local_devices_board") {
       config = { siteId: "" };
+    } else if (type === "snmp_device_status") {
+      const firstNet =
+        (firstSite?.devices ?? []).find((d) => (d.kind ?? "network") !== "server") ??
+        (firstSite?.devices ?? []).find((d) => d.snmpIp);
+      config = {
+        siteId: firstSite?.id ?? "",
+        deviceId: firstNet?.id ?? ""
+      };
     }
     const widget: DashboardWidget = {
       i: id,

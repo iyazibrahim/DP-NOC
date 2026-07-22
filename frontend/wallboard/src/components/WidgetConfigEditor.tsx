@@ -102,6 +102,47 @@ export function WidgetConfigEditor({
     );
   }
 
+  if (widget.type === "snmp_device_status") {
+    const networkDevices = devices.filter((d) => (d.kind ?? "network") !== "server");
+    return (
+      <div className="widgetConfig">
+        <TitleField config={config} onChange={onChange} placeholder="e.g. DP Firewall" />
+        <label className="label">Site</label>
+        <select
+          value={siteId}
+          onChange={(e) => {
+            const nextSite = sites.find((s) => s.id === e.target.value);
+            const firstNet =
+              nextSite?.devices?.find((d) => (d.kind ?? "network") !== "server")?.id ?? "";
+            onChange({ ...config, siteId: e.target.value, deviceId: firstNet });
+          }}
+        >
+          {sites.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        <label className="label">SNMP device</label>
+        <select
+          value={deviceId}
+          onChange={(e) => onChange({ ...config, siteId, deviceId: e.target.value })}
+        >
+          {networkDevices.length === 0 ? (
+            <option value="">No SNMP devices on this site</option>
+          ) : (
+            networkDevices.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+                {d.snmpIp ? ` (${d.snmpIp})` : ""}
+              </option>
+            ))
+          )}
+        </select>
+      </div>
+    );
+  }
+
   if (widget.type === "grafana_panel") {
     const base = grafanaUrl.replace(/\/$/, "");
     return (
@@ -161,13 +202,13 @@ export function WidgetConfigEditor({
           </option>
         ))}
       </select>
-      <label className="label">Collector / device</label>
+      <label className="label">Collector / SNMP device</label>
       <select
         value={deviceId}
         onChange={(e) => onChange({ ...config, siteId, deviceId: e.target.value })}
       >
         {devices.length === 0 ? (
-          <option value="">No collectors yet</option>
+          <option value="">No devices yet</option>
         ) : (
           [...devices]
             .sort((a, b) => {
@@ -178,7 +219,7 @@ export function WidgetConfigEditor({
             .map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
-                {d.kind === "server" ? " (collector)" : " (local)"}
+                {d.kind === "server" ? " (collector)" : " (SNMP)"}
               </option>
             ))
         )}
@@ -197,8 +238,8 @@ export function WidgetConfigEditor({
             ))}
           </select>
           <p className="muted fieldHint">
-            Tip: pick “Uplink (DNS)” or “Uplink (central)” for a green/red UP-DOWN card instead of
-            1.0.
+            For SNMP gear pick “Local device online”, “Interface traffic in/out”. For collectors use
+            CPU / memory / disk.
           </p>
         </>
       ) : null}

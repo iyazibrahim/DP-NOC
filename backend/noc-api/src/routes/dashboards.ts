@@ -11,6 +11,8 @@ const widgetSchema = z.object({
   type: z.enum([
     "site_status_grid",
     "site_signal_board",
+    "local_devices_board",
+    "snmp_device_status",
     "uplink_status",
     "collector_status",
     "alerts_table",

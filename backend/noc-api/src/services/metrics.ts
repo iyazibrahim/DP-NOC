@@ -50,20 +50,20 @@ export const METRIC_PRESETS: MetricPreset[] = [
   },
   {
     id: "snmp_up",
-    label: "Local device online",
+    label: "SNMP device online",
     kind: "network",
     query: `snmp_up{site="{{site}}",device="{{device}}"}`
   },
   {
     id: "if_in_bps",
-    label: "Interface traffic in",
+    label: "SNMP traffic in",
     kind: "network",
     unit: "bps",
     query: `IF_IN_PLACEHOLDER`
   },
   {
     id: "if_out_bps",
-    label: "Interface traffic out",
+    label: "SNMP traffic out",
     kind: "network",
     unit: "bps",
     query: `IF_OUT_PLACEHOLDER`
