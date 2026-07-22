@@ -26,10 +26,23 @@ const widgetSchema = z.object({
     "device_stat_gauge",
     "device_detail"
   ]),
-  x: z.number().int().min(0),
-  y: z.number().int().min(0),
-  w: z.number().int().min(1).max(12),
-  h: z.number().int().min(1).max(24),
+  // RGL / JSON may send null for Infinity/NaN — coerce before int checks
+  x: z.preprocess((v) => {
+    const n = Number(v);
+    return v == null || !Number.isFinite(n) ? 0 : Math.trunc(n);
+  }, z.number().int().min(0)),
+  y: z.preprocess((v) => {
+    const n = Number(v);
+    return v == null || !Number.isFinite(n) ? 0 : Math.trunc(n);
+  }, z.number().int().min(0)),
+  w: z.preprocess((v) => {
+    const n = Number(v);
+    return v == null || !Number.isFinite(n) || n < 1 ? 4 : Math.trunc(n);
+  }, z.number().int().min(1).max(12)),
+  h: z.preprocess((v) => {
+    const n = Number(v);
+    return v == null || !Number.isFinite(n) || n < 1 ? 4 : Math.trunc(n);
+  }, z.number().int().min(1).max(24)),
   config: z.record(z.string()).optional()
 });
 

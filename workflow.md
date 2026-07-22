@@ -115,10 +115,12 @@ Collector box → Alloy → Prometheus (central)
     - Console image bakes toolkit; detects monorepo-mounted `/data`
   - **Temporary SNMP status bridge (2026-07-22)**
     - While `site_snmp_if_mib` / `snmp_up` empty, NOC Local devices use `up{job=~"integrations/snmp/.*"}`
-  - **Dashboard widget enum + SNMP widgets (2026-07-22)**
-    - Backend accepts `local_devices_board` (fixes 400 Invalid layout on save)
-    - New `snmp_device_status` big UP/DOWN card; SNMP group in widget catalog
-    - Default layout includes local devices board + SNMP traffic chart slot
+  - **Dashboard layout null coerce + compact density (2026-07-22)**
+    - Fix 400 Invalid layout: RGL `Infinity`/`NaN` serialized as JSON `null` on x/y/w/h
+    - Frontend `normalizeLayoutForSave` + backend Zod preprocess coerce null → ints
+    - New widgets place at finite `maxBottom` (no more `y: Infinity`)
+    - Dashboard **Compact / Comfortable** density toggle (localStorage); denser boards/cards
+    - Per-widget “Compact this widget” in settings; shorter add-drawer labels (tooltip only)
 
 
 ## Local Validation

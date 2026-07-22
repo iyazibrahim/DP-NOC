@@ -15,25 +15,31 @@ function stateLabel(state: DomainState | string): string {
   return "UNKNOWN";
 }
 
+function cardClass(tone: string, compact?: boolean) {
+  return `signalCard signalCard--${tone}${compact ? " signalCardCompact" : ""}`;
+}
+
 /** Big green/red uplink card for one site. */
 export function UplinkStatusCard({
   site,
   status,
-  title
+  title,
+  compact
 }: {
   site?: Site;
   status?: SiteStatus | null;
   title?: string;
+  compact?: boolean;
 }) {
   const up = uplinkOf(status);
   const tone = stateTone(up.state);
   return (
-    <div className={`signalCard signalCard--${tone}`}>
+    <div className={cardClass(tone, compact)}>
       <div className="signalCardEyebrow">{title?.trim() || "Uplink / Internet"}</div>
       <div className="signalCardName">{site?.name ?? "Pick a site"}</div>
       <div className="signalCardState">{stateLabel(up.state)}</div>
-      {up.notes ? <div className="signalCardNotes">{up.notes}</div> : null}
-      <div className="signalCardHint">Green = reachable · Red = down</div>
+      {!compact && up.notes ? <div className="signalCardNotes">{up.notes}</div> : null}
+      {!compact ? <div className="signalCardHint">Green = reachable · Red = down</div> : null}
     </div>
   );
 }
@@ -42,23 +48,25 @@ export function UplinkStatusCard({
 export function CollectorStatusCard({
   site,
   status,
-  title
+  title,
+  compact
 }: {
   site?: Site;
   status?: SiteStatus | null;
   title?: string;
+  compact?: boolean;
 }) {
   const col = collectorOf(status);
   const tone = stateTone(col.state);
   const collectorName =
     site?.devices?.find((d) => (d.kind ?? "network") === "server")?.name ?? "Collector";
   return (
-    <div className={`signalCard signalCard--${tone}`}>
+    <div className={cardClass(tone, compact)}>
       <div className="signalCardEyebrow">{title?.trim() || "Collector"}</div>
       <div className="signalCardName">{site?.name ?? "Pick a site"}</div>
-      <div className="signalCardSub">{collectorName}</div>
+      {!compact ? <div className="signalCardSub">{collectorName}</div> : null}
       <div className="signalCardState">{stateLabel(col.state)}</div>
-      {col.notes ? <div className="signalCardNotes">{col.notes}</div> : null}
+      {!compact && col.notes ? <div className="signalCardNotes">{col.notes}</div> : null}
     </div>
   );
 }
@@ -66,14 +74,16 @@ export function CollectorStatusCard({
 /** Board of LED-style rows for every site (uplink + collector). */
 export function SiteSignalBoard({
   sites,
-  statuses
+  statuses,
+  compact
 }: {
   sites: Site[];
   statuses: SiteStatus[];
+  compact?: boolean;
 }) {
   return (
-    <div className="signalBoard">
-      <div className="widgetTitle">Sites at a glance</div>
+    <div className={`signalBoard${compact ? " signalBoardCompact" : ""}`}>
+      {!compact ? <div className="widgetTitle">Sites at a glance</div> : null}
       <div className="signalBoardList">
         {sites.map((s) => {
           const st = statuses.find((x) => x.siteId === s.id);
@@ -84,10 +94,10 @@ export function SiteSignalBoard({
               <div className="signalBoardSite">{s.name}</div>
               <div className="signalLeds">
                 <span className={`signalLed signalLed--${stateTone(col.state)}`} title={col.notes}>
-                  <i /> Collector {stateLabel(col.state)}
+                  <i /> {compact ? "Col" : "Collector"} {stateLabel(col.state)}
                 </span>
                 <span className={`signalLed signalLed--${stateTone(up.state)}`} title={up.notes}>
-                  <i /> Uplink {stateLabel(up.state)}
+                  <i /> {compact ? "Up" : "Uplink"} {stateLabel(up.state)}
                 </span>
               </div>
             </div>
@@ -103,12 +113,14 @@ export function SnmpDeviceStatusCard({
   site,
   status,
   deviceId,
-  title
+  title,
+  compact
 }: {
   site?: Site;
   status?: SiteStatus | null;
   deviceId?: string;
   title?: string;
+  compact?: boolean;
 }) {
   const inventory = site?.devices?.find((d) => d.id === deviceId);
   const live = status?.localDeviceStates?.find((d) => d.deviceId === deviceId);
@@ -117,16 +129,20 @@ export function SnmpDeviceStatusCard({
   const name = live?.name ?? inventory?.name ?? "Pick a device";
   const snmpIp = live?.snmpIp ?? inventory?.snmpIp;
   return (
-    <div className={`signalCard signalCard--${tone}`}>
+    <div className={cardClass(tone, compact)}>
       <div className="signalCardEyebrow">{title?.trim() || "SNMP device"}</div>
       <div className="signalCardName">{name}</div>
-      <div className="signalCardSub">
-        {site?.name ?? "—"}
-        {snmpIp ? ` · ${snmpIp}` : ""}
-      </div>
+      {!compact ? (
+        <div className="signalCardSub">
+          {site?.name ?? "—"}
+          {snmpIp ? ` · ${snmpIp}` : ""}
+        </div>
+      ) : null}
       <div className="signalCardState">{stateLabel(state)}</div>
-      {live?.notes ? <div className="signalCardNotes">{live.notes}</div> : null}
-      <div className="signalCardHint">Green = SNMP reachable · Red = down · Grey = no data</div>
+      {!compact && live?.notes ? <div className="signalCardNotes">{live.notes}</div> : null}
+      {!compact ? (
+        <div className="signalCardHint">Green = SNMP reachable · Red = down · Grey = no data</div>
+      ) : null}
     </div>
   );
 }
@@ -136,12 +152,14 @@ export function LocalDevicesSignalBoard({
   sites,
   statuses,
   siteId,
-  title
+  title,
+  compact
 }: {
   sites: Site[];
   statuses: SiteStatus[];
   siteId?: string;
   title?: string;
+  compact?: boolean;
 }) {
   const rows = (siteId ? sites.filter((s) => s.id === siteId) : sites).flatMap((s) => {
     const st = statuses.find((x) => x.siteId === s.id);
@@ -169,19 +187,22 @@ export function LocalDevicesSignalBoard({
   });
 
   return (
-    <div className="signalBoard">
-      <div className="widgetTitle">{title?.trim() || "Local devices (SNMP)"}</div>
+    <div className={`signalBoard${compact ? " signalBoardCompact" : ""}`}>
+      {!compact ? (
+        <div className="widgetTitle">{title?.trim() || "Local devices (SNMP)"}</div>
+      ) : null}
       <div className="signalBoardList">
         {rows.map((r) => (
           <div key={r.key} className="signalBoardRow">
             <div className="signalBoardSite">
               {!siteId ? <span className="muted">{r.siteName} · </span> : null}
               {r.deviceName}
-              {r.snmpIp ? <div className="muted">{r.snmpIp}</div> : null}
+              {!compact && r.snmpIp ? <div className="muted">{r.snmpIp}</div> : null}
             </div>
             <div className="signalLeds">
               <span className={`signalLed signalLed--${stateTone(r.state)}`} title={r.notes}>
-                <i /> SNMP {stateLabel(r.state)}
+                <i /> {compact ? "" : "SNMP "}
+                {stateLabel(r.state)}
               </span>
             </div>
           </div>

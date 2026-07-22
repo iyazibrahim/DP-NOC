@@ -22,6 +22,30 @@ function TitleField({
   );
 }
 
+function CompactField({
+  config,
+  onChange
+}: {
+  config: Record<string, string>;
+  onChange: (config: Record<string, string>) => void;
+}) {
+  return (
+    <label className="checkRow">
+      <input
+        type="checkbox"
+        checked={config.compact === "1"}
+        onChange={(e) =>
+          onChange({
+            ...config,
+            compact: e.target.checked ? "1" : "0"
+          })
+        }
+      />
+      Compact this widget
+    </label>
+  );
+}
+
 export function WidgetConfigEditor({
   widget,
   sites,
@@ -73,6 +97,7 @@ export function WidgetConfigEditor({
             </option>
           ))}
         </select>
+        {widget.type !== "site_card" ? <CompactField config={config} onChange={onChange} /> : null}
       </div>
     );
   }
@@ -97,7 +122,15 @@ export function WidgetConfigEditor({
             </option>
           ))}
         </select>
-        <p className="muted fieldHint">Leave as All sites to show every network device.</p>
+        <CompactField config={config} onChange={onChange} />
+      </div>
+    );
+  }
+
+  if (widget.type === "site_signal_board") {
+    return (
+      <div className="widgetConfig">
+        <CompactField config={config} onChange={onChange} />
       </div>
     );
   }
@@ -139,6 +172,7 @@ export function WidgetConfigEditor({
             ))
           )}
         </select>
+        <CompactField config={config} onChange={onChange} />
       </div>
     );
   }

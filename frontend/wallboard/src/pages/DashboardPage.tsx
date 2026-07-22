@@ -30,21 +30,32 @@ import { useMetricPresets } from "../components/DeviceMetricWidgets";
 import { pushToast, ToastStack, type ToastItem } from "../components/ToastStack";
 import { uplinkOf } from "../statusLabels";
 
+function safeInt(value: unknown, fallback: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
+}
+
+/** RGL may use Infinity/NaN; JSON turns those into null and the API rejects the layout. */
 function normalizeLayoutForSave(layout: DashboardLayout): DashboardLayout {
+  const prepared = layout.widgets.map((w) => {
+    const h = Math.max(1, Math.min(24, safeInt(w.h, 4)));
+    const ww = Math.max(1, Math.min(12, safeInt(w.w, 4)));
+    const x = Math.max(0, Math.min(11, safeInt(w.x, 0)));
+    const yRaw = safeInt(w.y, -1);
+    return { ...w, x, y: yRaw, w: ww, h };
+  });
+
   let maxBottom = 0;
-  for (const w of layout.widgets) {
-    const y = Number.isFinite(w.y) && w.y >= 0 ? w.y : 0;
-    maxBottom = Math.max(maxBottom, y + w.h);
+  for (const w of prepared) {
+    if (w.y >= 0) maxBottom = Math.max(maxBottom, w.y + w.h);
   }
+
   return {
     ...layout,
-    widgets: layout.widgets.map((w, i) => {
-      const y =
-        !Number.isFinite(w.y) || w.y === Infinity || w.y < 0
-          ? maxBottom + i * 2
-          : Math.floor(w.y);
-      return { ...w, y, x: Math.floor(w.x), w: Math.floor(w.w), h: Math.floor(w.h) };
-    })
+    widgets: prepared.map((w, i) => ({
+      ...w,
+      y: w.y >= 0 ? w.y : maxBottom + i * Math.max(2, w.h)
+    }))
   };
 }
 
@@ -65,7 +76,8 @@ function widgetHasConfig(type: DashboardWidget["type"]) {
     type === "uplink_status" ||
     type === "collector_status" ||
     type === "local_devices_board" ||
-    type === "snmp_device_status"
+    type === "snmp_device_status" ||
+    type === "site_signal_board"
   );
 }
 
@@ -86,6 +98,16 @@ export function DashboardPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   /** Which widget shows the settings panel (edit mode). */
   const [configOpenId, setConfigOpenId] = useState<string | null>(null);
+  const [density, setDensity] = useState<"comfortable" | "compact">(() => {
+    try {
+      return localStorage.getItem("noc-dashboard-density") === "compact" ? "compact" : "comfortable";
+    } catch {
+      return "comfortable";
+    }
+  });
+  const compact = density === "compact" || commandCenter;
+  const rowH = commandCenter ? 36 : compact ? 28 : 36;
+  const gridMargin: [number, number] = commandCenter ? [6, 6] : compact ? [6, 6] : [10, 10];
   const hostRef = useRef<HTMLDivElement | null>(null);
   const presets = useMetricPresets();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -210,10 +232,10 @@ export function DashboardPage() {
     () =>
       (layout?.widgets ?? []).map((w) => ({
         i: w.i,
-        x: w.x,
-        y: w.y,
-        w: w.w,
-        h: w.h,
+        x: Math.max(0, safeInt(w.x, 0)),
+        y: Math.max(0, safeInt(w.y, 0)),
+        w: Math.max(1, safeInt(w.w, 4)),
+        h: Math.max(1, safeInt(w.h, 4)),
         minW: 2,
         minH: w.type === "mini_map" ? 3 : 2
       })),
@@ -222,7 +244,11 @@ export function DashboardPage() {
 
   /** Extra empty rows so you can drag into the lower part of a large monitor. */
   const gridMinRows = useMemo(() => {
-    const bottom = (layout?.widgets ?? []).reduce((m, w) => Math.max(m, w.y + w.h), 0);
+    const bottom = (layout?.widgets ?? []).reduce((m, w) => {
+      const y = Math.max(0, safeInt(w.y, 0));
+      const h = Math.max(1, safeInt(w.h, 4));
+      return Math.max(m, y + h);
+    }, 0);
     return Math.max(bottom + 8, 22);
   }, [layout]);
 
@@ -233,10 +259,10 @@ export function DashboardPage() {
       if (!n) return w;
       return {
         ...w,
-        x: Math.max(0, Math.min(11, Math.floor(n.x))),
-        y: Math.max(0, Math.floor(n.y)),
-        w: Math.max(1, Math.min(12, Math.floor(n.w))),
-        h: Math.max(1, Math.floor(n.h))
+        x: Math.max(0, Math.min(11, safeInt(n.x, w.x))),
+        y: Math.max(0, safeInt(n.y, w.y >= 0 && Number.isFinite(w.y) ? w.y : 0)),
+        w: Math.max(1, Math.min(12, safeInt(n.w, w.w))),
+        h: Math.max(1, Math.min(24, safeInt(n.h, w.h)))
       };
     });
     setLayout({ ...layout, widgets });
@@ -244,12 +270,17 @@ export function DashboardPage() {
 
   const persist = async () => {
     if (!token || !layout) return;
-    const normalized = normalizeLayoutForSave(layout);
-    setLayout(normalized);
-    await saveDashboardLayout(token, normalized);
-    setEditing(false);
-    setDrawerOpen(false);
-    setConfigOpenId(null);
+    try {
+      const normalized = normalizeLayoutForSave(layout);
+      setLayout(normalized);
+      await saveDashboardLayout(token, normalized);
+      setEditing(false);
+      setDrawerOpen(false);
+      setConfigOpenId(null);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save layout");
+    }
   };
 
   const addWidget = (type: DashboardWidget["type"]) => {
@@ -288,13 +319,19 @@ export function DashboardPage() {
         deviceId: firstNet?.id ?? ""
       };
     }
+    let maxBottom = 0;
+    for (const w of layout.widgets) {
+      const y = Number.isFinite(w.y) && w.y >= 0 ? w.y : 0;
+      const h = Number.isFinite(w.h) && w.h > 0 ? w.h : meta.defaultH;
+      maxBottom = Math.max(maxBottom, y + h);
+    }
     const widget: DashboardWidget = {
       i: id,
       type,
       x: 0,
-      y: Infinity,
+      y: maxBottom,
       w: meta.defaultW,
-      h: meta.defaultH,
+      h: compact ? Math.max(2, Math.round(meta.defaultH * 0.75)) : meta.defaultH,
       config
     };
     setLayout({ ...layout, widgets: [...layout.widgets, widget] });
@@ -360,6 +397,21 @@ export function DashboardPage() {
           <div className="pageActions">
             {editing ? (
               <>
+                <button
+                  type="button"
+                  title={compact ? "Switch to comfortable spacing" : "Pack more sites on screen"}
+                  onClick={() => {
+                    const next = density === "compact" ? "comfortable" : "compact";
+                    setDensity(next);
+                    try {
+                      localStorage.setItem("noc-dashboard-density", next);
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                >
+                  {density === "compact" ? "Comfortable" : "Compact"}
+                </button>
                 <button type="button" onClick={() => setDrawerOpen(true)}>
                   Add widget
                 </button>
@@ -372,6 +424,21 @@ export function DashboardPage() {
               </>
             ) : (
               <>
+                <button
+                  type="button"
+                  title={compact ? "Switch to comfortable spacing" : "Pack more sites on screen"}
+                  onClick={() => {
+                    const next = density === "compact" ? "comfortable" : "compact";
+                    setDensity(next);
+                    try {
+                      localStorage.setItem("noc-dashboard-density", next);
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                >
+                  {density === "compact" ? "Comfortable" : "Compact"}
+                </button>
                 <button type="button" onClick={() => void enterCommandCenter()}>
                   Fullscreen
                 </button>
@@ -400,16 +467,18 @@ export function DashboardPage() {
       <div
         id="dashboard-grid-host"
         ref={hostRef}
-        className={`dashboardHost${canEdit ? " dashboardHostEditing" : ""}`}
-        style={{ minHeight: gridMinRows * 36 + 80 }}
+        className={`dashboardHost${canEdit ? " dashboardHostEditing" : ""}${
+          compact ? " dashboardHostCompact" : ""
+        }`}
+        style={{ minHeight: gridMinRows * rowH + 80 }}
       >
         <GridLayout
           className="layout"
           layout={gridLayout}
           cols={12}
-          rowHeight={commandCenter ? 42 : 36}
+          rowHeight={rowH}
           width={width}
-          margin={commandCenter ? [8, 8] : [10, 10]}
+          margin={gridMargin}
           containerPadding={[0, 0]}
           isDraggable={canEdit}
           isResizable={canEdit}
@@ -485,6 +554,7 @@ export function DashboardPage() {
                     alerts={alerts}
                     devices={devices}
                     grafanaUrl={grafanaUrl}
+                    compact={compact || w.config?.compact === "1"}
                   />
                 )}
               </div>
@@ -509,10 +579,9 @@ export function DashboardPage() {
                     setDrawerOpen(false);
                   }}
                 >
-                  <span className="drawerItemLabel">{c.label}</span>
-                  {c.description ? (
-                    <span className="drawerItemDesc">{c.description}</span>
-                  ) : null}
+                  <span className="drawerItemLabel" title={c.description}>
+                    {c.label}
+                  </span>
                 </button>
               ))}
             </div>

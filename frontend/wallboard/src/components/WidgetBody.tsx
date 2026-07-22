@@ -27,63 +27,81 @@ export type WidgetCatalogEntry = {
 };
 
 export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
-  { type: "site_status_grid", label: "Site health overview", defaultW: 4, defaultH: 8 },
-  { type: "site_signal_board", label: "Sites signal board", description: "Green/red LEDs for collector + uplink", defaultW: 6, defaultH: 7 },
+  { type: "site_status_grid", label: "Site health", defaultW: 4, defaultH: 6 },
+  {
+    type: "site_signal_board",
+    label: "Sites signal board",
+    description: "Collector + uplink LEDs",
+    defaultW: 6,
+    defaultH: 5
+  },
   {
     type: "local_devices_board",
-    label: "Local devices board (SNMP)",
-    description: "LED board — every firewall/switch SNMP up/down",
+    label: "Local devices (SNMP)",
+    description: "Firewall/switch LEDs",
     defaultW: 6,
-    defaultH: 7
+    defaultH: 5
   },
   {
     type: "snmp_device_status",
-    label: "SNMP device status",
-    description: "Big UP/DOWN for one firewall or switch",
+    label: "SNMP device",
+    description: "One device UP/DOWN",
     defaultW: 3,
-    defaultH: 4
+    defaultH: 3
   },
-  { type: "uplink_status", label: "Uplink status", description: "Big UP/DOWN for one site’s internet", defaultW: 3, defaultH: 4 },
-  { type: "collector_status", label: "Collector status", description: "Big UP/DOWN for one site’s collector", defaultW: 3, defaultH: 4 },
-  { type: "alerts_table", label: "Active alerts", defaultW: 6, defaultH: 4 },
+  {
+    type: "uplink_status",
+    label: "Uplink",
+    description: "Site internet UP/DOWN",
+    defaultW: 3,
+    defaultH: 3
+  },
+  {
+    type: "collector_status",
+    label: "Collector",
+    description: "Collector UP/DOWN",
+    defaultW: 3,
+    defaultH: 3
+  },
+  { type: "alerts_table", label: "Alerts", defaultW: 6, defaultH: 4 },
   { type: "top_devices", label: "Top devices", defaultW: 6, defaultH: 4 },
   { type: "mini_map", label: "Map", defaultW: 6, defaultH: 6 },
-  { type: "website_summary", label: "Website checks summary", defaultW: 4, defaultH: 4 },
-  { type: "site_card", label: "Single site card", defaultW: 4, defaultH: 4 },
+  { type: "website_summary", label: "Website checks", defaultW: 4, defaultH: 3 },
+  { type: "site_card", label: "Site card", defaultW: 4, defaultH: 3 },
   {
     type: "device_metric_chart",
-    label: "Device line chart",
-    description: "CPU/mem/disk (collector) or SNMP traffic / online",
+    label: "Line chart",
+    description: "CPU / SNMP traffic",
     defaultW: 6,
-    defaultH: 5
+    defaultH: 4
   },
   {
     type: "device_metric_bar",
-    label: "Device bar chart",
-    description: "Same metrics as bars — works for SNMP traffic too",
+    label: "Bar chart",
+    description: "Same metrics as bars",
     defaultW: 6,
-    defaultH: 5
+    defaultH: 4
   },
   {
     type: "device_stat_gauge",
-    label: "Device gauge / online",
-    description: "Percent gauge or SNMP/collector UP-DOWN",
+    label: "Gauge / online",
+    description: "% or UP-DOWN",
     defaultW: 3,
-    defaultH: 4
+    defaultH: 3
   },
   {
     type: "grafana_panel",
     label: "Grafana panel",
-    description: "Optional deep-dive chart",
+    description: "Embed a panel",
     defaultW: 6,
-    defaultH: 6
+    defaultH: 5
   },
   {
     type: "device_detail",
     label: "Device info",
-    description: "Name and IDs only",
+    description: "Name and IDs",
     defaultW: 4,
-    defaultH: 4
+    defaultH: 3
   }
 ];
 
@@ -129,7 +147,8 @@ export function WidgetBody({
   statuses,
   alerts,
   devices,
-  grafanaUrl: _grafanaUrl
+  grafanaUrl: _grafanaUrl,
+  compact = false
 }: {
   type: WidgetType;
   config?: Record<string, string>;
@@ -138,6 +157,7 @@ export function WidgetBody({
   alerts: ActiveAlert[];
   devices: DeviceRow[];
   grafanaUrl: string;
+  compact?: boolean;
 }) {
   const presets = useMetricPresets();
   const siteId = config?.siteId ?? sites[0]?.id ?? "";
@@ -175,7 +195,7 @@ export function WidgetBody({
   if (type === "site_signal_board") {
     return (
       <div className="widgetInner widgetInnerScroll">
-        <SiteSignalBoard sites={sites} statuses={statuses} />
+        <SiteSignalBoard sites={sites} statuses={statuses} compact={compact} />
       </div>
     );
   }
@@ -188,6 +208,7 @@ export function WidgetBody({
           statuses={statuses}
           siteId={config?.siteId || undefined}
           title={config?.title}
+          compact={compact}
         />
       </div>
     );
@@ -201,6 +222,7 @@ export function WidgetBody({
           status={st}
           deviceId={config?.deviceId}
           title={config?.title}
+          compact={compact}
         />
       </div>
     );
@@ -209,7 +231,7 @@ export function WidgetBody({
   if (type === "uplink_status") {
     return (
       <div className="widgetInner flush">
-        <UplinkStatusCard site={site} status={st} title={config?.title} />
+        <UplinkStatusCard site={site} status={st} title={config?.title} compact={compact} />
       </div>
     );
   }
@@ -217,7 +239,7 @@ export function WidgetBody({
   if (type === "collector_status") {
     return (
       <div className="widgetInner flush">
-        <CollectorStatusCard site={site} status={st} title={config?.title} />
+        <CollectorStatusCard site={site} status={st} title={config?.title} compact={compact} />
       </div>
     );
   }
