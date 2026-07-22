@@ -1,17 +1,11 @@
+# Auth profiles only — merge with Alloy's embedded snmp_exporter modules (if_mib, etc.).
+# Do NOT redefine modules here unless they include full metrics blocks from snmp_exporter generator.
+# config_merge_strategy = "merge" is set in generate-config.sh.
+#
+# Change community to match your Fortinet / switch SNMPv2c string.
+
 auths:
   public_v2:
     community: public
     security_level: noAuthNoPriv
     version: 2
-
-modules:
-  if_mib:
-    # Minimal interface polling (subset of IF-MIB).
-    # This is enough to build basic "interface up/down" and traffic trends.
-    walk:
-      - 1.3.6.1.2.1.2.2.1.2    # ifDescr
-      - 1.3.6.1.2.1.2.2.1.8    # ifOperStatus
-      - 1.3.6.1.2.1.2.2.1.5    # ifSpeed
-      - 1.3.6.1.2.1.31.1.1.1.6  # ifHCInOctets
-      - 1.3.6.1.2.1.31.1.1.1.10 # ifHCOutOctets
-

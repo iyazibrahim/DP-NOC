@@ -107,10 +107,18 @@ export async function regenerateAlloyConfig(): Promise<string> {
   const interval = process.env.SCRAPE_INTERVAL_SEC || "15";
   const safeInterval = /^\d+$/.test(interval) ? interval : "15";
 
-  return run("bash", [script, devicesFile, out], {
+  const msg = await run("bash", [script, devicesFile, out], {
     cwd: dir,
     env: { SCRAPE_INTERVAL_SEC: safeInterval }
   });
+
+  const written = fs.readFileSync(out, "utf8");
+  if (written.includes("${SCRAPE_INTERVAL_SEC}")) {
+    throw new Error(
+      'Generated config.alloy still has "${SCRAPE_INTERVAL_SEC}" — update generate-config.sh on the NUC and Force apply again'
+    );
+  }
+  return msg;
 }
 
 /**

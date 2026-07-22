@@ -104,6 +104,10 @@ DEVICE_COUNT="$(python3 -c "import json; print(len(json.load(open('$DEVICES_FILE
 
 if [[ "$DEVICE_COUNT" -eq 0 ]]; then
   echo "// No SNMP devices in devices.json." >> "$OUT_FILE"
+  if grep -q '\${SCRAPE_INTERVAL_SEC}' "$OUT_FILE"; then
+    echo "ERROR: config.alloy still contains \${SCRAPE_INTERVAL_SEC}" >&2
+    exit 1
+  fi
   echo "Wrote $OUT_FILE (ICMP + host metrics; no SNMP)"
   exit 0
 fi
@@ -111,7 +115,9 @@ fi
 {
   echo ""
   echo "prometheus.exporter.snmp \"site_devices\" {"
+  echo "  // Merge custom auths with Alloy embedded modules (if_mib). Do not replace."
   echo "  config_file = \"snmp.yml\""
+  echo "  config_merge_strategy = \"merge\""
   echo ""
 } >> "$OUT_FILE"
 
@@ -131,6 +137,7 @@ for d in devices:
     vendor = d.get("vendor", "generic").replace('"', '\\"')
     print(f'  target "{tid}" {{')
     print(f'    address = "{ip}"')
+    # Embedded Alloy/snmp_exporter module — requires config_merge_strategy = merge
     print(f'    module  = "if_mib"')
     print(f'    auth    = "public_v2"')
     print(f'    labels  = {{')
@@ -152,5 +159,15 @@ PY
   echo "  scrape_interval = \"${SCRAPE_INTERVAL_SEC}s\""
   echo "}"
 } >> "$OUT_FILE"
+
+# Guard: Alloy cannot parse shell placeholders as durations
+if grep -q '\${SCRAPE_INTERVAL_SEC}' "$OUT_FILE"; then
+  echo "ERROR: config.alloy still contains \${SCRAPE_INTERVAL_SEC} — refusing to leave broken config" >&2
+  exit 1
+fi
+if ! grep -qE 'scrape_interval = "[0-9]+s"' "$OUT_FILE"; then
+  echo "ERROR: config.alloy missing a numeric scrape_interval" >&2
+  exit 1
+fi
 
 echo "Wrote $OUT_FILE (ICMP + host + $DEVICE_COUNT SNMP device(s))"

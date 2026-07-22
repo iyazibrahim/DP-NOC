@@ -225,9 +225,8 @@ app.get("/api/diagnostics", async (_req, res) => {
     hint = "SNMP targets missing in Alloy — click Force apply SNMP";
   } else {
     hint =
-      "Metrics env present on Alloy. If NOC still says No recent samples: check Alloy logs for remote_write 403. If SNMP UNKNOWN after collector is healthy: Fortinet community / UDP 161 + Prometheus snmp_up{site=\"site-1\"}";
+      "Metrics env present on Alloy. Check SNMP scrape: up{job=\"site_snmp_if_mib\"} then snmp_up{site=\"site-1\"}. If scrape up=0: Fortinet community in snmp.yml / UDP 161. Device id must match exactly (e.g. site-1-firewall1).";
   }
-
   res.json({
     whyNocDown:
       !metricsOk || remoteWriteHints.length > 0
