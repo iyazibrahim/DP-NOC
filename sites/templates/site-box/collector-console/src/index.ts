@@ -12,6 +12,7 @@ import {
 } from "./config";
 import { getAlloyLogs, isAlloyRunning, regenerateAlloyConfig, recreateAlloy } from "./alloy";
 import { getLastSync, startSyncLoop, syncDevices } from "./sync";
+import { pushDeviceToNoc } from "./pushDevice";
 
 const PORT = Number(process.env.PORT || "8090");
 const dir = dataDir();
@@ -134,6 +135,25 @@ app.post("/api/sync", async (_req, res) => {
 
 app.get("/api/devices", (_req, res) => {
   res.json(readDevicesJson());
+});
+
+app.post("/api/devices", async (req, res) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const result = await pushDeviceToNoc(dir, {
+      name: typeof body.name === "string" ? body.name : "",
+      snmpIp: typeof body.snmpIp === "string" ? body.snmpIp : "",
+      type: typeof body.type === "string" ? body.type : "switch",
+      vendor: typeof body.vendor === "string" ? body.vendor : "generic",
+      id: typeof body.id === "string" ? body.id : undefined
+    });
+    res.status(result.ok ? (result.created ? 201 : 200) : 502).json(result);
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      message: err instanceof Error ? err.message : String(err)
+    });
+  }
 });
 
 app.get("/api/config/alloy", (_req, res) => {

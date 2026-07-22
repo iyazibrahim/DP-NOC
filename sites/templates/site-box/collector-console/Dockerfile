@@ -7,8 +7,18 @@ COPY src ./src
 RUN npm run build
 
 FROM node:20-bookworm-slim
+# docker CLI for socket access + compose standalone (plugin often missing in docker.io)
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash python3 docker.io \
+  && apt-get install -y --no-install-recommends bash python3 curl ca-certificates docker.io \
+  && ARCH="$(dpkg --print-architecture)" \
+  && case "$ARCH" in \
+       amd64) CARCH=x86_64 ;; \
+       arm64) CARCH=aarch64 ;; \
+       *) CARCH=x86_64 ;; \
+     esac \
+  && curl -fsSL "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-${CARCH}" \
+       -o /usr/local/bin/docker-compose \
+  && chmod +x /usr/local/bin/docker-compose \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json* ./

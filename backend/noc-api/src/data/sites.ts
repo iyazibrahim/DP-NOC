@@ -321,6 +321,36 @@ export function addDevice(siteId: string, device: SiteDevice): Site | null {
   return site;
 }
 
+/** Add or update a network SNMP device (used by collector console push). */
+export function upsertNetworkDevice(
+  siteId: string,
+  input: { id: string; name: string; type?: string; snmpIp: string; vendor?: string }
+): { site: Site; created: boolean } | null {
+  const site = getSiteById(siteId);
+  if (!site) return null;
+  if (!site.devices) site.devices = [];
+
+  const device: SiteDevice = {
+    id: input.id.trim(),
+    name: input.name.trim(),
+    type: (input.type || "switch").trim() || "switch",
+    kind: "network",
+    snmpIp: input.snmpIp.trim(),
+    vendor: (input.vendor || "generic").trim() || "generic"
+  };
+
+  const idx = site.devices.findIndex((d) => d.id === device.id);
+  if (idx >= 0) {
+    site.devices[idx] = normalizeDevice({ ...site.devices[idx], ...device, id: device.id });
+    persist();
+    return { site, created: false };
+  }
+
+  site.devices.push(normalizeDevice(device));
+  persist();
+  return { site, created: true };
+}
+
 export function updateDevice(
   siteId: string,
   deviceId: string,

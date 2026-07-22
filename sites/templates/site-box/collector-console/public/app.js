@@ -10,7 +10,13 @@ async function api(path, opts = {}) {
   } catch {
     data = text;
   }
-  if (!res.ok) throw new Error(typeof data === "object" && data?.message ? data.message : text || res.statusText);
+  if (!res.ok) {
+    const errMsg =
+      (typeof data === "object" && data && (data.message || data.error)) ||
+      text ||
+      res.statusText;
+    throw new Error(String(errMsg));
+  }
   return data;
 }
 
@@ -59,7 +65,7 @@ async function loadDevices() {
   const devices = await api("/api/devices");
   const body = document.getElementById("devices-body");
   if (!Array.isArray(devices) || devices.length === 0) {
-    body.innerHTML = '<tr><td colspan="4" class="hint">No devices — add network devices in NOC UI, then Sync now.</td></tr>';
+    body.innerHTML = '<tr><td colspan="4" class="hint">No devices yet — use Add SNMP device above, or Sync now to pull from NOC.</td></tr>';
     return;
   }
   body.innerHTML = devices
@@ -135,6 +141,34 @@ document.getElementById("btn-sync").addEventListener("click", async () => {
     await refreshDashboard();
   } catch (e) {
     showMsg(msg, e.message, false);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("add-device-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("add-device-msg");
+  const form = e.target;
+  const btn = form.querySelector('button[type="submit"]');
+  const fd = new FormData(form);
+  const body = {
+    name: String(fd.get("name") || "").trim(),
+    snmpIp: String(fd.get("snmpIp") || "").trim(),
+    type: String(fd.get("type") || "switch").trim(),
+    vendor: String(fd.get("vendor") || "generic").trim(),
+    id: String(fd.get("id") || "").trim() || undefined
+  };
+  btn.disabled = true;
+  try {
+    const result = await api("/api/devices", { method: "POST", body: JSON.stringify(body) });
+    showMsg(msg, result.message || "Device added", result.ok !== false);
+    form.reset();
+    document.getElementById("dev-vendor").value = "generic";
+    document.getElementById("dev-type").value = "firewall";
+    await refreshDashboard();
+  } catch (err) {
+    showMsg(msg, err.message, false);
   } finally {
     btn.disabled = false;
   }

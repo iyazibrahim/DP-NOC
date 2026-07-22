@@ -10,7 +10,7 @@
   <div class="wrap">
     <header>
       <h1>Collector Console</h1>
-      <p class="sub">Configure this site box, sync SNMP devices from NOC, and monitor Alloy.</p>
+      <p class="sub">Add SNMP devices here — they register on NOC and sync to Alloy for polling.</p>
     </header>
 
     <div class="tabs">
@@ -26,6 +26,47 @@
         <button type="button" class="secondary" id="btn-refresh">Refresh status</button>
       </div>
       <div id="sync-msg"></div>
+
+      <h3 style="margin-top:24px">Add SNMP device</h3>
+      <p class="hint">Adds the device on NOC, then syncs it to this collector for SNMP polling.</p>
+      <form id="add-device-form">
+        <div class="row2">
+          <div class="field">
+            <label for="dev-name">Name</label>
+            <input id="dev-name" name="name" placeholder="DP Firewall" required />
+          </div>
+          <div class="field">
+            <label for="dev-snmpIp">SNMP IP</label>
+            <input id="dev-snmpIp" name="snmpIp" placeholder="192.168.1.1" required />
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="dev-type">Type</label>
+            <select id="dev-type" name="type">
+              <option value="firewall">Firewall</option>
+              <option value="switch">Switch</option>
+              <option value="router">Router</option>
+              <option value="access-point">Access point</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="dev-vendor">Vendor</label>
+            <input id="dev-vendor" name="vendor" placeholder="generic" value="generic" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="dev-id">Device ID (optional)</label>
+          <input id="dev-id" name="id" placeholder="auto: site-1-dp-firewall" />
+          <p class="hint">Leave blank to auto-generate from site + name.</p>
+        </div>
+        <div class="actions">
+          <button type="submit">Add device → NOC</button>
+        </div>
+        <div id="add-device-msg"></div>
+      </form>
+
       <h3 style="margin-top:24px">Local devices</h3>
       <table>
         <thead>

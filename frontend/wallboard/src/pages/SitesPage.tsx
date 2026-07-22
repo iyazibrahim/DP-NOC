@@ -714,7 +714,7 @@ export function SiteDetailPage() {
             <div className="tableTitle">Collector inventory sync</div>
             <p className="muted">
               {site.hasCollectorToken
-                ? "Token configured. Open the Collector Console on the site box (http://<collector-ip>:8090), paste this token, and save. Sync runs automatically."
+                ? "Token configured. Open the Collector Console on the site box (http://<collector-ip>:8090) to add SNMP devices and sync. Devices added there appear here automatically."
                 : "Generate a token so this site’s Alloy box can pull SNMP targets from the UI."}
             </p>
             {site.collectorDevicesSyncedAt ? (

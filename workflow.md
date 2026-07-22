@@ -89,6 +89,10 @@ Collector box → Alloy → Prometheus (central)
     - Auto-sync inventory from NOC API (~90s), regenerate `config.alloy`, recreate Alloy
     - Replaces manual `sync-devices.sh` / cron for operators (shell script kept for legacy)
     - NOC Sites page updated to point operators to Collector Console
+  - **Collector add-device → NOC (2026-07-22)**
+    - Dashboard form pushes SNMP devices to `POST /api/collector/:siteId/devices`
+    - NOC upserts inventory; collector pulls + reloads Alloy
+    - Sync now still pulls devices already on NOC
 
 ## Local Validation
 1. `docker compose up -d --build`

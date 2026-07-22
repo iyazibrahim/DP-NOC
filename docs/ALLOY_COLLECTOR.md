@@ -126,10 +126,10 @@ Mirror the same devices in the **NOC UI** (Sites → site → Add device). With 
 After `docker compose up --build` (or Dokploy deploy), open **http://\<collector-lan-ip\>:8090** on the site LAN:
 
 1. **Setup** — site id, NOC URL, collector token, CF Access credentials, SNMP community, ping targets
-2. **Dashboard** — Alloy status, last sync, device list, **Sync now**
+2. **Dashboard** — add SNMP devices (pushes to NOC), Alloy status, last sync, device list, **Sync now**
 3. **Settings** — sync interval, view `config.alloy` / Alloy logs
 
-The console pulls `GET /api/collector/:siteId/devices.json`, writes `devices.json`, regenerates `config.alloy`, and recreates Alloy. No SSH or cron required.
+**Add device flow:** Collector Console → `POST /api/collector/:siteId/devices` (collector token) → NOC inventory → pull `devices.json` → regenerate Alloy. **Sync now** still pulls devices that already exist on NOC.
 
 **Dokploy:** expose port **8090** on the LAN only — do not publish the collector console to the public internet.
 

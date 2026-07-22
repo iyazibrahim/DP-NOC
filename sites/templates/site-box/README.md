@@ -63,9 +63,11 @@ Build context must be the **site-box** folder (where `docker-compose.yml` and `c
 
 | Page | Purpose |
 |---|---|
-| **Dashboard** | Alloy status, last sync, device list, Sync now |
+| **Dashboard** | Add SNMP device → NOC, Alloy status, last sync, device list, Sync now |
 | **Setup** | NOC URL, collector token, CF Access, SNMP community, ping targets |
 | **Settings** | Sync interval, view `config.alloy`, Alloy logs |
+
+Add devices on the collector page; they register on NOC and Alloy starts SNMP polling after sync.
 
 LAN only — do not expose port 8090 to the public internet.
 
