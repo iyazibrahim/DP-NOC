@@ -59,7 +59,7 @@ services:
     cap_add:
       - NET_RAW
     network_mode: host
-    // Dokploy Environment is injected here — survives redeploy
+    # Dokploy Environment is injected here — survives redeploy
     environment:
       <<: *collector-env
     volumes:
