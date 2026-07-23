@@ -5,12 +5,17 @@ import {
   getAllSiteStatuses,
   getDevices,
   getDiscoveredDevicesAll,
-  getTopDevices,
   STATUS_POLL_MS
 } from "../api";
 import type { DeviceRow, DiscoveredDevice, DiscoveryDiagnostics, DomainState, SiteStatus } from "../types";
-import { TopDevicesTable } from "../components/TopDevicesTable";
 import { StatusPill } from "../components/StatusPill";
+import {
+  KindFilter,
+  SiteOption,
+  TablePagination,
+  TableToolbar,
+  paginateItems
+} from "../components/TableControls";
 
 function kindLabel(kind: string | undefined) {
   if (kind === "server") return "Collector / server";
@@ -40,27 +45,37 @@ function collectorStateForDevice(
   return { state: st?.collector?.state ?? "unknown", notes: st?.collector?.notes, live: false };
 }
 
+function matchesSearch(d: DeviceRow, q: string) {
+  if (!q) return true;
+  const hay = [d.name, d.id, d.hostMetricId, d.snmpIp, d.siteName, d.siteId, d.type, d.vendor, d.kind]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(q);
+}
+
 export function DevicesPage() {
   const { token } = useAuth();
   const [devices, setDevices] = useState<DeviceRow[]>([]);
-  const [top, setTop] = useState<DeviceRow[]>([]);
   const [discovered, setDiscovered] = useState<DiscoveredDevice[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiscoveryDiagnostics | null>(null);
   const [statuses, setStatuses] = useState<SiteStatus[]>([]);
+  const [search, setSearch] = useState("");
+  const [siteId, setSiteId] = useState("");
+  const [kind, setKind] = useState<KindFilter>("all");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
     const load = async () => {
-      const [d, t, disc, st] = await Promise.all([
+      const [d, disc, st] = await Promise.all([
         getDevices(token),
-        getTopDevices(token),
         getDiscoveredDevicesAll(token),
         getAllSiteStatuses(token)
       ]);
       if (cancelled) return;
       setDevices(d.devices);
-      setTop(t.devices);
       setDiscovered(disc.devices);
       setDiagnostics(disc.diagnostics);
       setStatuses(st.statuses);
@@ -86,6 +101,41 @@ export function DevicesPage() {
     [localDevices]
   );
 
+  const siteOptions: SiteOption[] = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const d of devices) {
+      if (!map.has(d.siteId)) map.set(d.siteId, d.siteName || d.siteId);
+    }
+    return [...map.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [devices]);
+
+  const q = search.trim().toLowerCase();
+
+  const filtered = useMemo(() => {
+    return devices.filter((d) => {
+      if (siteId && d.siteId !== siteId) return false;
+      const k = d.kind ?? "network";
+      if (kind !== "all" && k !== kind) return false;
+      return matchesSearch(d, q);
+    });
+  }, [devices, siteId, kind, q]);
+
+  const pager = useMemo(() => paginateItems(filtered, page), [filtered, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, siteId, kind]);
+
+  useEffect(() => {
+    if (page !== pager.page) setPage(pager.page);
+  }, [pager.page, page]);
+
+  function toggleKindChip(next: KindFilter) {
+    setKind((prev) => (prev === next ? "all" : next));
+  }
+
   return (
     <div className="page">
       <div className="pageHeader">
@@ -96,14 +146,24 @@ export function DevicesPage() {
       </div>
 
       <div className="healthStrip">
-        <div className="healthChip">
+        <button
+          type="button"
+          className={`healthChip healthChipButton${kind === "server" ? " healthChipActive" : ""}`}
+          onClick={() => toggleKindChip("server")}
+          title="Filter collectors"
+        >
           <span className="healthChipLabel">Collectors</span>
           <strong>{collectors.length}</strong>
-        </div>
-        <div className="healthChip">
+        </button>
+        <button
+          type="button"
+          className={`healthChip healthChipButton${kind === "network" ? " healthChipActive" : ""}`}
+          onClick={() => toggleKindChip("network")}
+          title="Filter local devices"
+        >
           <span className="healthChipLabel">Local devices</span>
           <strong>{localDevices.length}</strong>
-        </div>
+        </button>
         <div className="healthChip">
           <span className="healthChipLabel">Waiting to add</span>
           <strong>{pending.length}</strong>
@@ -118,8 +178,8 @@ export function DevicesPage() {
         </div>
       ) : localDevices.length > 0 ? (
         <p className="muted" style={{ marginBottom: 14 }}>
-          SNMP status refreshes every {STATUS_POLL_MS / 1000}s. Collectors pull device inventory
-          every 1–2 minutes.
+          Health refreshes every {STATUS_POLL_MS / 1000}s. Collectors pull device inventory every
+          1–2 minutes.
         </p>
       ) : null}
 
@@ -164,11 +224,7 @@ export function DevicesPage() {
                       {d.lastSeen ? new Date(d.lastSeen).toLocaleString() : "—"}
                     </td>
                     <td>
-                      {d.siteId ? (
-                        <Link to={`/sites/${d.siteId}`}>Open site</Link>
-                      ) : (
-                        "—"
-                      )}
+                      {d.siteId ? <Link to={`/sites/${d.siteId}`}>Open site</Link> : "—"}
                     </td>
                   </tr>
                 ))}
@@ -201,75 +257,95 @@ export function DevicesPage() {
         </div>
       ) : null}
 
-      <div className="detailGrid">
-        <TopDevicesTable devices={top} />
-        <div className="tableCard">
-          <div className="tableTitle">All devices</div>
-          <table className="dataTable">
-            <thead>
+      <div className="tableCard">
+        <div className="tableTitle">All devices</div>
+        <TableToolbar
+          search={search}
+          onSearchChange={setSearch}
+          sites={siteOptions}
+          siteId={siteId}
+          onSiteChange={setSiteId}
+          kind={kind}
+          onKindChange={setKind}
+        />
+        <table className="dataTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Site</th>
+              <th>Type</th>
+              <th>ID / address</th>
+              <th>Health</th>
+              <th>Vendor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {devices.length === 0 ? (
               <tr>
-                <th>Name</th>
-                <th>Site</th>
-                <th>Type</th>
-                <th>ID / address</th>
-                <th>Health</th>
-                <th>Vendor</th>
+                <td colSpan={6} className="muted">
+                  No devices yet. When a collector starts sending data, it should appear and be added
+                  automatically.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {devices.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="muted">
-                    No devices yet. When a collector starts sending data, it should appear and be
-                    added automatically.
-                  </td>
-                </tr>
-              ) : (
-                devices.map((d) => {
-                  const isServer = (d.kind ?? "network") === "server";
-                  const snmp = !isServer
-                    ? snmpStateForDevice(statuses, d.siteId, d.id)
-                    : null;
-                  const collector = isServer
-                    ? collectorStateForDevice(statuses, d.siteId, d.id)
-                    : null;
-                  return (
-                    <tr key={`${d.siteId}-${d.id}`}>
-                      <td>
-                        {d.name}
-                        {collector?.live ? (
-                          <span className="liveBadge" title="Receiving host metrics">
-                            Live
-                          </span>
-                        ) : null}
-                      </td>
-                      <td>
-                        <Link to={`/sites/${d.siteId}`}>{d.siteName}</Link>
-                      </td>
-                      <td>{kindLabel(d.kind)}</td>
-                      <td>
-                        {isServer ? d.hostMetricId ?? d.id : d.snmpIp ?? "—"}
-                        {!isServer && !d.snmpIp ? (
-                          <div className="muted">Needs SNMP IP</div>
-                        ) : null}
-                      </td>
-                      <td>
-                        {snmp ? (
-                          <StatusPill state={snmp.state} notes={snmp.notes} />
-                        ) : collector ? (
-                          <StatusPill state={collector.state} notes={collector.notes} />
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
-                      </td>
-                      <td>{d.vendor}</td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+            ) : pager.slice.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="muted">
+                  No devices match your search or filters.
+                </td>
+              </tr>
+            ) : (
+              pager.slice.map((d) => {
+                const isServer = (d.kind ?? "network") === "server";
+                const snmp = !isServer ? snmpStateForDevice(statuses, d.siteId, d.id) : null;
+                const collector = isServer
+                  ? collectorStateForDevice(statuses, d.siteId, d.id)
+                  : null;
+                return (
+                  <tr key={`${d.siteId}-${d.id}`}>
+                    <td>
+                      {d.name}
+                      {collector?.live ? (
+                        <span className="liveBadge" title="Receiving host metrics">
+                          Live
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>
+                      <Link to={`/sites/${d.siteId}`}>{d.siteName}</Link>
+                    </td>
+                    <td>{kindLabel(d.kind)}</td>
+                    <td>
+                      {isServer ? d.hostMetricId ?? d.id : d.snmpIp ?? "—"}
+                      {!isServer && !d.snmpIp ? (
+                        <div className="muted">Needs SNMP IP</div>
+                      ) : null}
+                    </td>
+                    <td>
+                      {snmp ? (
+                        <StatusPill state={snmp.state} notes={snmp.notes} />
+                      ) : collector ? (
+                        <StatusPill state={collector.state} notes={collector.notes} />
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                    <td>{d.vendor}</td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+        {devices.length > 0 ? (
+          <TablePagination
+            page={pager.page}
+            totalPages={pager.totalPages}
+            total={pager.total}
+            start={pager.start}
+            end={pager.end}
+            onPageChange={setPage}
+          />
+        ) : null}
       </div>
     </div>
   );

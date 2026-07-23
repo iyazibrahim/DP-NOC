@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -28,6 +28,7 @@ import { DeviceTypePicker, useDeviceTypes, type DeviceTypeOption } from "../comp
 import { collectorOf, localDevicesOf, uplinkOf } from "../statusLabels";
 import { Modal } from "../components/Modal";
 import { SitesLeafletMap } from "../components/SitesLeafletMap";
+import { TablePagination, TableToolbar, paginateItems } from "../components/TableControls";
 
 export function SitesPage() {
   const { token } = useAuth();
@@ -194,6 +195,8 @@ export function SiteDetailPage() {
   const [deviceModalOpen, setDeviceModalOpen] = useState(false);
   const [websiteModalOpen, setWebsiteModalOpen] = useState(false);
   const [revealedCollectorToken, setRevealedCollectorToken] = useState<string | null>(null);
+  const [deviceSearch, setDeviceSearch] = useState("");
+  const [devicePage, setDevicePage] = useState(1);
 
   async function reload() {
     if (!token || !id) return;
@@ -218,6 +221,32 @@ export function SiteDetailPage() {
     if (!token || !id) return;
     reload().catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
   }, [token, id]);
+
+  useEffect(() => {
+    setDevicePage(1);
+  }, [deviceSearch, id]);
+
+  const deviceQ = deviceSearch.trim().toLowerCase();
+  const filteredSiteDevices = useMemo(() => {
+    const list = site?.devices ?? [];
+    if (!deviceQ) return list;
+    return list.filter((d) => {
+      const hay = [d.name, d.id, d.hostMetricId, d.snmpIp, d.type, d.kind, d.vendor]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(deviceQ);
+    });
+  }, [site?.devices, deviceQ]);
+
+  const devicePager = useMemo(
+    () => paginateItems(filteredSiteDevices, devicePage),
+    [filteredSiteDevices, devicePage]
+  );
+
+  useEffect(() => {
+    if (devicePage !== devicePager.page) setDevicePage(devicePager.page);
+  }, [devicePager.page, devicePage]);
 
   function startEdit(d: SiteDevice) {
     setEditingId(d.id);
@@ -646,6 +675,12 @@ export function SiteDetailPage() {
             </div>
           ) : null}
 
+          <TableToolbar
+            search={deviceSearch}
+            onSearchChange={setDeviceSearch}
+            searchPlaceholder="Search devices on this site…"
+          />
+
           <table className="dataTable">
             <thead>
               <tr>
@@ -653,7 +688,7 @@ export function SiteDetailPage() {
                 <th>Kind</th>
                 <th>Type</th>
                 <th>Target</th>
-                <th>SNMP</th>
+                <th>Health</th>
                 <th></th>
               </tr>
             </thead>
@@ -665,17 +700,32 @@ export function SiteDetailPage() {
                     so the site collector can poll them.
                   </td>
                 </tr>
+              ) : devicePager.slice.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="muted">
+                    No devices match your search.
+                  </td>
+                </tr>
               ) : (
-                (site.devices ?? []).map((d) => {
+                devicePager.slice.map((d) => {
                   const snmpRow =
                     d.kind === "network"
                       ? status?.localDeviceStates?.find((x) => x.deviceId === d.id)
+                      : undefined;
+                  const collectorRow =
+                    d.kind === "server"
+                      ? status?.collectorDeviceStates?.find((x) => x.deviceId === d.id)
                       : undefined;
                   return (
                     <tr key={d.id}>
                       <td>
                         {d.name}
                         <div className="muted">{d.id}</div>
+                        {collectorRow?.live ? (
+                          <span className="liveBadge" title="Receiving host metrics">
+                            Live
+                          </span>
+                        ) : null}
                       </td>
                       <td>{d.kind}</td>
                       <td>{deviceTypes.find((t) => t.id === d.type)?.label ?? d.type}</td>
@@ -697,7 +747,12 @@ export function SiteDetailPage() {
                             }
                           />
                         ) : (
-                          <span className="muted">—</span>
+                          <StatusPill
+                            state={
+                              collectorRow?.state ?? status?.collector?.state ?? "unknown"
+                            }
+                            notes={collectorRow?.notes ?? status?.collector?.notes}
+                          />
                         )}
                       </td>
                       <td>
@@ -714,6 +769,16 @@ export function SiteDetailPage() {
               )}
             </tbody>
           </table>
+          {(site.devices ?? []).length > 0 ? (
+            <TablePagination
+              page={devicePager.page}
+              totalPages={devicePager.totalPages}
+              total={devicePager.total}
+              start={devicePager.start}
+              end={devicePager.end}
+              onPageChange={setDevicePage}
+            />
+          ) : null}
           <p className="muted" style={{ marginTop: 10 }}>
             Network inventory syncs to the site collector automatically when the Collector Console is
             configured and running (typically every 90 seconds).

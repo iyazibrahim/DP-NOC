@@ -127,6 +127,9 @@ Collector box → Alloy → Prometheus (central)
     - Website checks: latency ms, 24h uptime %, sparkline; dashboard avg latency
     - Acknowledgeable incidents (`data/runtime/incidents.json`) — open until Ack → History
     - Devices: per-collector Health + Live badge for duplicate inventory rows
+  - **Devices inventory UX (2026-07-23)**
+    - Devices page: drop Top devices panel; full-width table with search, site/kind filters, 20/page
+    - Sites devices: search + pagination; collector Health pill (not SNMP dash)
 
 
 ## Local Validation
