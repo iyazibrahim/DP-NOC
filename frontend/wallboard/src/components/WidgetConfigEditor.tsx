@@ -197,14 +197,37 @@ export function WidgetConfigEditor({
 
   if (!needsDevicePicker) return null;
 
-  const filteredPresets = presets.filter(
-    (p) =>
-      p.kind === "any" ||
-      devices.find((d) => d.id === deviceId)?.kind === p.kind ||
-      !deviceId ||
-      p.id === "wan_dns" ||
-      p.id === "wan_vps"
-  );
+  const selectedDevice = devices.find((d) => d.id === deviceId);
+
+  function normalizeVendor(v: string | undefined) {
+    return (v ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  }
+
+  function presetMatchesDevice(p: MetricPreset) {
+    if (p.kind === "any" || p.id === "wan_dns" || p.id === "wan_vps") return true;
+    if (!selectedDevice) return true;
+    const deviceKind = selectedDevice.kind ?? "network";
+    if (p.kind !== deviceKind) return false;
+    if (deviceKind === "server") return true;
+    if (p.deviceTypes?.length) {
+      const dtype = (selectedDevice.type ?? "").toLowerCase();
+      if (!p.deviceTypes.some((t) => t.toLowerCase() === dtype)) return false;
+    }
+    if (p.vendors?.length) {
+      const v = normalizeVendor(selectedDevice.vendor);
+      // Firewall Fortinet pack: also allow empty/generic vendor on firewall type
+      const allowEmptyFw =
+        p.deviceTypes?.includes("firewall") &&
+        (v === "" || v === "generic") &&
+        p.vendors.some((x) => ["fortinet", "fortigate"].includes(normalizeVendor(x)));
+      if (!allowEmptyFw && !p.vendors.some((x) => normalizeVendor(x) === v || v.includes(normalizeVendor(x)))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  const filteredPresets = presets.filter(presetMatchesDevice);
 
   return (
     <div className="widgetConfig">
@@ -272,8 +295,9 @@ export function WidgetConfigEditor({
             ))}
           </select>
           <p className="muted fieldHint">
-            For SNMP gear pick “Local device online”, “Interface traffic in/out”. For collectors use
-            CPU / memory / disk.
+            SNMP: traffic, bandwidth utilization, capacity, errors. Firewall / switch / AP health
+            presets appear when device type and vendor match (Fortinet, Maipu, Cambium, Omada).
+            Collectors use CPU / memory / disk.
           </p>
         </>
       ) : null}

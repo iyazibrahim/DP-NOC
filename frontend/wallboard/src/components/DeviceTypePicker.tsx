@@ -9,7 +9,19 @@ export type DeviceTypeOption = {
   icon?: string;
 };
 
-const VENDOR_PRESETS = ["generic", "cisco", "mikrotik", "ubiquiti", "tp-link", "hp", "dell", "fortinet"];
+const VENDOR_PRESETS = [
+  "generic",
+  "fortinet",
+  "maipu",
+  "cambium",
+  "omada",
+  "tp-link",
+  "cisco",
+  "mikrotik",
+  "ubiquiti",
+  "hp",
+  "dell"
+];
 
 export function DeviceTypePicker({
   types,

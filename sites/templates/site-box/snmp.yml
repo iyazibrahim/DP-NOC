@@ -1,12 +1,15 @@
 # SNMPv2c config for Grafana Alloy prometheus.exporter.snmp
 # Contract: grafana/alloy:v1.5.1 ONLY
 # Do NOT use config_merge_strategy — unsupported on Alloy v1.5.1 (causes crash / no SNMP data).
-# Must include auths + modules.if_mib.metrics (walk-only is not enough for usable series).
+# Must include auths + modules.*.metrics (walk-only is not enough for usable series).
 #
 # generate-config.sh rewrites the auths: block from devices.json:
 #   default_v2 / public_v2 = Console Setup default community
 #   auth_<deviceId>        = per-device snmpCommunity or the default
-# Template below is the starting point before the first generate with devices.
+# Modules below are preserved across regenerate (auths only rewritten).
+#
+# Each network device scrapes if_mib always, plus one vendor module when type/vendor matches
+# (see generate-config.sh). After template changes: Force-apply collectors / redeploy site-box.
 
 auths:
   default_v2:
@@ -24,9 +27,14 @@ modules:
       - 1.3.6.1.2.1.2.2.1.2     # ifDescr
       - 1.3.6.1.2.1.2.2.1.8     # ifOperStatus
       - 1.3.6.1.2.1.2.2.1.5     # ifSpeed
+      - 1.3.6.1.2.1.2.2.1.13    # ifInDiscards
+      - 1.3.6.1.2.1.2.2.1.14    # ifInErrors
+      - 1.3.6.1.2.1.2.2.1.19    # ifOutDiscards
+      - 1.3.6.1.2.1.2.2.1.20    # ifOutErrors
       - 1.3.6.1.2.1.31.1.1.1.1  # ifName
       - 1.3.6.1.2.1.31.1.1.1.6  # ifHCInOctets
       - 1.3.6.1.2.1.31.1.1.1.10 # ifHCOutOctets
+      - 1.3.6.1.2.1.31.1.1.1.15 # ifHighSpeed (Mb)
     metrics:
       - name: ifDescr
         oid: 1.3.6.1.2.1.2.2.1.2
@@ -57,6 +65,34 @@ modules:
         indexes:
           - labelname: ifIndex
             type: gauge
+      - name: ifInDiscards
+        oid: 1.3.6.1.2.1.2.2.1.13
+        type: counter
+        help: Inbound packets discarded
+        indexes:
+          - labelname: ifIndex
+            type: gauge
+      - name: ifInErrors
+        oid: 1.3.6.1.2.1.2.2.1.14
+        type: counter
+        help: Inbound packets with errors
+        indexes:
+          - labelname: ifIndex
+            type: gauge
+      - name: ifOutDiscards
+        oid: 1.3.6.1.2.1.2.2.1.19
+        type: counter
+        help: Outbound packets discarded
+        indexes:
+          - labelname: ifIndex
+            type: gauge
+      - name: ifOutErrors
+        oid: 1.3.6.1.2.1.2.2.1.20
+        type: counter
+        help: Outbound packets with errors
+        indexes:
+          - labelname: ifIndex
+            type: gauge
       - name: ifName
         oid: 1.3.6.1.2.1.31.1.1.1.1
         type: DisplayString
@@ -78,3 +114,100 @@ modules:
         indexes:
           - labelname: ifIndex
             type: gauge
+      - name: ifHighSpeed
+        oid: 1.3.6.1.2.1.31.1.1.1.15
+        type: gauge
+        help: Interface speed in megabits per second
+        indexes:
+          - labelname: ifIndex
+            type: gauge
+
+  # FortiGate system health (FORTINET-FORTIGATE-MIB)
+  fortigate_health:
+    walk:
+      - 1.3.6.1.4.1.12356.101.4.1.3  # fgSysCpuUsage
+      - 1.3.6.1.4.1.12356.101.4.1.4  # fgSysMemUsage
+      - 1.3.6.1.4.1.12356.101.4.1.8  # fgSysSesCount
+    metrics:
+      - name: fgSysCpuUsage
+        oid: 1.3.6.1.4.1.12356.101.4.1.3
+        type: gauge
+        help: FortiGate CPU usage percent
+      - name: fgSysMemUsage
+        oid: 1.3.6.1.4.1.12356.101.4.1.4
+        type: gauge
+        help: FortiGate memory usage percent
+      - name: fgSysSesCount
+        oid: 1.3.6.1.4.1.12356.101.4.1.8
+        type: gauge
+        help: FortiGate active session count
+
+  # Maipu / portable switch health via HOST-RESOURCES-MIB
+  # Enterprise Maipu OIDs vary by model — confirm with snmpwalk and extend this module.
+  maipu_health:
+    walk:
+      - 1.3.6.1.2.1.25.3.3.1.2  # hrProcessorLoad
+      - 1.3.6.1.2.1.25.2.3.1.2  # hrStorageType
+      - 1.3.6.1.2.1.25.2.3.1.5  # hrStorageSize
+      - 1.3.6.1.2.1.25.2.3.1.6  # hrStorageUsed
+    metrics:
+      - name: hrProcessorLoad
+        oid: 1.3.6.1.2.1.25.3.3.1.2
+        type: gauge
+        help: The average percentage of CPU load
+        indexes:
+          - labelname: hrDeviceIndex
+            type: gauge
+      - name: hrStorageType
+        oid: 1.3.6.1.2.1.25.2.3.1.2
+        type: DisplayString
+        help: Storage type OID
+        indexes:
+          - labelname: hrStorageIndex
+            type: gauge
+      - name: hrStorageSize
+        oid: 1.3.6.1.2.1.25.2.3.1.5
+        type: gauge
+        help: Storage size in allocation units
+        indexes:
+          - labelname: hrStorageIndex
+            type: gauge
+      - name: hrStorageUsed
+        oid: 1.3.6.1.2.1.25.2.3.1.6
+        type: gauge
+        help: Storage used in allocation units
+        indexes:
+          - labelname: hrStorageIndex
+            type: gauge
+
+  # Cambium cnPilot AP health
+  cambium_ap_health:
+    walk:
+      - 1.3.6.1.4.1.17713.22.1.1.1.6   # cambiumAPCPUUtilization
+      - 1.3.6.1.4.1.17713.22.1.1.1.14  # cambiumAPTotalClients
+    metrics:
+      - name: cambiumAPCPUUtilization
+        oid: 1.3.6.1.4.1.17713.22.1.1.1.6
+        type: gauge
+        help: Cambium AP CPU utilization percent
+        indexes:
+          - labelname: cambiumAPMACAddress
+            type: PhysAddress48
+      - name: cambiumAPTotalClients
+        oid: 1.3.6.1.4.1.17713.22.1.1.1.14
+        type: gauge
+        help: Cambium AP total associated clients
+        indexes:
+          - labelname: cambiumAPMACAddress
+            type: PhysAddress48
+
+  # Omada / TP-Link EAP — client count OID is model/firmware dependent.
+  # Empty series = unsupported; charts show unknown (no crash).
+  omada_ap_health:
+    walk:
+      - 1.3.6.1.4.1.11863.10.1.1.1  # client count (verify on device)
+    metrics:
+      - name: omadaClientCount
+        oid: 1.3.6.1.4.1.11863.10.1.1.1
+        type: gauge
+        help: Omada/TP-Link EAP client count (verify OID on model/firmware)

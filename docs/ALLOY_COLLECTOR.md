@@ -20,6 +20,8 @@ Collector box (NUC / Pi / mini-PC / server)
 **SNMP (required):** site-box only — `job=site_snmp_if_mib` and metric **`snmp_up{site,device}`**.  
 **Do not use** Grafana Alloy/Agent **`integrations/snmp/*`** for SNMP (may export `ifDescr` without `snmp_up`; NOC will stay UNKNOWN). See [`sites/templates/site-box/CUTOVER_SITEBOX_SNMP.md`](../sites/templates/site-box/CUTOVER_SITEBOX_SNMP.md).
 
+**Vendor health packs** (Fortinet / Maipu / Cambium / Omada): see [`docs/SNMP_VENDOR_HEALTH.md`](SNMP_VENDOR_HEALTH.md). After updating `snmp.yml`, **Force apply** collectors and set device type + vendor.
+
 **Legacy Alloy integrations** (host/uplink only — still readable by the React app):
 - Host metrics: `job=integrations/unix`, often only `instance=<hostname>` (no `device`)
 - Uplink: `job=integrations/blackbox/ping_*`, `check=wan_dns|wan_vps`

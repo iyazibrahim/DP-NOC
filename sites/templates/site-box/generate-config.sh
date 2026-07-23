@@ -4,7 +4,8 @@
 # Alloy contract: grafana/alloy:v1.5.1 ONLY
 # - Never emit config_merge_strategy (unsupported on 1.5.1)
 # - Always emit numeric scrape_interval (e.g. "15s"), never ${SCRAPE_INTERVAL_SEC}
-# - SNMP uses full snmp.yml (auths + if_mib metrics) mounted beside config.alloy
+# - SNMP uses full snmp.yml (auths + if_mib + vendor health modules) beside config.alloy
+# - Each device: if_mib always; optional second target for fortigate/maipu/cambium/omada
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -273,11 +274,31 @@ print('  // Alloy v1.5.1: full snmp.yml — per-device auth_* from devices.json'
 print('  config_file = "snmp.yml"')
 print()
 
+def norm(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
+
+def vendor_module(dtype, vendor):
+    """Extra SNMP module from device type + vendor (if_mib is always scraped)."""
+    t = norm(dtype)
+    v = norm(vendor)
+    if t == "firewall" and (v in ("fortinet", "fortigate") or v == ""):
+        return "fortigate_health"
+    if t == "switch" and v == "maipu":
+        return "maipu_health"
+    # Portable HOST-RESOURCES for any switch when vendor unset — keep Maipu-only per plan
+    if t == "ap" and v == "cambium":
+        return "cambium_ap_health"
+    if t == "ap" and v in ("omada", "tplink"):
+        return "omada_ap_health"
+    return None
+
 for d in devices:
     tid = safe(d["id"])
     ip = d["snmpIp"].replace('"', '\\"')
     did = d["id"].replace('"', '\\"')
-    vendor = d.get("vendor", "generic").replace('"', '\\"')
+    vendor_raw = d.get("vendor", "generic") or "generic"
+    vendor = vendor_raw.replace('"', '\\"')
+    dtype = d.get("type", "") or ""
     print(f'  target "{tid}" {{')
     print(f'    address = "{ip}"')
     print(f'    module  = "if_mib"')
@@ -289,6 +310,19 @@ for d in devices:
     print(f'    }}')
     print(f'  }}')
     print()
+    extra = vendor_module(dtype, vendor_raw)
+    if extra:
+        print(f'  target "{tid}_{extra}" {{')
+        print(f'    address = "{ip}"')
+        print(f'    module  = "{extra}"')
+        print(f'    auth    = "auth_{tid}"')
+        print(f'    labels  = {{')
+        print(f'      site   = sys.env("SITE_NAME"),')
+        print(f'      device = "{did}",')
+        print(f'      vendor = "{vendor}",')
+        print(f'    }}')
+        print(f'  }}')
+        print()
 
 print("}")
 print()

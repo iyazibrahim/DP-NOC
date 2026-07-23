@@ -129,6 +129,10 @@ export type MetricPreset = {
   kind: "server" | "network" | "any";
   query: string;
   unit?: string;
+  /** When set, only offer for matching device.type (e.g. firewall, switch, ap). */
+  deviceTypes?: string[];
+  /** When set, only offer when device.vendor matches (normalized). */
+  vendors?: string[];
 };
 
 export type RetentionConfig = {

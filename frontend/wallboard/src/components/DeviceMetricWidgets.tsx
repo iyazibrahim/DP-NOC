@@ -50,29 +50,51 @@ function parseInstant(data: PromQueryResult): number | null {
 
 function formatBitrate(value: number): { text: string; unitLabel: string } {
   if (!Number.isFinite(value)) return { text: "—", unitLabel: "" };
-  if (Math.abs(value) >= 1_000_000) {
-    return { text: (value / 1_000_000).toFixed(2), unitLabel: " Mbps" };
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000_000) {
+    return { text: (value / 1_000_000_000).toFixed(2), unitLabel: "Gbps" };
   }
-  return { text: (value / 1000).toFixed(1), unitLabel: " Kbps" };
+  if (abs >= 1_000_000) {
+    return { text: (value / 1_000_000).toFixed(2), unitLabel: "Mbps" };
+  }
+  return { text: (value / 1000).toFixed(1), unitLabel: "Kbps" };
+}
+
+/** Pick a single scale for a whole series (axis header), not per-tick. */
+function bitrateScaleForSeries(values: number[]): "Gbps" | "Mbps" | "Kbps" {
+  const peak = values.reduce((m, v) => (Number.isFinite(v) ? Math.max(m, Math.abs(v)) : m), 0);
+  if (peak >= 1_000_000_000) return "Gbps";
+  if (peak >= 1_000_000) return "Mbps";
+  return "Kbps";
+}
+
+function toScaledBitrate(value: number, scale: "Gbps" | "Mbps" | "Kbps"): number {
+  if (!Number.isFinite(value)) return value;
+  if (scale === "Gbps") return value / 1_000_000_000;
+  if (scale === "Mbps") return value / 1_000_000;
+  return value / 1000;
 }
 
 function formatMetricValue(value: number, unit?: string): string {
   if (!Number.isFinite(value)) return "—";
   if (unit === "bps") {
     const { text, unitLabel } = formatBitrate(value);
-    return `${text}${unitLabel}`;
+    return `${text} ${unitLabel}`;
   }
   if (unit === "%") return `${value.toFixed(1)}%`;
+  if (unit === "count") return `${Math.round(value)}`;
   return `${value.toFixed(2)}${unit ?? ""}`;
 }
 
-function formatYAxis(value: number, unit?: string) {
-  if (unit === "%") return `${Math.round(value)}%`;
-  if (unit === "bps") {
-    const { text, unitLabel } = formatBitrate(value);
-    return `${text}${unitLabel.trim() ? unitLabel : ""}`;
+/** Y-axis: numbers only (no unit suffix). */
+function formatYAxisTick(value: number, unit?: string, bitrateScale?: "Gbps" | "Mbps" | "Kbps") {
+  if (unit === "%") return `${Math.round(value)}`;
+  if (unit === "bps" && bitrateScale) {
+    const scaled = toScaledBitrate(value, bitrateScale);
+    return bitrateScale === "Kbps" ? scaled.toFixed(0) : scaled.toFixed(1);
   }
-  return String(value);
+  if (unit === "count") return `${Math.round(value)}`;
+  return Number.isFinite(value) ? String(Math.round(value * 10) / 10) : "";
 }
 
 function ChartTooltip({
@@ -92,6 +114,13 @@ function ChartTooltip({
       <div className="chartTooltipValue">{formatMetricValue(v, unit)}</div>
     </div>
   );
+}
+
+function chartUnitBadge(unit: string | undefined, bitrateScale?: "Gbps" | "Mbps" | "Kbps") {
+  if (unit === "bps") return bitrateScale ?? "Mbps";
+  if (unit === "%") return "%";
+  if (unit === "count") return "count";
+  return unit || "";
 }
 
 function NoDeviceHint() {
@@ -127,6 +156,11 @@ export function DeviceMetricChart({
   const unit = preset?.unit ?? "";
   // Chrome already shows config.title — avoid stacking the same label again.
   const showInnerTitle = !customTitle;
+  const bitrateScale = useMemo(
+    () => (unit === "bps" ? bitrateScaleForSeries(points.map((p) => p.v)) : undefined),
+    [unit, points]
+  );
+  const unitBadge = chartUnitBadge(unit, bitrateScale);
 
   useEffect(() => {
     if (!token || !siteId || !deviceId || !metric) return;
@@ -168,17 +202,20 @@ export function DeviceMetricChart({
     <div className="metricChartWidget">
       <div className="metricChartHeader">
         {showInnerTitle ? <div className="widgetTitle">{label}</div> : <div />}
-        <div className="timeRangePicker">
-          {TIME_RANGES.map((r) => (
-            <button
-              key={r.hours}
-              type="button"
-              className={hours === r.hours ? "timeRangeBtn active" : "timeRangeBtn"}
-              onClick={() => setHours(r.hours)}
-            >
-              {r.label}
-            </button>
-          ))}
+        <div className="metricChartHeaderRight">
+          {unitBadge ? <span className="chartUnitBadge">{unitBadge}</span> : null}
+          <div className="timeRangePicker">
+            {TIME_RANGES.map((r) => (
+              <button
+                key={r.hours}
+                type="button"
+                className={hours === r.hours ? "timeRangeBtn active" : "timeRangeBtn"}
+                onClick={() => setHours(r.hours)}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       {loading && points.length === 0 ? (
@@ -193,8 +230,8 @@ export function DeviceMetricChart({
               <XAxis dataKey="t" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" />
               <YAxis
                 tick={{ fill: "#94a3b8", fontSize: 10 }}
-                width={40}
-                tickFormatter={(v) => formatYAxis(v, unit)}
+                width={44}
+                tickFormatter={(v) => formatYAxisTick(v, unit, bitrateScale)}
               />
               <Tooltip content={<ChartTooltip unit={unit} />} />
               <Area type="monotone" dataKey="v" stroke="#2dd4bf" fill="#2dd4bf33" strokeWidth={2} />
@@ -229,6 +266,11 @@ export function DeviceMetricBar({
   const label = customTitle || preset?.label || metric;
   const unit = preset?.unit ?? "";
   const showInnerTitle = !customTitle;
+  const bitrateScale = useMemo(
+    () => (unit === "bps" ? bitrateScaleForSeries(points.map((p) => p.v)) : undefined),
+    [unit, points]
+  );
+  const unitBadge = chartUnitBadge(unit, bitrateScale);
 
   useEffect(() => {
     if (!token || !siteId || !deviceId || !metric) return;
@@ -270,17 +312,20 @@ export function DeviceMetricBar({
     <div className="metricChartWidget">
       <div className="metricChartHeader">
         {showInnerTitle ? <div className="widgetTitle">{label}</div> : <div />}
-        <div className="timeRangePicker">
-          {TIME_RANGES.map((r) => (
-            <button
-              key={r.hours}
-              type="button"
-              className={hours === r.hours ? "timeRangeBtn active" : "timeRangeBtn"}
-              onClick={() => setHours(r.hours)}
-            >
-              {r.label}
-            </button>
-          ))}
+        <div className="metricChartHeaderRight">
+          {unitBadge ? <span className="chartUnitBadge">{unitBadge}</span> : null}
+          <div className="timeRangePicker">
+            {TIME_RANGES.map((r) => (
+              <button
+                key={r.hours}
+                type="button"
+                className={hours === r.hours ? "timeRangeBtn active" : "timeRangeBtn"}
+                onClick={() => setHours(r.hours)}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       {loading && points.length === 0 ? (
@@ -295,8 +340,8 @@ export function DeviceMetricBar({
               <XAxis dataKey="t" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" />
               <YAxis
                 tick={{ fill: "#94a3b8", fontSize: 10 }}
-                width={40}
-                tickFormatter={(v) => formatYAxis(v, unit)}
+                width={44}
+                tickFormatter={(v) => formatYAxisTick(v, unit, bitrateScale)}
               />
               <Tooltip content={<ChartTooltip unit={unit} />} />
               <Bar dataKey="v" fill="#2dd4bf" radius={[3, 3, 0, 0]} />

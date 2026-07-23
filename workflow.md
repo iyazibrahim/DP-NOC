@@ -39,6 +39,11 @@ Collector box → Alloy → Prometheus (central)
 - [x] Penang seed sites + collector `deploy.sh` / Compose / generate-config
 - [x] Sites JSON persistence + device CRUD
 - [x] Device auto-discovery + auto-sync
+- [x] **Chart axes + full SNMP catalog (2026-07-23)**
+  - Y-axis numbers only; unit badge (Kbps/Mbps/Gbps) once in chart header; tooltips keep units
+  - IF-MIB presets renamed/expanded: util, capacity (`ifHighSpeed`), interfaces up/down, errors/discards
+  - Vendor SNMP modules: Fortinet / Maipu (HOST-RESOURCES) / Cambium / Omada + generate-config selection
+  - Wallboard presets filtered by device type/vendor; see `docs/SNMP_VENDOR_HEALTH.md` (Force-apply collectors)
 - [x] **Collector-first clarity (2026-07-21)**
   - Root cause: live collector uses `job=integrations/unix` + `instance` (no `device`); discovery only looked for `job=site_host` + `device`
   - Discovery / metrics / status accept template + legacy integrations labels
