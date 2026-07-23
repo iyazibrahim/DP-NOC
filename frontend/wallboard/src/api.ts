@@ -280,6 +280,34 @@ export async function getRecentAlerts(token: string, limit = 50) {
   });
 }
 
+export type NocIncident = {
+  id: string;
+  key: string;
+  siteId: string;
+  siteName: string;
+  kind: string;
+  title: string;
+  detail: string;
+  source: "status" | "alertmanager";
+  openedAt: string;
+  resolvedAt?: string;
+  acknowledgedAt?: string;
+  acknowledgedBy?: string;
+};
+
+export async function getIncidents(token: string) {
+  return fetchJson<{ open: NocIncident[]; history: NocIncident[] }>("/api/alerts/incidents", {
+    headers: authHeaders(token)
+  });
+}
+
+export async function acknowledgeIncident(token: string, id: string) {
+  return fetchJson<{ incident: NocIncident }>(`/api/alerts/incidents/${id}/ack`, {
+    method: "POST",
+    headers: authHeaders(token)
+  });
+}
+
 export async function getDevices(token: string) {
   return fetchJson<{ devices: DeviceRow[] }>("/api/devices", {
     headers: authHeaders(token)
@@ -302,8 +330,19 @@ export async function getWebsites(token: string) {
       url: string;
       state: string;
       notes?: string;
+      latencyMs?: number | null;
+      uptime24h?: number | null;
+      sparkline?: number[];
     }>;
   }>("/api/websites", { headers: authHeaders(token) });
+}
+
+export async function getWebsitesSummary(token: string) {
+  return fetchJson<{
+    counts: { healthy: number; warning: number; critical: number; unknown: number };
+    avgLatencyMs: number | null;
+    grafanaUrl?: string;
+  }>("/api/websites/summary", { headers: authHeaders(token) });
 }
 
 export async function getDashboardLayout(token: string) {

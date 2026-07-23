@@ -1,91 +1,54 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { getAllSiteStatuses, getRecentAlerts, getSites, STATUS_POLL_MS } from "../api";
-import type { ActiveAlert, Site, SiteStatus } from "../types";
-import { collectorOf, uplinkOf } from "../statusLabels";
+import {
+  acknowledgeIncident,
+  getIncidents,
+  getRecentAlerts,
+  STATUS_POLL_MS,
+  type NocIncident
+} from "../api";
+import type { ActiveAlert } from "../types";
 import { StatusPill } from "../components/StatusPill";
 
-type IncidentRow = {
-  id: string;
-  source: "status" | "alertmanager";
-  name: string;
-  siteId: string;
-  siteName: string;
-  status: string;
-  summary: string;
-};
+function incidentStatusLabel(i: NocIncident) {
+  if (i.acknowledgedAt) return "acked";
+  if (i.resolvedAt) return "resolved — pending ack";
+  return "firing";
+}
 
-function buildStatusIncidents(sites: Site[], statuses: SiteStatus[]): IncidentRow[] {
-  const rows: IncidentRow[] = [];
-  for (const st of statuses) {
-    const site = sites.find((s) => s.id === st.siteId);
-    const siteName = site?.name ?? st.siteId;
-    const up = uplinkOf(st);
-    const col = collectorOf(st);
-    if (up.state === "critical") {
-      rows.push({
-        id: `uplink-${st.siteId}`,
-        source: "status",
-        name: "Internet / uplink DOWN",
-        siteId: st.siteId,
-        siteName,
-        status: "firing",
-        summary: up.notes ?? "Uplink critical"
-      });
-    }
-    if (col.state === "critical") {
-      rows.push({
-        id: `collector-${st.siteId}`,
-        source: "status",
-        name: "Collector offline",
-        siteId: st.siteId,
-        siteName,
-        status: "firing",
-        summary: col.notes ?? "Collector critical"
-      });
-    }
-    if (
-      st.overall === "critical" &&
-      up.state !== "critical" &&
-      col.state !== "critical"
-    ) {
-      rows.push({
-        id: `site-${st.siteId}`,
-        source: "status",
-        name: "Site DOWN",
-        siteId: st.siteId,
-        siteName,
-        status: "firing",
-        summary: "Overall site health critical"
-      });
-    }
+function formatWhen(iso?: string) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
   }
-  return rows;
 }
 
 export function AlertsPage() {
   const { token } = useAuth();
+  const [open, setOpen] = useState<NocIncident[]>([]);
+  const [history, setHistory] = useState<NocIncident[]>([]);
   const [amAlerts, setAmAlerts] = useState<ActiveAlert[]>([]);
-  const [sites, setSites] = useState<Site[]>([]);
-  const [statuses, setStatuses] = useState<SiteStatus[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function reload() {
+    if (!token) return;
+    const [inc, al] = await Promise.all([getIncidents(token), getRecentAlerts(token, 100)]);
+    setOpen(inc.open ?? []);
+    setHistory(inc.history ?? []);
+    setAmAlerts(al.alerts ?? []);
+  }
 
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
     const load = async () => {
       try {
-        const [al, s, st] = await Promise.all([
-          getRecentAlerts(token, 100),
-          getSites(token),
-          getAllSiteStatuses(token)
-        ]);
-        if (cancelled) return;
-        setAmAlerts(al.alerts ?? []);
-        setSites(s.sites);
-        setStatuses(st.statuses);
-        setError(null);
+        await reload();
+        if (!cancelled) setError(null);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
@@ -98,26 +61,21 @@ export function AlertsPage() {
     };
   }, [token]);
 
-  const statusIncidents = useMemo(
-    () => buildStatusIncidents(sites, statuses),
-    [sites, statuses]
-  );
+  async function onAck(id: string) {
+    if (!token) return;
+    setBusyId(id);
+    try {
+      await acknowledgeIncident(token, id);
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Acknowledge failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
-  const amRows: IncidentRow[] = amAlerts.map((a, i) => {
-    const siteId = a.labels?.site ?? "";
-    return {
-      id: `am-${a.labels?.alertname ?? i}-${siteId}-${a.startsAt ?? i}`,
-      source: "alertmanager" as const,
-      name: a.labels?.alertname ?? a.labels?.alert ?? "Alert",
-      siteId,
-      siteName: sites.find((s) => s.id === siteId)?.name ?? (siteId || "—"),
-      status: a.status,
-      summary: a.annotations?.summary ?? "—"
-    };
-  });
-
-  const firingAm = amRows.filter((r) => r.status === "firing");
-  const resolvedAm = amRows.filter((r) => r.status === "resolved");
+  const firingAm = amAlerts.filter((a) => a.status === "firing");
+  const pendingAck = open.filter((i) => i.resolvedAt).length;
 
   return (
     <div className="page">
@@ -125,7 +83,7 @@ export function AlertsPage() {
         <div>
           <h1>Alerts</h1>
           <p className="pageSub">
-            Live site problems from status (same as dashboard toasts) plus Alertmanager rules
+            Incidents stay until you acknowledge them — even after the site recovers
           </p>
         </div>
       </div>
@@ -134,8 +92,12 @@ export function AlertsPage() {
 
       <div className="healthStrip" style={{ marginBottom: 14 }}>
         <div className="healthChip">
-          <span className="healthChipLabel">Live incidents</span>
-          <strong>{statusIncidents.length}</strong>
+          <span className="healthChipLabel">Open incidents</span>
+          <strong>{open.length}</strong>
+        </div>
+        <div className="healthChip">
+          <span className="healthChipLabel">Pending ack (recovered)</span>
+          <strong>{pendingAck}</strong>
         </div>
         <div className="healthChip">
           <span className="healthChipLabel">Alertmanager firing</span>
@@ -144,10 +106,9 @@ export function AlertsPage() {
       </div>
 
       <div className="tableCard" style={{ marginBottom: 14 }}>
-        <div className="tableTitle">Live site incidents</div>
+        <div className="tableTitle">Open incidents</div>
         <p className="muted" style={{ marginBottom: 10 }}>
-          From the status API (~30–60s). Dashboard toasts use this same signal — not Telegram until
-          Alertmanager rules fire.
+          Acknowledge to clear from this list. Recovered incidents stay here until you ack them.
         </p>
         <table className="dataTable">
           <thead>
@@ -156,26 +117,92 @@ export function AlertsPage() {
               <th>Site</th>
               <th>Status</th>
               <th>Detail</th>
+              <th>Opened</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            {statusIncidents.length === 0 ? (
+            {open.length === 0 ? (
               <tr>
-                <td colSpan={4} className="muted">
-                  No live incidents — all monitored sites look healthy or unknown.
+                <td colSpan={6} className="muted">
+                  No open incidents.
                 </td>
               </tr>
             ) : (
-              statusIncidents.map((r) => (
+              open.map((r) => (
                 <tr key={r.id}>
-                  <td>{r.name}</td>
+                  <td>{r.title}</td>
                   <td>
-                    <Link to={`/sites/${r.siteId}`}>{r.siteName}</Link>
+                    {r.siteId === "global" ? (
+                      r.siteName
+                    ) : (
+                      <Link to={`/sites/${r.siteId}`}>{r.siteName}</Link>
+                    )}
                   </td>
                   <td>
-                    <StatusPill state="critical" />
+                    {r.resolvedAt ? (
+                      <span className="muted">{incidentStatusLabel(r)}</span>
+                    ) : (
+                      <StatusPill state="critical" />
+                    )}
                   </td>
-                  <td>{r.summary}</td>
+                  <td>{r.detail}</td>
+                  <td>{formatWhen(r.openedAt)}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={busyId === r.id}
+                      onClick={() => onAck(r.id)}
+                    >
+                      Acknowledge
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="tableCard" style={{ marginBottom: 14 }}>
+        <div className="tableTitle">History</div>
+        <p className="muted" style={{ marginBottom: 10 }}>
+          Acknowledged incidents (last 30 days, up to 200).
+        </p>
+        <table className="dataTable">
+          <thead>
+            <tr>
+              <th>Problem</th>
+              <th>Site</th>
+              <th>Opened</th>
+              <th>Resolved</th>
+              <th>Acknowledged</th>
+              <th>By</th>
+            </tr>
+          </thead>
+          <tbody>
+            {history.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="muted">
+                  No acknowledged incidents yet.
+                </td>
+              </tr>
+            ) : (
+              history.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.title}</td>
+                  <td>
+                    {r.siteId === "global" ? (
+                      r.siteName
+                    ) : (
+                      <Link to={`/sites/${r.siteId}`}>{r.siteName}</Link>
+                    )}
+                  </td>
+                  <td>{formatWhen(r.openedAt)}</td>
+                  <td>{formatWhen(r.resolvedAt)}</td>
+                  <td>{formatWhen(r.acknowledgedAt)}</td>
+                  <td>{r.acknowledgedBy ?? "—"}</td>
                 </tr>
               ))
             )}
@@ -186,9 +213,8 @@ export function AlertsPage() {
       <div className="tableCard">
         <div className="tableTitle">Alertmanager</div>
         <p className="muted" style={{ marginBottom: 10 }}>
-          Prometheus rules (silence / probe down). Needs rules deployed and Prometheus + Alertmanager
-          running. Empty here while live incidents show above means rules have not fired yet (or AM is
-          unreachable).
+          Live Prometheus rules feed (Telegram / email). Use Open incidents above to acknowledge
+          operator work.
         </p>
         <table className="dataTable">
           <thead>
@@ -200,24 +226,26 @@ export function AlertsPage() {
             </tr>
           </thead>
           <tbody>
-            {amRows.length === 0 ? (
+            {amAlerts.length === 0 ? (
               <tr>
                 <td colSpan={4} className="muted">
-                  No Alertmanager alerts. After a collector stop, expect SiteUplinkDown /
-                  SiteCollectorDown within ~60s once rules are loaded.
+                  No Alertmanager alerts.
                 </td>
               </tr>
             ) : (
-              [...firingAm, ...resolvedAm].map((r) => (
-                <tr key={r.id}>
-                  <td>{r.name}</td>
-                  <td>
-                    {r.siteId ? <Link to={`/sites/${r.siteId}`}>{r.siteName}</Link> : r.siteName}
-                  </td>
-                  <td>{r.status}</td>
-                  <td>{r.summary}</td>
-                </tr>
-              ))
+              amAlerts.map((a, i) => {
+                const siteId = a.labels?.site ?? "";
+                return (
+                  <tr key={`${a.labels?.alertname}-${siteId}-${a.startsAt ?? i}`}>
+                    <td>{a.labels?.alertname ?? "Alert"}</td>
+                    <td>
+                      {siteId ? <Link to={`/sites/${siteId}`}>{siteId}</Link> : "—"}
+                    </td>
+                    <td>{a.status}</td>
+                    <td>{a.annotations?.summary ?? "—"}</td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

@@ -19,6 +19,10 @@ function cardClass(tone: string, compact?: boolean) {
   return `signalCard signalCard--${tone}${compact ? " signalCardCompact" : ""}`;
 }
 
+function sameLabel(a?: string, b?: string) {
+  return Boolean(a?.trim()) && a!.trim().toLowerCase() === (b ?? "").trim().toLowerCase();
+}
+
 /** Big green/red uplink card for one site. */
 export function UplinkStatusCard({
   site,
@@ -33,13 +37,13 @@ export function UplinkStatusCard({
 }) {
   const up = uplinkOf(status);
   const tone = stateTone(up.state);
+  const eyebrow = title?.trim() || "Uplink / Internet";
+  const siteName = site?.name ?? "Pick a site";
   return (
-    <div className={cardClass(tone, compact)}>
-      <div className="signalCardEyebrow">{title?.trim() || "Uplink / Internet"}</div>
-      <div className="signalCardName">{site?.name ?? "Pick a site"}</div>
+    <div className={cardClass(tone, compact)} title={up.notes || undefined}>
+      {!sameLabel(eyebrow, siteName) ? <div className="signalCardEyebrow">{eyebrow}</div> : null}
+      <div className="signalCardName">{siteName}</div>
       <div className="signalCardState">{stateLabel(up.state)}</div>
-      {!compact && up.notes ? <div className="signalCardNotes">{up.notes}</div> : null}
-      {!compact ? <div className="signalCardHint">Green = reachable · Red = down</div> : null}
     </div>
   );
 }
@@ -58,15 +62,18 @@ export function CollectorStatusCard({
 }) {
   const col = collectorOf(status);
   const tone = stateTone(col.state);
+  const eyebrow = title?.trim() || "Collector";
+  const siteName = site?.name ?? "Pick a site";
   const collectorName =
     site?.devices?.find((d) => (d.kind ?? "network") === "server")?.name ?? "Collector";
   return (
-    <div className={cardClass(tone, compact)}>
-      <div className="signalCardEyebrow">{title?.trim() || "Collector"}</div>
-      <div className="signalCardName">{site?.name ?? "Pick a site"}</div>
-      {!compact ? <div className="signalCardSub">{collectorName}</div> : null}
+    <div className={cardClass(tone, compact)} title={col.notes || undefined}>
+      {!sameLabel(eyebrow, siteName) ? <div className="signalCardEyebrow">{eyebrow}</div> : null}
+      <div className="signalCardName">{siteName}</div>
+      {!compact && !sameLabel(collectorName, siteName) && !sameLabel(collectorName, eyebrow) ? (
+        <div className="signalCardSub">{collectorName}</div>
+      ) : null}
       <div className="signalCardState">{stateLabel(col.state)}</div>
-      {!compact && col.notes ? <div className="signalCardNotes">{col.notes}</div> : null}
     </div>
   );
 }
@@ -128,21 +135,23 @@ export function SnmpDeviceStatusCard({
   const tone = stateTone(state);
   const name = live?.name ?? inventory?.name ?? "Pick a device";
   const snmpIp = live?.snmpIp ?? inventory?.snmpIp;
+  const eyebrow = title?.trim() || "SNMP device";
+  const titleOwnsName = Boolean(title?.trim()) && sameLabel(title, name);
   return (
-    <div className={cardClass(tone, compact)}>
-      <div className="signalCardEyebrow">{title?.trim() || "SNMP device"}</div>
-      <div className="signalCardName">{name}</div>
+    <div className={cardClass(tone, compact)} title={live?.notes || undefined}>
+      {!titleOwnsName && !sameLabel(eyebrow, name) ? (
+        <div className="signalCardEyebrow">{eyebrow}</div>
+      ) : null}
+      {!titleOwnsName ? <div className="signalCardName">{name}</div> : null}
       {!compact ? (
-        <div className="signalCardSub">
+        <div className={titleOwnsName ? "signalCardName" : "signalCardSub"}>
           {site?.name ?? "—"}
           {snmpIp ? ` · ${snmpIp}` : ""}
         </div>
+      ) : titleOwnsName ? (
+        <div className="signalCardSub truncate">{snmpIp ?? site?.name ?? ""}</div>
       ) : null}
       <div className="signalCardState">{stateLabel(state)}</div>
-      {!compact && live?.notes ? <div className="signalCardNotes">{live.notes}</div> : null}
-      {!compact ? (
-        <div className="signalCardHint">Green = SNMP reachable · Red = down · Grey = no data</div>
-      ) : null}
     </div>
   );
 }
@@ -188,8 +197,8 @@ export function LocalDevicesSignalBoard({
 
   return (
     <div className={`signalBoard${compact ? " signalBoardCompact" : ""}`}>
-      {!compact ? (
-        <div className="widgetTitle">{title?.trim() || "Local devices (SNMP)"}</div>
+      {!compact && !title?.trim() ? (
+        <div className="widgetTitle">Local devices (SNMP)</div>
       ) : null}
       <div className="signalBoardList">
         {rows.map((r) => (

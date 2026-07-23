@@ -230,15 +230,24 @@ export function DashboardPage() {
 
   const gridLayout: Layout[] = useMemo(
     () =>
-      (layout?.widgets ?? []).map((w) => ({
-        i: w.i,
-        x: Math.max(0, safeInt(w.x, 0)),
-        y: Math.max(0, safeInt(w.y, 0)),
-        w: Math.max(1, safeInt(w.w, 4)),
-        h: Math.max(1, safeInt(w.h, 4)),
-        minW: 2,
-        minH: w.type === "mini_map" ? 3 : 2
-      })),
+      (layout?.widgets ?? []).map((w) => {
+        const narrowOk =
+          w.type === "device_stat_gauge" ||
+          w.type === "snmp_device_status" ||
+          w.type === "uplink_status" ||
+          w.type === "collector_status" ||
+          w.type === "website_summary" ||
+          w.type === "alerts_table";
+        return {
+          i: w.i,
+          x: Math.max(0, safeInt(w.x, 0)),
+          y: Math.max(0, safeInt(w.y, 0)),
+          w: Math.max(1, safeInt(w.w, 4)),
+          h: Math.max(1, safeInt(w.h, 4)),
+          minW: narrowOk ? 1 : w.type === "mini_map" || w.type === "device_metric_chart" || w.type === "device_metric_bar" ? 3 : 2,
+          minH: w.type === "mini_map" ? 3 : 2
+        };
+      }),
     [layout]
   );
 
@@ -389,10 +398,6 @@ export function DashboardPage() {
         <div className="pageHeader">
           <div>
             <h1>Dashboard</h1>
-            <p className="pageSub">
-              Collector health, uplink, and charts — same metrics Grafana uses. In edit mode, drag
-              anywhere on the grid (including empty space below).
-            </p>
           </div>
           <div className="pageActions">
             {editing ? (

@@ -103,8 +103,11 @@ export function DeviceMetricChart({
   const [loading, setLoading] = useState(false);
   const [hours, setHours] = useState<number>(1);
   const preset = presets.find((p) => p.id === metric);
-  const label = title?.trim() || preset?.label || metric;
+  const customTitle = title?.trim();
+  const label = customTitle || preset?.label || metric;
   const unit = preset?.unit ?? "";
+  // Chrome already shows config.title — avoid stacking the same label again.
+  const showInnerTitle = !customTitle;
 
   useEffect(() => {
     if (!token || !siteId || !deviceId || !metric) return;
@@ -145,7 +148,7 @@ export function DeviceMetricChart({
   return (
     <div className="metricChartWidget">
       <div className="metricChartHeader">
-        <div className="widgetTitle">{label}</div>
+        {showInnerTitle ? <div className="widgetTitle">{label}</div> : <div />}
         <div className="timeRangePicker">
           {TIME_RANGES.map((r) => (
             <button
@@ -203,8 +206,10 @@ export function DeviceMetricBar({
   const [loading, setLoading] = useState(false);
   const [hours, setHours] = useState<number>(1);
   const preset = presets.find((p) => p.id === metric);
-  const label = title?.trim() || preset?.label || metric;
+  const customTitle = title?.trim();
+  const label = customTitle || preset?.label || metric;
   const unit = preset?.unit ?? "";
+  const showInnerTitle = !customTitle;
 
   useEffect(() => {
     if (!token || !siteId || !deviceId || !metric) return;
@@ -245,7 +250,7 @@ export function DeviceMetricBar({
   return (
     <div className="metricChartWidget">
       <div className="metricChartHeader">
-        <div className="widgetTitle">{label}</div>
+        {showInnerTitle ? <div className="widgetTitle">{label}</div> : <div />}
         <div className="timeRangePicker">
           {TIME_RANGES.map((r) => (
             <button
@@ -308,7 +313,10 @@ export function DeviceStatGauge({
   const preset = presets.find((p) => p.id === metric);
   const unit = preset?.unit ?? "";
   const isBool = BOOLEAN_METRICS.has(metric);
-  const displayTitle = title?.trim() || preset?.label || metric;
+  const customTitle = title?.trim();
+  const displayTitle = customTitle || preset?.label || metric;
+  // Chrome already shows config.title — show device/site name once, then UP/DOWN or %.
+  const showInnerTitle = !customTitle;
 
   useEffect(() => {
     if (!token || !siteId || !metric) return;
@@ -350,14 +358,15 @@ export function DeviceStatGauge({
     const up = value != null && value >= 1;
     const tone = up ? "ok" : "bad";
     const label = up ? "UP" : "DOWN";
+    const siteLabel = siteName ?? siteId;
     return (
-      <div className={`signalCard signalCard--${tone} signalCardCompact`}>
-        <div className="signalCardEyebrow">{displayTitle}</div>
-        <div className="signalCardName">{siteName ?? siteId}</div>
+      <div
+        className={`signalCard signalCard--${tone} signalCardCompact`}
+        title={up ? "Reachable" : value != null ? "Not reachable" : "No recent samples"}
+      >
+        {showInnerTitle ? <div className="signalCardEyebrow">{displayTitle}</div> : null}
+        <div className="signalCardName">{siteLabel}</div>
         <div className="signalCardState">{label}</div>
-        <div className="signalCardHint">
-          {up ? "Reachable" : value != null ? "Not reachable" : "No recent samples"}
-        </div>
       </div>
     );
   }
@@ -373,7 +382,7 @@ export function DeviceStatGauge({
 
   return (
     <div className="gaugeWidget">
-          <div className="widgetTitle">{displayTitle}</div>
+      {showInnerTitle ? <div className="widgetTitle">{displayTitle}</div> : null}
       {loading && value == null ? (
         <div className="chartSkeleton gaugeSkeleton" aria-hidden />
       ) : (

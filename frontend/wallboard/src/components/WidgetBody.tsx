@@ -9,7 +9,7 @@ import {
   DeviceStatGauge,
   useMetricPresets
 } from "./DeviceMetricWidgets";
-import { collectorOf, localDevicesOf, uplinkOf } from "../statusLabels";
+import { localDevicesOf } from "../statusLabels";
 import {
   CollectorStatusCard,
   LocalDevicesSignalBoard,
@@ -17,6 +17,8 @@ import {
   SnmpDeviceStatusCard,
   UplinkStatusCard
 } from "./StatusVisualWidgets";
+import { WebsiteSummaryWidget } from "./WebsiteSummaryWidget";
+import { AlertsIncidentsWidget } from "./AlertsIncidentsWidget";
 
 export type WidgetCatalogEntry = {
   type: WidgetType;
@@ -145,7 +147,7 @@ export function WidgetBody({
   config,
   sites,
   statuses,
-  alerts,
+  alerts: _alerts,
   devices,
   grafanaUrl: _grafanaUrl,
   compact = false
@@ -174,16 +176,10 @@ export function WidgetBody({
         <div className="statusGrid statusGridList">
           {sites.map((s) => {
             const row = statuses.find((x) => x.siteId === s.id);
-            const col = collectorOf(row);
-            const up = uplinkOf(row);
             return (
               <div key={s.id} className="statusTile">
                 <div className="statusTileName">{s.name}</div>
-                <StatusPill state={row?.overall ?? "unknown"} notes={col.notes ?? up.notes} />
-                <div className="statusTileMeta">
-                  <span className={`dotLine dotLine--${col.state}`}>Collector: {col.state}</span>
-                  <span className={`dotLine dotLine--${up.state}`}>Uplink: {up.state}</span>
-                </div>
+                <StatusPill state={row?.overall ?? "unknown"} />
               </div>
             );
           })}
@@ -245,23 +241,7 @@ export function WidgetBody({
   }
 
   if (type === "alerts_table") {
-    const firing = alerts.filter((a) => a.status === "firing").slice(0, 20);
-    return (
-      <div className="widgetInner widgetInnerScroll">
-        <div className="widgetTitle">Active alerts</div>
-        {firing.length === 0 ? (
-          <div className="muted">No firing alerts</div>
-        ) : (
-          <ul className="alertUl">
-            {firing.map((a, i) => (
-              <li key={i}>
-                <strong>{a.labels.alertname ?? "alert"}</strong> · {a.labels.site ?? "—"}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    );
+    return <AlertsIncidentsWidget compact={compact} />;
   }
 
   if (type === "top_devices") {
@@ -281,39 +261,19 @@ export function WidgetBody({
   }
 
   if (type === "website_summary") {
-    const counts = { healthy: 0, warning: 0, critical: 0, unknown: 0 };
-    for (const row of statuses) {
-      const n = row.websiteTargetCount ?? 0;
-      if (n <= 0) continue;
-      counts[row.websites.state] += n;
-    }
-    return (
-      <div className="widgetInner">
-        <div className="widgetTitle">Website checks</div>
-        <div className="kvList">
-          <div className="dotLine dotLine--healthy">Healthy: {counts.healthy}</div>
-          <div className="dotLine dotLine--warning">Warning: {counts.warning}</div>
-          <div className="dotLine dotLine--critical">Critical: {counts.critical}</div>
-          <div className="dotLine dotLine--unknown">Unknown: {counts.unknown}</div>
-        </div>
-      </div>
-    );
+    return <WebsiteSummaryWidget compact={compact} />;
   }
 
   if (type === "site_card") {
-    const col = collectorOf(st);
-    const up = uplinkOf(st);
     const loc = localDevicesOf(st);
     return (
       <div className="widgetInner">
         <div className="widgetTitle">{site?.name ?? siteId ?? "Site"}</div>
+        <StatusPill state={st?.overall ?? "unknown"} />
         <div className="kvList">
-          <div className={`dotLine dotLine--${col.state}`}>Collector: {col.state}</div>
-          <div className={`dotLine dotLine--${up.state}`}>Uplink: {up.state}</div>
           <div className={`dotLine dotLine--${loc.state}`}>Local devices: {loc.state}</div>
           <div>Website checks: {st?.websites.state ?? "unknown"}</div>
         </div>
-        <StatusPill state={st?.overall ?? "unknown"} notes={col.notes ?? up.notes} />
       </div>
     );
   }

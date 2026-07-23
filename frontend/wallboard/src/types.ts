@@ -25,6 +25,14 @@ export type SiteStatus = {
     notes?: string;
   }>;
   collector?: DomainStatus;
+  collectorDeviceStates?: Array<{
+    deviceId: string;
+    name: string;
+    metricId: string;
+    state: DomainState;
+    notes?: string;
+    live: boolean;
+  }>;
   websiteTargetCount?: number;
   alerts: { firing: number; resolved: number };
   overall: DomainState;

@@ -29,6 +29,17 @@ function snmpStateForDevice(
   return { state: "unknown", notes: "No SNMP status yet" };
 }
 
+function collectorStateForDevice(
+  statuses: SiteStatus[],
+  siteId: string,
+  deviceId: string
+): { state: DomainState; notes?: string; live: boolean } {
+  const st = statuses.find((s) => s.siteId === siteId);
+  const row = st?.collectorDeviceStates?.find((d) => d.deviceId === deviceId);
+  if (row) return { state: row.state, notes: row.notes, live: row.live };
+  return { state: st?.collector?.state ?? "unknown", notes: st?.collector?.notes, live: false };
+}
+
 export function DevicesPage() {
   const { token } = useAuth();
   const [devices, setDevices] = useState<DeviceRow[]>([]);
@@ -180,6 +191,16 @@ export function DevicesPage() {
         </div>
       ) : null}
 
+      {collectors.filter((c) => {
+        const h = collectorStateForDevice(statuses, c.siteId, c.id);
+        return !h.live && collectors.some((x) => x.siteId === c.siteId && x.id !== c.id);
+      }).length > 0 ? (
+        <div className="bannerHint" style={{ marginBottom: 14 }}>
+          Some sites have more than one collector inventory row. Keep the one marked{" "}
+          <strong>Live</strong> (healthy metrics); remove the stale duplicate on the site page.
+        </div>
+      ) : null}
+
       <div className="detailGrid">
         <TopDevicesTable devices={top} />
         <div className="tableCard">
@@ -191,7 +212,7 @@ export function DevicesPage() {
                 <th>Site</th>
                 <th>Type</th>
                 <th>ID / address</th>
-                <th>SNMP</th>
+                <th>Health</th>
                 <th>Vendor</th>
               </tr>
             </thead>
@@ -205,26 +226,38 @@ export function DevicesPage() {
                 </tr>
               ) : (
                 devices.map((d) => {
-                  const snmp =
-                    (d.kind ?? "network") === "network"
-                      ? snmpStateForDevice(statuses, d.siteId, d.id)
-                      : null;
+                  const isServer = (d.kind ?? "network") === "server";
+                  const snmp = !isServer
+                    ? snmpStateForDevice(statuses, d.siteId, d.id)
+                    : null;
+                  const collector = isServer
+                    ? collectorStateForDevice(statuses, d.siteId, d.id)
+                    : null;
                   return (
                     <tr key={`${d.siteId}-${d.id}`}>
-                      <td>{d.name}</td>
+                      <td>
+                        {d.name}
+                        {collector?.live ? (
+                          <span className="liveBadge" title="Receiving host metrics">
+                            Live
+                          </span>
+                        ) : null}
+                      </td>
                       <td>
                         <Link to={`/sites/${d.siteId}`}>{d.siteName}</Link>
                       </td>
                       <td>{kindLabel(d.kind)}</td>
                       <td>
-                        {d.kind === "server" ? d.hostMetricId ?? d.id : d.snmpIp ?? "—"}
-                        {(d.kind ?? "network") === "network" && !d.snmpIp ? (
+                        {isServer ? d.hostMetricId ?? d.id : d.snmpIp ?? "—"}
+                        {!isServer && !d.snmpIp ? (
                           <div className="muted">Needs SNMP IP</div>
                         ) : null}
                       </td>
                       <td>
                         {snmp ? (
                           <StatusPill state={snmp.state} notes={snmp.notes} />
+                        ) : collector ? (
+                          <StatusPill state={collector.state} notes={collector.notes} />
                         ) : (
                           <span className="muted">—</span>
                         )}

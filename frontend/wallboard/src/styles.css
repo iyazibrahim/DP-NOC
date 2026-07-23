@@ -699,6 +699,10 @@ textarea {
   font-size: 11px;
   color: var(--muted);
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .iconBtn {
@@ -736,8 +740,24 @@ textarea {
   align-content: start;
 }
 
-.dotLine--healthy {
-  color: #34d399;
+.uptimeSparkline {
+  display: block;
+  vertical-align: middle;
+}
+
+.liveBadge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #065f46;
+  background: rgba(52, 211, 153, 0.2);
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  vertical-align: middle;
 }
 .dotLine--critical {
   color: #f87171;
@@ -773,11 +793,20 @@ textarea {
 
 .signalCardCompact .signalCardName {
   font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .signalCardCompact .signalCardState {
   font-size: clamp(1rem, 2.2vw, 1.35rem);
   margin-top: 0;
+}
+
+.signalCardCompact .signalCardSub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .signalBoardCompact {
@@ -819,6 +848,21 @@ textarea {
 .dashboardHostCompact .widgetTitle {
   margin-bottom: 4px;
   font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboardHostCompact .chartFlexFill {
+  min-height: 48px;
+}
+
+.dashboardHostCompact .pieWrap {
+  min-height: 48px;
+}
+
+.dashboardHostCompact .gaugeValue {
+  font-size: clamp(0.95rem, 2vw, 1.35rem);
 }
 
 .checkRow {
@@ -1048,22 +1092,20 @@ textarea {
   width: 100%;
 }
 
-.pieWrap {
-  flex: 1 1 auto;
-  min-height: 64px;
-  width: 100%;
-}
-
 .metricChartWidget {
   display: flex;
   flex-direction: column;
   gap: 8px;
   height: 100%;
   min-height: 0;
+  width: 100%;
 }
 
 .metricChartWidget .widgetTitle {
   margin-bottom: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .gaugeWidget {
@@ -1072,12 +1114,17 @@ textarea {
   gap: 6px;
   height: 100%;
   min-height: 0;
+  width: 100%;
   justify-content: flex-start;
+  align-items: stretch;
 }
 
 .gaugeWidget .widgetTitle {
   margin-bottom: 0;
   flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .gaugeValue {
@@ -1085,6 +1132,13 @@ textarea {
   font-weight: 600;
   color: var(--accent);
   flex-shrink: 0;
+}
+
+.pieWrap {
+  flex: 1 1 auto;
+  min-height: 64px;
+  width: 100%;
+  align-self: stretch;
 }
 
 /* Themed scrollbars */

@@ -13,12 +13,46 @@ import { StatusPill } from "../components/StatusPill";
 import { Modal } from "../components/Modal";
 import type { Site } from "../types";
 
+type WebsiteRow = {
+  siteId: string;
+  siteName: string;
+  name: string;
+  url: string;
+  state: string;
+  notes?: string;
+  latencyMs?: number | null;
+  uptime24h?: number | null;
+  sparkline?: number[];
+};
+
+function UptimeSparkline({ values }: { values?: number[] }) {
+  const pts = values?.length ? values : [];
+  if (pts.length < 2) {
+    return <span className="muted">—</span>;
+  }
+  const w = 72;
+  const h = 22;
+  const max = 1;
+  const min = 0;
+  const step = w / (pts.length - 1);
+  const d = pts
+    .map((v, i) => {
+      const x = i * step;
+      const y = h - ((Math.max(min, Math.min(max, v)) - min) / (max - min || 1)) * (h - 2) - 1;
+      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <svg className="uptimeSparkline" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden>
+      <path d={d} fill="none" stroke="var(--accent)" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 export function WebsitesPage() {
   const { token } = useAuth();
   const [searchParams] = useSearchParams();
-  const [rows, setRows] = useState<
-    Array<{ siteId: string; siteName: string; name: string; url: string; state: string }>
-  >([]);
+  const [rows, setRows] = useState<WebsiteRow[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [form, setForm] = useState({ siteId: "", name: "", url: "" });
   const [editingUrl, setEditingUrl] = useState<string | null>(null);
@@ -141,6 +175,9 @@ export function WebsitesPage() {
               <th>Site</th>
               <th>Name</th>
               <th>URL</th>
+              <th>Latency</th>
+              <th>Uptime 24h</th>
+              <th>24h</th>
               <th>State</th>
               <th></th>
             </tr>
@@ -148,7 +185,7 @@ export function WebsitesPage() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="muted">
+                <td colSpan={8} className="muted">
                   No websites yet —{" "}
                   <button type="button" className="linkBtn" onClick={openAdd}>
                     add one
@@ -168,8 +205,13 @@ export function WebsitesPage() {
                   </td>
                   <td>{r.name}</td>
                   <td>{r.url}</td>
+                  <td>{r.latencyMs != null ? `${r.latencyMs} ms` : "—"}</td>
+                  <td>{r.uptime24h != null ? `${r.uptime24h}%` : "—"}</td>
                   <td>
-                    <StatusPill state={r.state} />
+                    <UptimeSparkline values={r.sparkline} />
+                  </td>
+                  <td>
+                    <StatusPill state={r.state} notes={r.notes} />
                   </td>
                   <td>
                     <button type="button" onClick={() => openEdit(r)}>
@@ -197,40 +239,38 @@ export function WebsitesPage() {
             value={form.siteId}
             onChange={(e) => setForm((f) => ({ ...f, siteId: e.target.value }))}
             required
+            disabled={Boolean(editingUrl)}
           >
-            <option value="global">Global (no physical site)</option>
+            <option value="global">Global / Central</option>
             {sites.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
           </select>
-          <p className="muted fieldHint">
-            Website checks run from the central server and count toward that site&apos;s health.
-          </p>
-          <label className="label">Display name</label>
+          <label className="label">Name</label>
           <input
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="Public website"
+            required
           />
           <label className="label">URL</label>
           <input
             value={form.url}
             onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
-            placeholder="https://example.com"
             required
+            placeholder="https://example.com"
           />
           <div className="formActions">
-            <button className="primary" type="submit" disabled={busy}>
-              {editingUrl ? "Save" : "Add website"}
+            <button type="submit" className="primary" disabled={busy}>
+              {editingUrl ? "Save" : "Add"}
             </button>
             {form.siteId ? (
-              <button type="button" onClick={() => onApply(form.siteId)} disabled={busy}>
+              <button type="button" disabled={busy} onClick={() => onApply(form.siteId)}>
                 Save and start checking
               </button>
             ) : null}
-            <button type="button" onClick={closeModal} disabled={busy}>
+            <button type="button" onClick={closeModal}>
               Cancel
             </button>
           </div>

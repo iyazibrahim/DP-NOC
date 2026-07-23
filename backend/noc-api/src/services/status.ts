@@ -38,6 +38,15 @@ export type SiteStatus = {
   }>;
   /** Collector box host metrics health */
   collector: DomainStatus;
+  /** Per-collector device host health (for Devices page) */
+  collectorDeviceStates: Array<{
+    deviceId: string;
+    name: string;
+    metricId: string;
+    state: DomainState;
+    notes?: string;
+    live: boolean;
+  }>;
   websiteTargetCount: number;
   alerts: {
     firing: number;
@@ -193,33 +202,66 @@ async function collectorIdStatus(siteId: string, metricId: string): Promise<Doma
   }
 }
 
-async function computeCollectorStatus(siteId: string): Promise<DomainStatus> {
+async function computeCollectorStatus(siteId: string): Promise<{
+  aggregate: DomainStatus;
+  devices: SiteStatus["collectorDeviceStates"];
+}> {
   const site = getSiteById(siteId);
   const servers = (site?.devices ?? []).filter((d) => (d.kind ?? "network") === "server");
 
   if (servers.length > 0) {
+    const devices: SiteStatus["collectorDeviceStates"] = [];
     const statuses: DomainStatus[] = [];
     for (const d of servers) {
-      statuses.push(await collectorIdStatus(siteId, d.hostMetricId || d.id));
+      const metricId = d.hostMetricId || d.id;
+      const st = await collectorIdStatus(siteId, metricId);
+      statuses.push(st);
+      devices.push({
+        deviceId: d.id,
+        name: d.name,
+        metricId,
+        state: st.state,
+        notes: st.notes,
+        live: false
+      });
     }
-    return aggregateProbeStatuses(statuses);
+    // Prefer the healthy device whose id matches preferred HOST_DEVICE_ID pattern (site-*-nuc)
+    // or any healthy one; mark exactly one Live when possible.
+    const preferred =
+      devices.find((x) => x.state === "healthy" && /-(nuc|collector)$/i.test(x.deviceId)) ??
+      devices.find((x) => x.state === "healthy") ??
+      devices.find((x) => x.state === "warning") ??
+      null;
+    if (preferred) preferred.live = true;
+    else if (devices.length === 1) devices[0].live = devices[0].state !== "unknown";
+
+    return { aggregate: aggregateProbeStatuses(statuses), devices };
   }
 
   // No registered collector — if site once had uplink/host metrics but host is silent, still surface
   if (await siteHasCollectorMetrics(siteId)) {
     return {
-      state: "warning",
-      notes:
-        "Collector is sending data but is not registered yet — it should appear under Devices shortly"
+      aggregate: {
+        state: "warning",
+        notes:
+          "Collector is sending data but is not registered yet — it should appear under Devices shortly"
+      },
+      devices: []
     };
   }
   if (await hasUnregisteredHostMetrics(siteId)) {
     return {
-      state: "warning",
-      notes: "Collector data found — waiting to add it automatically"
+      aggregate: {
+        state: "warning",
+        notes: "Collector data found — waiting to add it automatically"
+      },
+      devices: []
     };
   }
-  return { state: "unknown", notes: "Waiting for collector data" };
+  return {
+    aggregate: { state: "unknown", notes: "Waiting for collector data" },
+    devices: []
+  };
 }
 
 export async function computeSiteStatus(
@@ -256,6 +298,7 @@ export async function computeSiteStatus(
       localDevices: na,
       localDeviceStates: [],
       collector: na,
+      collectorDeviceStates: [],
       alerts: { firing, resolved },
       websiteTargetCount: globalTargets.length,
       overall: websites.state
@@ -317,7 +360,8 @@ export async function computeSiteStatus(
         : { state: "unknown", notes: "No website checks configured" };
   }
 
-  const collector = await computeCollectorStatus(siteId);
+  const { aggregate: collector, devices: collectorDeviceStates } =
+    await computeCollectorStatus(siteId);
 
   let localDevices: DomainStatus = { state: "unknown", notes: "No local devices configured" };
   const localDeviceStates: SiteStatus["localDeviceStates"] = [];
@@ -413,6 +457,7 @@ export async function computeSiteStatus(
     localDevices,
     localDeviceStates,
     collector,
+    collectorDeviceStates,
     websiteTargetCount: site.websiteTargets?.length ?? 0,
     alerts: { firing, resolved },
     overall
@@ -433,6 +478,17 @@ export async function computeAllSitesStatus(): Promise<{
   if (globalTargets.length > 0) {
     statuses.push(await computeSiteStatus("global", activeAlerts));
   }
+
+  // Keep acknowledgeable incidents in sync with live status.
+  try {
+    // Lazy require avoids circular import with incidents → status types
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { syncIncidentsFromStatuses } = require("./incidents") as typeof import("./incidents");
+    syncIncidentsFromStatuses(statuses);
+  } catch {
+    /* ignore sync errors */
+  }
+
   return {
     statuses,
     meta: {

@@ -121,6 +121,12 @@ Collector box → Alloy → Prometheus (central)
     - New widgets place at finite `maxBottom` (no more `y: Infinity`)
     - Dashboard **Compact / Comfortable** density toggle (localStorage); denser boards/cards
     - Per-widget “Compact this widget” in settings; shorter add-drawer labels (tooltip only)
+  - **Dashboard UX + ops proof (2026-07-23)**
+    - Remove SNMP notes/legend + dashboard help subtitle; simplify Site health to overall pill
+    - Compact fill/ellipsis fixes; gauges/status `minW: 1`; drop duplicate inner widget titles
+    - Website checks: latency ms, 24h uptime %, sparkline; dashboard avg latency
+    - Acknowledgeable incidents (`data/runtime/incidents.json`) — open until Ack → History
+    - Devices: per-collector Health + Live badge for duplicate inventory rows
 
 
 ## Local Validation
