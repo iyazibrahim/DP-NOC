@@ -48,8 +48,30 @@ function parseInstant(data: PromQueryResult): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function formatBitrate(value: number): { text: string; unitLabel: string } {
+  if (!Number.isFinite(value)) return { text: "—", unitLabel: "" };
+  if (Math.abs(value) >= 1_000_000) {
+    return { text: (value / 1_000_000).toFixed(2), unitLabel: " Mbps" };
+  }
+  return { text: (value / 1000).toFixed(1), unitLabel: " Kbps" };
+}
+
+function formatMetricValue(value: number, unit?: string): string {
+  if (!Number.isFinite(value)) return "—";
+  if (unit === "bps") {
+    const { text, unitLabel } = formatBitrate(value);
+    return `${text}${unitLabel}`;
+  }
+  if (unit === "%") return `${value.toFixed(1)}%`;
+  return `${value.toFixed(2)}${unit ?? ""}`;
+}
+
 function formatYAxis(value: number, unit?: string) {
   if (unit === "%") return `${Math.round(value)}%`;
+  if (unit === "bps") {
+    const { text, unitLabel } = formatBitrate(value);
+    return `${text}${unitLabel.trim() ? unitLabel : ""}`;
+  }
   return String(value);
 }
 
@@ -67,10 +89,7 @@ function ChartTooltip({
   return (
     <div className="chartTooltip">
       <div className="chartTooltipTime">{t}</div>
-      <div className="chartTooltipValue">
-        {Number.isFinite(v) ? v.toFixed(2) : "—"}
-        {unit ?? ""}
-      </div>
+      <div className="chartTooltipValue">{formatMetricValue(v, unit)}</div>
     </div>
   );
 }
@@ -388,7 +407,7 @@ export function DeviceStatGauge({
       ) : (
         <>
           <div className="gaugeValue">
-            {value != null ? `${value.toFixed(1)}${unit}` : "—"}
+            {value != null ? formatMetricValue(value, unit) : "—"}
           </div>
           {pieData ? (
             <div className="pieWrap">

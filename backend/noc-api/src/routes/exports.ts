@@ -2,12 +2,18 @@ import fs from "fs";
 import path from "path";
 import express from "express";
 import { requireJwt } from "../middleware/auth";
-import { listExports, runExport, resolveExportFile, type ExportPeriod } from "../services/exports";
+import { listExports, runExport, resolveExportFile, getLatestMonthlyReport, type ExportPeriod } from "../services/exports";
 
 export const exportsRouter = express.Router();
 
 exportsRouter.get("/", requireJwt(["operator", "wallboard"]), (_req, res) => {
   return res.json({ exports: listExports() });
+});
+
+exportsRouter.get("/latest/monthly", requireJwt(["operator", "wallboard"]), (_req, res) => {
+  const report = getLatestMonthlyReport();
+  if (!report) return res.json({ report: null });
+  return res.json({ report });
 });
 
 exportsRouter.post("/run", requireJwt(["operator"]), async (req, res) => {

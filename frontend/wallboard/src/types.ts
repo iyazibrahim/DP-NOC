@@ -148,6 +148,60 @@ export type ExportRecord = {
   files: string[];
 };
 
+export type MonthlyReportPayload = {
+  id: string;
+  period: "weekly" | "monthly";
+  generatedAt: string;
+  rangeDays: number;
+  sites: Array<{
+    siteId: string;
+    name: string;
+    address: string;
+    overall: string;
+    wan: string;
+    lan: string;
+    wanUptimePct: string | null;
+    deviceCount: number;
+  }>;
+  devices: Array<{
+    siteId: string;
+    siteName: string;
+    deviceId: string;
+    name: string;
+    kind?: string;
+    uptimePct: number | null;
+    avgUtilInPct?: number | null;
+    avgUtilOutPct?: number | null;
+    peakUtilInPct?: number | null;
+    peakUtilOutPct?: number | null;
+  }>;
+  alerts: {
+    firing: number;
+    resolved: number;
+    topAlertnames: Array<{ alertname: string; count: number }>;
+  };
+  incidents: {
+    summary: {
+      openedInRange: number;
+      resolvedInRange: number;
+      stillOpen: number;
+      acknowledgedInRange: number;
+    };
+    timeline: Array<{
+      id: string;
+      title: string;
+      siteId: string;
+      siteName: string;
+      kind: string;
+      detail: string;
+      openedAt: string;
+      resolvedAt?: string;
+      acknowledgedAt?: string;
+      acknowledgedBy?: string;
+    }>;
+  };
+};
+
 export type StatusMeta = {
   checkedAt: string;
   dashboardRefreshSec: number;

@@ -17,7 +17,7 @@ export type RetentionConfig = {
 };
 
 const DEFAULT: RetentionConfig = {
-  retentionTime: "28d",
+  retentionTime: "30d",
   retentionSizeGB: 10,
   hostScrapeIntervalSec: 60,
   icmpScrapeIntervalSec: 60,

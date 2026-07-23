@@ -4,6 +4,7 @@ import type {
   DeviceRow,
   ExportRecord,
   MetricPreset,
+  MonthlyReportPayload,
   PromQueryResult,
   RetentionConfig,
   Site,
@@ -428,6 +429,12 @@ export async function getMetricRange(
 
 export async function listExports(token: string) {
   return fetchJson<{ exports: ExportRecord[] }>("/api/exports", {
+    headers: authHeaders(token)
+  });
+}
+
+export async function getLatestMonthlyReport(token: string) {
+  return fetchJson<{ report: MonthlyReportPayload | null }>("/api/exports/latest/monthly", {
     headers: authHeaders(token)
   });
 }

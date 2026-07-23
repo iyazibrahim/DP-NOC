@@ -130,6 +130,11 @@ Collector box → Alloy → Prometheus (central)
   - **Devices inventory UX (2026-07-23)**
     - Devices page: drop Top devices panel; full-width table with search, site/kind filters, 20/page
     - Sites devices: search + pagination; collector Health pill (not SNMP dash)
+  - **Retention 30d + monthly report + SNMP util (2026-07-23)**
+    - Prometheus default retention **30d**; Settings/docs/flags updated (apply + restart Prom on VPS)
+    - Monthly/weekly exports include incident timeline + SNMP util avg/peak
+    - Settings → Reports shows in-app monthly summary (uptime, incidents, util)
+    - Traffic charts show Kbps/Mbps only; presets `if_util_in_pct` / `if_util_out_pct`
 
 
 ## Local Validation

@@ -69,6 +69,20 @@ export const METRIC_PRESETS: MetricPreset[] = [
     query: `IF_OUT_PLACEHOLDER`
   },
   {
+    id: "if_util_in_pct",
+    label: "SNMP util in",
+    kind: "network",
+    unit: "%",
+    query: `IF_UTIL_IN_PLACEHOLDER`
+  },
+  {
+    id: "if_util_out_pct",
+    label: "SNMP util out",
+    kind: "network",
+    unit: "%",
+    query: `IF_UTIL_OUT_PLACEHOLDER`
+  },
+  {
     id: "wan_dns",
     label: "Uplink (DNS)",
     kind: "any",
@@ -81,6 +95,20 @@ export const METRIC_PRESETS: MetricPreset[] = [
     query: `WAN_VPS_PLACEHOLDER`
   }
 ];
+
+/** Device-summed interface utilization % (nominal ifSpeed). */
+export function buildIfUtilQuery(
+  direction: "in" | "out",
+  siteId: string,
+  deviceId: string
+): string {
+  const octets = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
+  return `(
+  sum(rate(${octets}{site="${siteId}",device="${deviceId}"}[5m]) * 8)
+  /
+  clamp_min(sum(ifSpeed{site="${siteId}",device="${deviceId}"} > 0), 1)
+) * 100`;
+}
 
 function buildCpuQuery(siteId: string, deviceId: string): string {
   // Only emit CPU when host metrics are still fresh — avoids end-of-series rate() spikes on stop.
@@ -140,6 +168,10 @@ export function buildQuery(presetId: string, siteId: string, deviceId: string): 
       return `sum(rate(ifHCInOctets{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
     case "if_out_bps":
       return `sum(rate(ifHCOutOctets{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
+    case "if_util_in_pct":
+      return buildIfUtilQuery("in", siteId, deviceId);
+    case "if_util_out_pct":
+      return buildIfUtilQuery("out", siteId, deviceId);
     default:
       return preset.query.replace(/\{\{site\}\}/g, siteId).replace(/\{\{device\}\}/g, deviceId);
   }
@@ -188,6 +220,12 @@ export function listPresetsForApi(): MetricPreset[] {
       return {
         ...p,
         query: `sum(rate(ifHCOutOctets{site,device}[5m]) * 8)`
+      };
+    }
+    if (p.id === "if_util_in_pct" || p.id === "if_util_out_pct") {
+      return {
+        ...p,
+        query: `(sum(rate(ifHC*Octets[5m])*8) / sum(ifSpeed>0)) * 100 — nominal link util`
       };
     }
     return p;

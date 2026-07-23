@@ -88,7 +88,7 @@ Sidebar:
 
 ## Storage & retention
 
-See [`docs/STORAGE_RETENTION.md`](docs/STORAGE_RETENTION.md). Defaults: **28 days**, **10GB** TSDB cap. Configure in **Settings → Prometheus storage**; restart Prometheus to apply flag changes.
+See [`docs/STORAGE_RETENTION.md`](docs/STORAGE_RETENTION.md). Defaults: **30 days**, **10GB** TSDB cap. Configure in **Settings → Prometheus storage**; restart Prometheus to apply flag changes.
 
 ## Reports
 

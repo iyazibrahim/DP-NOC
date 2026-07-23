@@ -4,6 +4,7 @@ import {
   applyRetentionSettings,
   applyNotificationsSettings,
   downloadExportFile,
+  getLatestMonthlyReport,
   getNotificationsSettings,
   getRetentionSettings,
   getSettings,
@@ -15,13 +16,34 @@ import {
   saveNotificationsSettings,
   saveRetentionSettings
 } from "../api";
-import type { ExportRecord, NotificationsConfig, RetentionConfig, StatusTimingInfo } from "../types";
+import type {
+  ExportRecord,
+  MonthlyReportPayload,
+  NotificationsConfig,
+  RetentionConfig,
+  StatusTimingInfo
+} from "../types";
 import { Modal } from "../components/Modal";
 
 function formatBytes(n: number | null) {
   if (n == null) return "—";
   const gb = n / (1024 * 1024 * 1024);
   return gb >= 1 ? `${gb.toFixed(2)} GB` : `${(n / (1024 * 1024)).toFixed(0)} MB`;
+}
+
+function fmtPct(v: number | string | null | undefined) {
+  if (v == null || v === "") return "—";
+  const n = typeof v === "string" ? Number(v) : v;
+  return Number.isFinite(n) ? `${n.toFixed(2)}%` : "—";
+}
+
+function fmtWhen(iso?: string) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
 }
 
 type SettingsModal = "notifications" | "storage" | "exports" | "advanced" | null;
@@ -32,6 +54,7 @@ export function SettingsPage() {
   const [retention, setRetention] = useState<RetentionConfig | null>(null);
   const [storageBytes, setStorageBytes] = useState<number | null>(null);
   const [exports, setExports] = useState<ExportRecord[]>([]);
+  const [monthlyReport, setMonthlyReport] = useState<MonthlyReportPayload | null>(null);
   const [notifications, setNotifications] = useState<NotificationsConfig | null>(null);
   const [statusTiming, setStatusTiming] = useState<StatusTimingInfo | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -41,12 +64,13 @@ export function SettingsPage() {
 
   async function reload() {
     if (!token) return;
-    const [settings, ret, ex, notif, timing] = await Promise.all([
+    const [settings, ret, ex, notif, timing, monthly] = await Promise.all([
       getSettings(),
       getRetentionSettings(token),
       listExports(token),
       getNotificationsSettings(token),
-      getStatusTiming(token)
+      getStatusTiming(token),
+      getLatestMonthlyReport(token)
     ]);
     setGrafanaUrl(settings.grafanaPublicUrl);
     setRetention(ret.config);
@@ -54,6 +78,7 @@ export function SettingsPage() {
     setExports(ex.exports);
     setNotifications(notif.config);
     setStatusTiming(timing);
+    setMonthlyReport(monthly.report);
   }
 
   useEffect(() => {
@@ -435,7 +460,7 @@ export function SettingsPage() {
             <input
               value={retention.retentionTime}
               onChange={(e) => setRetention({ ...retention, retentionTime: e.target.value })}
-              placeholder="28d"
+              placeholder="30d"
             />
             <label className="label">Retention size (GB)</label>
             <input
@@ -502,7 +527,10 @@ export function SettingsPage() {
       </Modal>
 
       <Modal open={modal === "exports"} title="Reports & exports" onClose={() => setModal(null)} wide>
-        <p className="muted">Weekly (Sunday 00:00 MYT) and monthly (1st 00:00 MYT) when enabled.</p>
+        <p className="muted">
+          Weekly (Sunday 00:00 MYT) and monthly (1st 00:00 MYT) when enabled. Metrics retention default
+          is 30 days — apply storage settings and restart Prometheus so monthly history is complete.
+        </p>
         <div className="formActions">
           <button type="button" className="primary" onClick={() => onRunExport("weekly")} disabled={busy}>
             Export now (weekly)
@@ -511,6 +539,135 @@ export function SettingsPage() {
             Export now (monthly)
           </button>
         </div>
+
+        <div className="tableTitle" style={{ marginTop: 18 }}>
+          Latest monthly summary
+        </div>
+        {!monthlyReport ? (
+          <p className="muted">No monthly report yet — click Export now (monthly).</p>
+        ) : (
+          <div className="monthlySummary">
+            <p className="muted">
+              Generated {fmtWhen(monthlyReport.generatedAt)} · last {monthlyReport.rangeDays} days
+            </p>
+            <div className="healthStrip" style={{ marginBottom: 12 }}>
+              <div className="healthChip">
+                <span className="healthChipLabel">Incidents opened</span>
+                <strong>{monthlyReport.incidents?.summary?.openedInRange ?? 0}</strong>
+              </div>
+              <div className="healthChip">
+                <span className="healthChipLabel">Resolved</span>
+                <strong>{monthlyReport.incidents?.summary?.resolvedInRange ?? 0}</strong>
+              </div>
+              <div className="healthChip">
+                <span className="healthChipLabel">Still open</span>
+                <strong>{monthlyReport.incidents?.summary?.stillOpen ?? 0}</strong>
+              </div>
+              <div className="healthChip">
+                <span className="healthChipLabel">Acknowledged</span>
+                <strong>{monthlyReport.incidents?.summary?.acknowledgedInRange ?? 0}</strong>
+              </div>
+            </div>
+
+            <div className="tableTitle">Site uptime (WAN)</div>
+            <table className="dataTable" style={{ marginBottom: 14 }}>
+              <thead>
+                <tr>
+                  <th>Site</th>
+                  <th>Overall</th>
+                  <th>WAN uptime</th>
+                  <th>Devices</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(monthlyReport.sites ?? []).map((s) => (
+                  <tr key={s.siteId}>
+                    <td>{s.name}</td>
+                    <td>{s.overall}</td>
+                    <td>{fmtPct(s.wanUptimePct)}</td>
+                    <td>{s.deviceCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="tableTitle">Bandwidth utilization (network)</div>
+            <p className="muted fieldHint">
+              Approx. util from SNMP ifSpeed (nominal link). Peak/avg over the report window.
+            </p>
+            <table className="dataTable" style={{ marginBottom: 14 }}>
+              <thead>
+                <tr>
+                  <th>Device</th>
+                  <th>Site</th>
+                  <th>Avg in</th>
+                  <th>Peak in</th>
+                  <th>Avg out</th>
+                  <th>Peak out</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(monthlyReport.devices ?? []).filter((d) => d.kind === "network").length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="muted">
+                      No network devices in report.
+                    </td>
+                  </tr>
+                ) : (
+                  (monthlyReport.devices ?? [])
+                    .filter((d) => d.kind === "network")
+                    .map((d) => (
+                      <tr key={`${d.siteId}-${d.deviceId}`}>
+                        <td>{d.name}</td>
+                        <td>{d.siteName}</td>
+                        <td>{fmtPct(d.avgUtilInPct)}</td>
+                        <td>{fmtPct(d.peakUtilInPct)}</td>
+                        <td>{fmtPct(d.avgUtilOutPct)}</td>
+                        <td>{fmtPct(d.peakUtilOutPct)}</td>
+                      </tr>
+                    ))
+                )}
+              </tbody>
+            </table>
+
+            <div className="tableTitle">Incident timeline</div>
+            <table className="dataTable" style={{ marginBottom: 14 }}>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Problem</th>
+                  <th>Site</th>
+                  <th>Resolved</th>
+                  <th>Acked</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(monthlyReport.incidents?.timeline ?? []).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="muted">
+                      No incidents in this period.
+                    </td>
+                  </tr>
+                ) : (
+                  (monthlyReport.incidents?.timeline ?? []).slice(0, 50).map((i) => (
+                    <tr key={i.id}>
+                      <td>{fmtWhen(i.openedAt)}</td>
+                      <td>
+                        {i.title}
+                        <div className="muted">{i.detail}</div>
+                      </td>
+                      <td>{i.siteName}</td>
+                      <td>{fmtWhen(i.resolvedAt)}</td>
+                      <td>{fmtWhen(i.acknowledgedAt)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="tableTitle">Export files</div>
         <table className="dataTable" style={{ marginTop: 12 }}>
           <thead>
             <tr>

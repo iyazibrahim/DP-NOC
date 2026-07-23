@@ -6,7 +6,7 @@ Central Prometheus on the VPS stores all site metrics via `remote_write`. On a *
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `retention.time` | **28d** | Keep roughly 2–4 weeks of history |
+| `retention.time` | **30d** | Keep one full month of metrics history |
 | `retention.size` | **10GB** | Hard cap on TSDB disk use |
 | Scrape interval (Alloy) | **60s** | Host, ICMP, SNMP |
 
