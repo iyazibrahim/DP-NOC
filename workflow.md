@@ -165,6 +165,7 @@ Collector box → Alloy → Prometheus (central)
     - Detail: 24h / 7d / 30d ranges, weekly+monthly uptime trend bars, clearer outage timeline (ongoing vs ended)
     - Site detail tabs: Overview | Network — tagged WAN interface (`wanUplink`), traffic charts, AP clients, incidents, speedtest placeholder
     - Dashboard widget `device_stack`: manual multi-select + LED mini-grid (e.g. many APs in one card)
+    - WAN picker fix: list interfaces from `ifName`/`ifDescr` metrics (IF-MIB only labels counters with `ifIndex`); manual name entry for FortiGate `wan1`
 
 ## Dokploy notes
 - Publish `noc-app:8080` and optionally `grafana:3000`

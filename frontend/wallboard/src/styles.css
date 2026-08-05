@@ -1965,8 +1965,12 @@ textarea {
 
 @media (min-width: 720px) {
   .siteNetworkWanForm {
-    grid-template-columns: 1fr 1fr auto;
+    grid-template-columns: 1fr 1fr;
     align-items: end;
+  }
+
+  .siteNetworkWanForm .formActions {
+    grid-column: 1 / -1;
   }
 }
 

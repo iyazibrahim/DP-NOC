@@ -68,9 +68,27 @@ function parseSeries(data: PromQueryResult): SiteNetworkSeriesPoint[] {
     .filter((p) => Number.isFinite(p.ts));
 }
 
-function ifMatcher(ifName: string): string {
-  const e = escapePromLabel(ifName);
-  return `ifName="${e}"`;
+function escapePromRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Match IF-MIB counter series to a human interface name via ifIndex join. */
+function ifNameJoinMatcher(siteId: string, deviceId: string, ifName: string): string {
+  const s = escapePromLabel(siteId);
+  const d = escapePromLabel(deviceId);
+  const indexOnly = /^ifIndex:(\d+)$/i.exec(ifName.trim());
+  if (indexOnly) {
+    return `ifHCInOctets{site="${s}",device="${d}",ifIndex="${indexOnly[1]}"}`;
+  }
+  const n = escapePromLabel(ifName);
+  const nRe = escapePromRegex(ifName);
+  // Counters only have ifIndex; DisplayString metrics carry ifName/ifDescr labels.
+  return `(
+  ifName{site="${s}",device="${d}",ifName="${n}"}
+  or ifDescr{site="${s}",device="${d}",ifDescr="${n}"}
+  or ifName{site="${s}",device="${d}",ifName=~"(?i)^${nRe}$"}
+  or ifDescr{site="${s}",device="${d}",ifDescr=~"(?i)^${nRe}$"}
+)`;
 }
 
 function buildIfTrafficQuery(
@@ -80,15 +98,32 @@ function buildIfTrafficQuery(
   ifName: string
 ): string {
   const octets = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
-  return `sum(rate(${octets}{site="${escapePromLabel(siteId)}",device="${escapePromLabel(deviceId)}",${ifMatcher(ifName)}}[5m]) * 8)`;
+  const s = escapePromLabel(siteId);
+  const d = escapePromLabel(deviceId);
+  const join = ifNameJoinMatcher(siteId, deviceId, ifName);
+  const indexOnly = /^ifIndex:(\d+)$/i.test(ifName.trim());
+  if (indexOnly) {
+    const idx = /^ifIndex:(\d+)$/i.exec(ifName.trim())![1];
+    return `sum(rate(${octets}{site="${s}",device="${d}",ifIndex="${idx}"}[5m]) * 8)`;
+  }
+  return `sum(
+  rate(${octets}{site="${s}",device="${d}"}[5m]) * 8
+  and on(ifIndex) ${join}
+)`;
 }
 
 function buildIfCapacityQuery(siteId: string, deviceId: string, ifName: string): string {
   const s = escapePromLabel(siteId);
   const d = escapePromLabel(deviceId);
-  const m = ifMatcher(ifName);
-  return `(sum(ifHighSpeed{site="${s}",device="${d}",${m}} * 1000000) > 0)
-  or sum(ifSpeed{site="${s}",device="${d}",${m}} > 0)`;
+  const indexOnly = /^ifIndex:(\d+)$/i.exec(ifName.trim());
+  if (indexOnly) {
+    const idx = indexOnly[1];
+    return `(sum(ifHighSpeed{site="${s}",device="${d}",ifIndex="${idx}"} * 1000000) > 0)
+  or sum(ifSpeed{site="${s}",device="${d}",ifIndex="${idx}"} > 0)`;
+  }
+  const join = ifNameJoinMatcher(siteId, deviceId, ifName);
+  return `(sum(ifHighSpeed{site="${s}",device="${d}"} * 1000000 and on(ifIndex) ${join}) > 0)
+  or sum(ifSpeed{site="${s}",device="${d}"} and on(ifIndex) ${join})`;
 }
 
 function buildIfUtilQuery(
@@ -101,32 +136,67 @@ function buildIfUtilQuery(
   return `(${buildIfTrafficQuery(direction, siteId, deviceId, ifName)} / ${cap}) * 100`;
 }
 
+function collectInterfacesFromProm(
+  data: PromQueryResult,
+  labelKeys: string[]
+): Map<string, SnmpInterfaceInfo> {
+  const seen = new Map<string, SnmpInterfaceInfo>();
+  if (data.resultType !== "vector" || !Array.isArray(data.result)) return seen;
+  for (const row of data.result as Array<{ metric?: Record<string, string> }>) {
+    const m = row.metric ?? {};
+    let name = "";
+    for (const key of labelKeys) {
+      if (m[key]?.trim()) {
+        name = m[key].trim();
+        break;
+      }
+    }
+    if (!name && m.ifIndex) name = `ifIndex:${m.ifIndex}`;
+    if (!name) continue;
+    if (!seen.has(name)) {
+      seen.set(name, {
+        ifName: name,
+        ifDescr: m.ifDescr,
+        ifIndex: m.ifIndex
+      });
+    }
+  }
+  return seen;
+}
+
 export async function listDeviceInterfaces(
   siteId: string,
   deviceId: string
 ): Promise<SnmpInterfaceInfo[]> {
   const s = escapePromLabel(siteId);
   const d = escapePromLabel(deviceId);
+  const seen = new Map<string, SnmpInterfaceInfo>();
   try {
-    const data = await promQuery(`ifOperStatus{site="${s}",device="${d}"}`);
-    if (data.resultType !== "vector" || !Array.isArray(data.result)) return [];
-    const seen = new Map<string, SnmpInterfaceInfo>();
-    for (const row of data.result as Array<{ metric?: Record<string, string> }>) {
-      const m = row.metric ?? {};
-      const ifName = (m.ifName || m.ifDescr || "").trim();
-      if (!ifName) continue;
-      if (!seen.has(ifName)) {
-        seen.set(ifName, {
-          ifName,
-          ifDescr: m.ifDescr,
-          ifIndex: m.ifIndex
-        });
+    // Prefer DisplayString metrics — IF-MIB counters only label ifIndex.
+    const [byName, byDescr, byOper, byOctets] = await Promise.all([
+      promQuery(`ifName{site="${s}",device="${d}"}`).catch(() => null),
+      promQuery(`ifDescr{site="${s}",device="${d}"}`).catch(() => null),
+      promQuery(`ifOperStatus{site="${s}",device="${d}"}`).catch(() => null),
+      promQuery(`ifHCInOctets{site="${s}",device="${d}"}`).catch(() => null)
+    ]);
+    if (byName) {
+      for (const [k, v] of collectInterfacesFromProm(byName, ["ifName"])) seen.set(k, v);
+    }
+    if (byDescr) {
+      for (const [k, v] of collectInterfacesFromProm(byDescr, ["ifDescr", "ifName"])) {
+        if (!seen.has(k)) seen.set(k, v);
       }
     }
-    return [...seen.values()].sort((a, b) => a.ifName.localeCompare(b.ifName));
+    if (seen.size === 0 && byOper) {
+      for (const [k, v] of collectInterfacesFromProm(byOper, ["ifName", "ifDescr"])) seen.set(k, v);
+    }
+    if (seen.size === 0 && byOctets) {
+      for (const [k, v] of collectInterfacesFromProm(byOctets, ["ifName", "ifDescr"])) seen.set(k, v);
+    }
   } catch {
     return [];
   }
+  return [...seen.values()].sort((a, b) => a.ifName.localeCompare(b.ifName));
 }
 
 export async function getSiteNetworkSummary(

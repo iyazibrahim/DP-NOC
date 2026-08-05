@@ -45,7 +45,9 @@ export function SiteNetworkPanel({ token, site, onSiteUpdated }: Props) {
   const [busy, setBusy] = useState(false);
   const [wanDeviceId, setWanDeviceId] = useState(site.wanUplink?.deviceId ?? "");
   const [wanIfName, setWanIfName] = useState(site.wanUplink?.ifName ?? "");
-  const [interfaces, setInterfaces] = useState<Array<{ ifName: string; ifDescr?: string }>>([]);
+  const [interfaces, setInterfaces] = useState<
+    Array<{ ifName: string; ifDescr?: string; ifIndex?: string }>
+  >([]);
   const [msg, setMsg] = useState<string | null>(null);
 
   const networkDevices = useMemo(
@@ -119,13 +121,14 @@ export function SiteNetworkPanel({ token, site, onSiteUpdated }: Props) {
     setBusy(true);
     setError(null);
     try {
+      const ifName = wanIfName.trim();
       const patch =
-        wanDeviceId && wanIfName
-          ? { wanUplink: { deviceId: wanDeviceId, ifName: wanIfName } }
+        wanDeviceId && ifName
+          ? { wanUplink: { deviceId: wanDeviceId, ifName } }
           : { wanUplink: null as null };
       const res = await updateSite(token, site.id, patch);
       onSiteUpdated(res.site);
-      setMsg(wanDeviceId && wanIfName ? "WAN uplink saved." : "WAN uplink cleared.");
+      setMsg(wanDeviceId && ifName ? "WAN uplink saved." : "WAN uplink cleared.");
       await reloadNetwork();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
@@ -197,23 +200,44 @@ export function SiteNetworkPanel({ token, site, onSiteUpdated }: Props) {
             </select>
           </label>
           <label className="label">
-            Interface
+            Interface (from SNMP)
             <select
-              value={wanIfName}
+              value={interfaces.some((i) => i.ifName === wanIfName) ? wanIfName : ""}
               onChange={(e) => setWanIfName(e.target.value)}
-              disabled={!wanDeviceId}
+              disabled={!wanDeviceId || interfaces.length === 0}
             >
-              <option value="">— Select —</option>
+              <option value="">
+                {wanDeviceId
+                  ? interfaces.length === 0
+                    ? "No SNMP interfaces found — type below"
+                    : "— Select —"
+                  : "— Select device first —"}
+              </option>
               {interfaces.map((i) => (
                 <option key={i.ifName} value={i.ifName}>
                   {i.ifName}
                   {i.ifDescr && i.ifDescr !== i.ifName ? ` · ${i.ifDescr}` : ""}
+                  {i.ifIndex ? ` [#${i.ifIndex}]` : ""}
                 </option>
               ))}
             </select>
           </label>
+          <label className="label">
+            Or type interface name
+            <input
+              value={wanIfName}
+              onChange={(e) => setWanIfName(e.target.value.trimStart())}
+              placeholder="e.g. wan1"
+              disabled={!wanDeviceId}
+            />
+          </label>
           <div className="formActions" style={{ alignSelf: "end" }}>
-            <button type="button" className="primary" disabled={busy} onClick={() => void saveWan()}>
+            <button
+              type="button"
+              className="primary"
+              disabled={busy || !wanDeviceId || !wanIfName.trim()}
+              onClick={() => void saveWan()}
+            >
               Save WAN tag
             </button>
             <button
