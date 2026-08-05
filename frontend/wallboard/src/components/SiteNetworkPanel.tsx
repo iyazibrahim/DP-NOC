@@ -9,15 +9,17 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import {
-  getDeviceInterfaces,
-  getSiteNetwork,
-  updateSite,
-  STATUS_POLL_MS,
-  type SiteNetworkSummary
-} from "../api";
+import { getSiteNetwork, STATUS_POLL_MS, type SiteNetworkSummary } from "../api";
 import type { Site } from "../types";
 import { StatusPill } from "./StatusPill";
+
+type ChartRange = "24h" | "7d" | "30d";
+
+function hoursForRange(range: ChartRange): number {
+  if (range === "30d") return 720;
+  if (range === "7d") return 168;
+  return 24;
+}
 
 function formatBitrate(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
@@ -25,6 +27,13 @@ function formatBitrate(value: number | null): string {
   if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)} Gbps`;
   if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} Mbps`;
   return `${(value / 1000).toFixed(1)} Kbps`;
+}
+
+function formatMbps(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  if (Math.abs(value) >= 100) return value.toFixed(0);
+  if (Math.abs(value) >= 10) return value.toFixed(1);
+  return value.toFixed(2);
 }
 
 function uplinkLabel(v: number | null): { state: string; label: string } {
@@ -36,41 +45,22 @@ function uplinkLabel(v: number | null): { state: string; label: string } {
 type Props = {
   token: string;
   site: Site;
-  onSiteUpdated: (site: Site) => void;
+  onEditSite?: () => void;
 };
 
-export function SiteNetworkPanel({ token, site, onSiteUpdated }: Props) {
+export function SiteNetworkPanel({ token, site, onEditSite }: Props) {
   const [network, setNetwork] = useState<SiteNetworkSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [wanDeviceId, setWanDeviceId] = useState(site.wanUplink?.deviceId ?? "");
-  const [wanIfName, setWanIfName] = useState(site.wanUplink?.ifName ?? "");
-  const [interfaces, setInterfaces] = useState<
-    Array<{ ifName: string; ifDescr?: string; ifIndex?: string }>
-  >([]);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  const networkDevices = useMemo(
-    () => site.devices.filter((d) => d.kind === "network"),
-    [site.devices]
-  );
-
-  async function reloadNetwork() {
-    const res = await getSiteNetwork(token, site.id, 24);
-    setNetwork(res.network);
-  }
-
-  useEffect(() => {
-    setWanDeviceId(site.wanUplink?.deviceId ?? "");
-    setWanIfName(site.wanUplink?.ifName ?? "");
-  }, [site.wanUplink?.deviceId, site.wanUplink?.ifName]);
+  const [range, setRange] = useState<ChartRange>("24h");
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
-        await reloadNetwork();
-        if (!cancelled) setError(null);
+        const res = await getSiteNetwork(token, site.id, hoursForRange(range));
+        if (cancelled) return;
+        setNetwork(res.network);
+        setError(null);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Network load failed");
       }
@@ -81,61 +71,24 @@ export function SiteNetworkPanel({ token, site, onSiteUpdated }: Props) {
       cancelled = true;
       clearInterval(t);
     };
-  }, [token, site.id]);
-
-  useEffect(() => {
-    if (!token || !wanDeviceId) {
-      setInterfaces([]);
-      return;
-    }
-    let cancelled = false;
-    getDeviceInterfaces(token, site.id, wanDeviceId)
-      .then((res) => {
-        if (!cancelled) setInterfaces(res.interfaces);
-      })
-      .catch(() => {
-        if (!cancelled) setInterfaces([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [token, site.id, wanDeviceId]);
+  }, [token, site.id, range, site.wanUplink?.deviceId, site.wanUplink?.ifName]);
 
   const chartData = useMemo(() => {
     const inMap = new Map((network?.trafficSeries.inBps ?? []).map((p) => [p.ts, p.value]));
     const outMap = new Map((network?.trafficSeries.outBps ?? []).map((p) => [p.ts, p.value]));
     const tsSet = new Set([...inMap.keys(), ...outMap.keys()]);
+    const fmt =
+      range === "24h"
+        ? { hour: "2-digit" as const, minute: "2-digit" as const }
+        : { month: "short" as const, day: "numeric" as const, hour: "2-digit" as const };
     return [...tsSet]
       .sort((a, b) => a - b)
       .map((ts) => ({
-        t: new Date(ts * 1000).toLocaleString([], {
-          hour: "2-digit",
-          minute: "2-digit"
-        }),
-        inMbps: ((inMap.get(ts) ?? 0) / 1_000_000),
-        outMbps: ((outMap.get(ts) ?? 0) / 1_000_000)
+        t: new Date(ts * 1000).toLocaleString([], fmt),
+        inMbps: (inMap.get(ts) ?? 0) / 1_000_000,
+        outMbps: (outMap.get(ts) ?? 0) / 1_000_000
       }));
-  }, [network]);
-
-  async function saveWan() {
-    setBusy(true);
-    setError(null);
-    try {
-      const ifName = wanIfName.trim();
-      const patch =
-        wanDeviceId && ifName
-          ? { wanUplink: { deviceId: wanDeviceId, ifName } }
-          : { wanUplink: null as null };
-      const res = await updateSite(token, site.id, patch);
-      onSiteUpdated(res.site);
-      setMsg(wanDeviceId && ifName ? "WAN uplink saved." : "WAN uplink cleared.");
-      await reloadNetwork();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Save failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+  }, [network, range]);
 
   const dns = uplinkLabel(network?.uplink.dns ?? null);
   const vps = uplinkLabel(network?.uplink.vps ?? null);
@@ -143,7 +96,6 @@ export function SiteNetworkPanel({ token, site, onSiteUpdated }: Props) {
   return (
     <div className="siteNetworkPanel">
       {error ? <div className="bannerError">{error}</div> : null}
-      {msg ? <p className="muted">{msg}</p> : null}
 
       <div className="websiteKpiStrip">
         <div className="healthChip">
@@ -156,15 +108,15 @@ export function SiteNetworkPanel({ token, site, onSiteUpdated }: Props) {
         </div>
         <div className="healthChip">
           <span className="healthChipLabel">Download (in)</span>
-          <strong>{formatBitrate(network?.traffic.inBps ?? null)}</strong>
+          <strong className="healthChipValue">{formatBitrate(network?.traffic.inBps ?? null)}</strong>
         </div>
         <div className="healthChip">
           <span className="healthChipLabel">Upload (out)</span>
-          <strong>{formatBitrate(network?.traffic.outBps ?? null)}</strong>
+          <strong className="healthChipValue">{formatBitrate(network?.traffic.outBps ?? null)}</strong>
         </div>
         <div className="healthChip">
           <span className="healthChipLabel">Util in / out</span>
-          <strong>
+          <strong className="healthChipValue">
             {network?.traffic.utilInPct != null ? `${network.traffic.utilInPct}%` : "—"}
             {" / "}
             {network?.traffic.utilOutPct != null ? `${network.traffic.utilOutPct}%` : "—"}
@@ -172,102 +124,62 @@ export function SiteNetworkPanel({ token, site, onSiteUpdated }: Props) {
         </div>
         <div className="healthChip">
           <span className="healthChipLabel">Clients</span>
-          <strong>{network?.clients.total != null ? network.clients.total : "—"}</strong>
+          <strong className="healthChipValue">
+            {network?.clients.total != null ? network.clients.total : "—"}
+          </strong>
         </div>
       </div>
 
-      <div className="tableCard" style={{ marginBottom: 14 }}>
-        <div className="tableTitle">WAN / internet pipe</div>
-        <p className="muted" style={{ marginTop: 0 }}>
-          Tag the firewall/router interface that faces the ISP. Charts use that interface only.
-        </p>
-        <div className="siteNetworkWanForm">
-          <label className="label">
-            Device
-            <select
-              value={wanDeviceId}
-              onChange={(e) => {
-                setWanDeviceId(e.target.value);
-                setWanIfName("");
-              }}
-            >
-              <option value="">— Select —</option>
-              {networkDevices.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} ({d.type})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="label">
-            Interface (from SNMP)
-            <select
-              value={interfaces.some((i) => i.ifName === wanIfName) ? wanIfName : ""}
-              onChange={(e) => setWanIfName(e.target.value)}
-              disabled={!wanDeviceId || interfaces.length === 0}
-            >
-              <option value="">
-                {wanDeviceId
-                  ? interfaces.length === 0
-                    ? "No SNMP interfaces found — type below"
-                    : "— Select —"
-                  : "— Select device first —"}
-              </option>
-              {interfaces.map((i) => (
-                <option key={i.ifName} value={i.ifName}>
-                  {i.ifName}
-                  {i.ifDescr && i.ifDescr !== i.ifName ? ` · ${i.ifDescr}` : ""}
-                  {i.ifIndex ? ` [#${i.ifIndex}]` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="label">
-            Or type interface name
-            <input
-              value={wanIfName}
-              onChange={(e) => setWanIfName(e.target.value.trimStart())}
-              placeholder="e.g. wan1"
-              disabled={!wanDeviceId}
-            />
-          </label>
-          <div className="formActions" style={{ alignSelf: "end" }}>
-            <button
-              type="button"
-              className="primary"
-              disabled={busy || !wanDeviceId || !wanIfName.trim()}
-              onClick={() => void saveWan()}
-            >
-              Save WAN tag
-            </button>
-            <button
-              type="button"
-              disabled={busy || (!site.wanUplink && !wanDeviceId)}
-              onClick={() => {
-                setWanDeviceId("");
-                setWanIfName("");
-              }}
-            >
-              Clear form
-            </button>
-          </div>
-        </div>
+      <p className="siteNetworkWanStatus muted">
         {network?.wanUplink ? (
-          <p className="muted" style={{ marginBottom: 0 }}>
-            Active: {network.wanDeviceName ?? network.wanUplink.deviceId} · {network.wanUplink.ifName}
+          <>
+            WAN pipe:{" "}
+            <strong className="healthChipValue">
+              {network.wanDeviceName ?? network.wanUplink.deviceId} · {network.wanUplink.ifName}
+            </strong>
             {network.traffic.capacityBps != null
-              ? ` · capacity ${formatBitrate(network.traffic.capacityBps)}`
+              ? ` · ${formatBitrate(network.traffic.capacityBps)}`
               : ""}
-          </p>
+            {onEditSite ? (
+              <>
+                {" · "}
+                <button type="button" className="linkBtn" onClick={onEditSite}>
+                  Change in Edit site
+                </button>
+              </>
+            ) : null}
+          </>
         ) : (
-          <p className="muted" style={{ marginBottom: 0 }}>
-            No WAN interface tagged yet — traffic charts stay empty until configured.
-          </p>
+          <>
+            No WAN interface tagged —{" "}
+            {onEditSite ? (
+              <button type="button" className="linkBtn" onClick={onEditSite}>
+                set it in Edit site
+              </button>
+            ) : (
+              "set it in Edit site"
+            )}
+            .
+          </>
         )}
-      </div>
+      </p>
 
       <div className="tableCard websiteChartCard" style={{ marginBottom: 14 }}>
-        <div className="tableTitle">Bandwidth in/out (24h)</div>
+        <div className="bentoTileHeader">
+          <div className="tableTitle">Bandwidth in/out ({range})</div>
+          <div className="formActions">
+            {(["24h", "7d", "30d"] as ChartRange[]).map((r) => (
+              <button
+                key={r}
+                type="button"
+                className={range === r ? "primary" : undefined}
+                onClick={() => setRange(r)}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="websiteChartInner">
           {!network?.wanUplink || chartData.length < 2 ? (
             <p className="muted">No WAN traffic history yet.</p>
@@ -275,14 +187,26 @@ export function SiteNetworkPanel({ token, site, onSiteUpdated }: Props) {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                <XAxis dataKey="t" tick={{ fontSize: 11 }} minTickGap={28} />
-                <YAxis tick={{ fontSize: 11 }} width={48} unit="M" />
-                <Tooltip />
+                <XAxis dataKey="t" tick={{ fontSize: 11, fill: "var(--muted)" }} minTickGap={28} />
+                <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} width={48} unit="M" />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--panel-2)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--text)"
+                  }}
+                  labelStyle={{ color: "var(--muted)" }}
+                  formatter={(value) => [
+                    `${formatMbps(typeof value === "number" ? value : Number(value))} Mbps`,
+                    undefined
+                  ]}
+                />
                 <Legend />
                 <Area
                   type="monotone"
                   dataKey="inMbps"
-                  name="In Mbps"
+                  name="In"
                   stroke="var(--accent)"
                   fill="rgba(0, 181, 226, 0.2)"
                   strokeWidth={1.5}
@@ -290,8 +214,8 @@ export function SiteNetworkPanel({ token, site, onSiteUpdated }: Props) {
                 <Area
                   type="monotone"
                   dataKey="outMbps"
-                  name="Out Mbps"
-                  stroke="var(--brand-yellow, #f5c400)"
+                  name="Out"
+                  stroke="var(--accent-yellow)"
                   fill="rgba(245, 196, 0, 0.15)"
                   strokeWidth={1.5}
                 />
@@ -316,7 +240,9 @@ export function SiteNetworkPanel({ token, site, onSiteUpdated }: Props) {
               {(network?.clients.byDevice ?? []).length === 0 ? (
                 <tr>
                   <td colSpan={3} className="muted">
-                    No APs in inventory (or no client SNMP for this vendor).
+                    No APs found. Add each AP under Overview → Devices (type{" "}
+                    <code>ap</code>, vendor <code>cambium</code> or <code>omada</code>), then Force-apply
+                    the collector so SNMP client metrics are scraped.
                   </td>
                 </tr>
               ) : (

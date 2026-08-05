@@ -13,6 +13,7 @@ import {
   deleteSiteWebsite,
   downloadSiteDevicesJson,
   getAllSiteStatuses,
+  getDeviceInterfaces,
   getDiscoveredDevices,
   getSite,
   getSites,
@@ -185,7 +186,18 @@ export function SiteDetailPage() {
   const [status, setStatus] = useState<SiteStatus | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [siteForm, setSiteForm] = useState({ name: "", address: "", notes: "", lat: 0, lng: 0 });
+  const [siteForm, setSiteForm] = useState({
+    name: "",
+    address: "",
+    notes: "",
+    lat: 0,
+    lng: 0,
+    wanDeviceId: "",
+    wanIfName: ""
+  });
+  const [wanInterfaces, setWanInterfaces] = useState<
+    Array<{ ifName: string; ifDescr?: string; ifIndex?: string }>
+  >([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { types: deviceTypes, setTypes: setDeviceTypes } = useDeviceTypes(token);
@@ -230,7 +242,9 @@ export function SiteDetailPage() {
       address: s.site.address ?? "",
       notes: s.site.notes ?? "",
       lat: s.site.lat,
-      lng: s.site.lng
+      lng: s.site.lng,
+      wanDeviceId: s.site.wanUplink?.deviceId ?? "",
+      wanIfName: s.site.wanUplink?.ifName ?? ""
     });
     setStatus(st.statuses.find((x) => x.siteId === id) ?? null);
     setDiscovered(disc.devices);
@@ -244,6 +258,24 @@ export function SiteDetailPage() {
   useEffect(() => {
     setDevicePage(1);
   }, [deviceSearch, id]);
+
+  useEffect(() => {
+    if (!token || !id || !editSiteOpen || !siteForm.wanDeviceId) {
+      setWanInterfaces([]);
+      return;
+    }
+    let cancelled = false;
+    getDeviceInterfaces(token, id, siteForm.wanDeviceId)
+      .then((res) => {
+        if (!cancelled) setWanInterfaces(res.interfaces);
+      })
+      .catch(() => {
+        if (!cancelled) setWanInterfaces([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, id, editSiteOpen, siteForm.wanDeviceId]);
 
   const deviceQ = deviceSearch.trim().toLowerCase();
   const filteredSiteDevices = useMemo(() => {
@@ -418,7 +450,17 @@ export function SiteDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      await updateSite(token, id, siteForm);
+      const wanDeviceId = siteForm.wanDeviceId.trim();
+      const wanIfName = siteForm.wanIfName.trim();
+      await updateSite(token, id, {
+        name: siteForm.name,
+        address: siteForm.address,
+        notes: siteForm.notes,
+        lat: siteForm.lat,
+        lng: siteForm.lng,
+        wanUplink:
+          wanDeviceId && wanIfName ? { deviceId: wanDeviceId, ifName: wanIfName } : null
+      });
       setEditSiteOpen(false);
       await reload();
     } catch (err) {
@@ -624,9 +666,7 @@ export function SiteDetailPage() {
         <SiteNetworkPanel
           token={token}
           site={site}
-          onSiteUpdated={(s) => {
-            setSite(s);
-          }}
+          onEditSite={() => setEditSiteOpen(true)}
         />
       ) : (
       <div className="siteBento">
@@ -971,6 +1011,59 @@ export function SiteDetailPage() {
             lat={siteForm.lat}
             lng={siteForm.lng}
             onChange={(lat, lng) => setSiteForm((f) => ({ ...f, lat, lng }))}
+          />
+          <div className="tableTitle" style={{ marginTop: 12 }}>
+            WAN / internet pipe
+          </div>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Tag the firewall interface that faces the ISP (used by the Network tab charts).
+          </p>
+          <label className="label">WAN device</label>
+          <select
+            value={siteForm.wanDeviceId}
+            onChange={(e) =>
+              setSiteForm((f) => ({ ...f, wanDeviceId: e.target.value, wanIfName: "" }))
+            }
+          >
+            <option value="">— None —</option>
+            {(site?.devices ?? [])
+              .filter((d) => d.kind === "network")
+              .map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} ({d.type})
+                </option>
+              ))}
+          </select>
+          <label className="label">WAN interface</label>
+          <select
+            value={
+              wanInterfaces.some((i) => i.ifName === siteForm.wanIfName)
+                ? siteForm.wanIfName
+                : ""
+            }
+            onChange={(e) => setSiteForm((f) => ({ ...f, wanIfName: e.target.value }))}
+            disabled={!siteForm.wanDeviceId || wanInterfaces.length === 0}
+          >
+            <option value="">
+              {!siteForm.wanDeviceId
+                ? "— Select device first —"
+                : wanInterfaces.length === 0
+                  ? "No SNMP list — type below"
+                  : "— Select —"}
+            </option>
+            {wanInterfaces.map((i) => (
+              <option key={i.ifName} value={i.ifName}>
+                {i.ifName}
+                {i.ifIndex ? ` [#${i.ifIndex}]` : ""}
+              </option>
+            ))}
+          </select>
+          <label className="label">Or type interface name</label>
+          <input
+            value={siteForm.wanIfName}
+            onChange={(e) => setSiteForm((f) => ({ ...f, wanIfName: e.target.value }))}
+            placeholder="e.g. wan1"
+            disabled={!siteForm.wanDeviceId}
           />
           <div className="formActions">
             <button className="primary" type="submit" disabled={busy}>

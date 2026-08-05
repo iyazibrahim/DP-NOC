@@ -257,7 +257,7 @@ export async function getSiteNetworkSummary(
 
       const end = Math.floor(Date.now() / 1000);
       const start = end - Math.max(1, hours) * 3600;
-      const step = hours > 48 ? "15m" : hours > 6 ? "5m" : "60s";
+      const step = hours >= 720 ? "1h" : hours > 48 ? "15m" : hours > 6 ? "5m" : "60s";
       const [inRange, outRange] = await Promise.all([
         promQueryRange(
           buildIfTrafficQuery("in", siteId, wanUplink.deviceId, wanUplink.ifName),
@@ -279,36 +279,14 @@ export async function getSiteNetworkSummary(
     }
   }
 
-  const aps = site.devices.filter((d) => d.type === "ap" && d.kind === "network");
-  const byDevice: SiteNetworkSummary["clients"]["byDevice"] = [];
+  const byDevice = await collectApClientRows(siteId, site);
   let total = 0;
   let anyClient = false;
-
-  for (const ap of aps) {
-    const vendor = (ap.vendor || "generic").toLowerCase();
-    let clients: number | null = null;
-    try {
-      if (vendor === "cambium") {
-        clients = parseFirstVectorValue(
-          await promQuery(
-            `sum(cambiumAPTotalClients{site="${escapePromLabel(siteId)}",device="${escapePromLabel(ap.id)}"})`
-          )
-        );
-      } else if (vendor === "omada" || vendor === "tplink" || vendor === "tp-link") {
-        clients = parseFirstVectorValue(
-          await promQuery(
-            `omadaClientCount{site="${escapePromLabel(siteId)}",device="${escapePromLabel(ap.id)}"}`
-          )
-        );
-      }
-    } catch {
-      clients = null;
-    }
-    if (clients != null) {
+  for (const row of byDevice) {
+    if (row.clients != null) {
       anyClient = true;
-      total += clients;
+      total += row.clients;
     }
-    byDevice.push({ deviceId: ap.id, name: ap.name, clients, vendor: ap.vendor });
   }
 
   const incidents = [...getOpenIncidents(), ...getHistoryIncidents()]
@@ -340,4 +318,120 @@ export async function getSiteNetworkSummary(
       message: "ISP speedtest coming later — bandwidth above is live link usage."
     }
   };
+}
+
+function isApLikeDevice(d: { type: string; kind: string; vendor: string }): boolean {
+  if (d.kind !== "network") return false;
+  const type = (d.type || "").toLowerCase();
+  const vendor = (d.vendor || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (type === "ap" || /access.?point|wifi|wireless/.test(type)) return true;
+  if (/cambium|omada|tplink|ubiquiti|unifi/.test(vendor)) return true;
+  return false;
+}
+
+function normalizeVendorKey(vendor: string): string {
+  return (vendor || "generic").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+async function readPromDeviceValues(
+  query: string
+): Promise<Array<{ deviceId: string; value: number }>> {
+  try {
+    const data = await promQuery(query);
+    if (data.resultType !== "vector" || !Array.isArray(data.result)) return [];
+    const out: Array<{ deviceId: string; value: number }> = [];
+    for (const row of data.result as Array<{
+      metric?: Record<string, string>;
+      value?: [number, string];
+    }>) {
+      const deviceId = (row.metric?.device || "").trim();
+      const n = Number(row.value?.[1]);
+      if (!deviceId || !Number.isFinite(n)) continue;
+      out.push({ deviceId, value: n });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+async function collectApClientRows(
+  siteId: string,
+  site: Site
+): Promise<SiteNetworkSummary["clients"]["byDevice"]> {
+  const s = escapePromLabel(siteId);
+  const inventoryAps = site.devices.filter(isApLikeDevice);
+  const byId = new Map<
+    string,
+    { deviceId: string; name: string; clients: number | null; vendor: string }
+  >();
+
+  for (const ap of inventoryAps) {
+    byId.set(ap.id, {
+      deviceId: ap.id,
+      name: ap.name,
+      clients: null,
+      vendor: ap.vendor || "generic"
+    });
+  }
+
+  const [cambiumRows, omadaRows] = await Promise.all([
+    readPromDeviceValues(`cambiumAPTotalClients{site="${s}"}`),
+    readPromDeviceValues(`omadaClientCount{site="${s}"}`)
+  ]);
+
+  for (const row of cambiumRows) {
+    const existing = byId.get(row.deviceId);
+    if (existing) {
+      existing.clients = (existing.clients ?? 0) + row.value;
+      if (normalizeVendorKey(existing.vendor) === "generic") existing.vendor = "cambium";
+    } else {
+      const inv = site.devices.find((d) => d.id === row.deviceId);
+      byId.set(row.deviceId, {
+        deviceId: row.deviceId,
+        name: inv?.name ?? row.deviceId,
+        clients: row.value,
+        vendor: inv?.vendor || "cambium"
+      });
+    }
+  }
+
+  for (const row of omadaRows) {
+    const existing = byId.get(row.deviceId);
+    if (existing) {
+      existing.clients = (existing.clients ?? 0) + row.value;
+      if (normalizeVendorKey(existing.vendor) === "generic") existing.vendor = "omada";
+    } else {
+      const inv = site.devices.find((d) => d.id === row.deviceId);
+      byId.set(row.deviceId, {
+        deviceId: row.deviceId,
+        name: inv?.name ?? row.deviceId,
+        clients: row.value,
+        vendor: inv?.vendor || "omada"
+      });
+    }
+  }
+
+  for (const ap of inventoryAps) {
+    const row = byId.get(ap.id);
+    if (!row || row.clients != null) continue;
+    const vendor = normalizeVendorKey(ap.vendor);
+    try {
+      if (vendor === "cambium") {
+        row.clients = parseFirstVectorValue(
+          await promQuery(
+            `sum(cambiumAPTotalClients{site="${s}",device="${escapePromLabel(ap.id)}"})`
+          )
+        );
+      } else if (vendor === "omada" || vendor === "tplink") {
+        row.clients = parseFirstVectorValue(
+          await promQuery(`omadaClientCount{site="${s}",device="${escapePromLabel(ap.id)}"}`)
+        );
+      }
+    } catch {
+      /* leave null */
+    }
+  }
+
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
