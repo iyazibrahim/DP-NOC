@@ -167,7 +167,12 @@ receivers:
   - name: default
 ${receiverBody}
 
-inhibit_rules: []
+inhibit_rules:
+  - source_matchers:
+      - alertname = SiteCollectorDown
+    target_matchers:
+      - alertname = SiteUplinkDown
+    equal: ["site"]
 `;
 
   fs.writeFileSync(alertmanagerPath(), yaml, "utf8");

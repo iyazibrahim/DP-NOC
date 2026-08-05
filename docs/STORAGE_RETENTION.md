@@ -34,12 +34,14 @@ Without this, save still persists config; restart the Prometheus service manuall
 Retention settings also store recommended scrape intervals. On each NUC, set before running `generate-config.sh`:
 
 ```bash
-export SCRAPE_INTERVAL_SEC=60   # match Settings → Storage
+# Prefer 15s for uplink/collector (NOC default). Do NOT use 60s for ICMP —
+# it delays detection and can still cause flaky status vs 90s freshness.
+export SCRAPE_INTERVAL_SEC=15
 ./generate-config.sh
 docker compose restart
 ```
 
-Separate env vars can be used per job in a future release; today one interval applies to ICMP, host, and SNMP scrapes.
+If you raise Storage-recommended scrapes for SNMP volume, keep ICMP/host at **≤30s** (edit Alloy jobs separately if needed).
 
 ## Monitoring disk use
 

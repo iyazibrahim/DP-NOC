@@ -1,21 +1,29 @@
 groups:
   - name: noc-site-alerts
     rules:
-      # Primary: internet / uplink — fires on explicit down OR silence (collector stopped)
-      # Requires ICMP scrape ≤30s (repo Alloy template: 15s). 60s ICMP + 45s window = false downs.
+      # Primary: internet / uplink — both WAN checks must fail (quorum).
+      # Requires ICMP scrape ≤30s (repo Alloy template: 15s). 60s ICMP + short window = false downs.
       - alert: SiteUplinkDown
         expr: |
           (
-            (probe_success{check=~"wan_dns|wan_vps"} == 0)
-            or
-            absent_over_time(probe_success{check=~"wan_dns|wan_vps"}[45s])
+            (
+              (probe_success{check="wan_dns"} == 0)
+              or
+              absent_over_time(probe_success{check="wan_dns"}[90s])
+            )
+            and on (site)
+            (
+              (probe_success{check="wan_vps"} == 0)
+              or
+              absent_over_time(probe_success{check="wan_vps"}[90s])
+            )
           )
-        for: 15s
+        for: 2m
         labels:
           severity: critical
           site: "{{ $labels.site }}"
         annotations:
-          summary: "Internet down at {{ $labels.site }} (check={{ $labels.check }})"
+          summary: "Internet down at {{ $labels.site }} (both wan_dns and wan_vps)"
 
       - alert: SiteWebsiteDown
         expr: |
@@ -37,11 +45,11 @@ groups:
           (
             (up{job=~"site_host|integrations/unix"} == 0)
             or
-            absent_over_time(up{job=~"site_host|integrations/unix"}[45s])
+            absent_over_time(up{job=~"site_host|integrations/unix"}[90s])
             or
-            absent_over_time(node_memory_MemAvailable_bytes{role="site-box"}[45s])
+            absent_over_time(node_memory_MemAvailable_bytes{role="site-box"}[90s])
           )
-        for: 15s
+        for: 2m
         labels:
           severity: critical
           site: "{{ $labels.site }}"

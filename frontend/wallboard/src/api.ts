@@ -97,13 +97,60 @@ export async function createSite(
 export async function updateSite(
   token: string,
   id: string,
-  patch: Partial<Pick<Site, "name" | "lat" | "lng" | "address" | "notes" | "wan" | "websiteTargets">>
+  patch: Partial<Pick<Site, "name" | "lat" | "lng" | "address" | "notes" | "wan" | "websiteTargets">> & {
+    wanUplink?: Site["wanUplink"] | null;
+  }
 ) {
   return fetchJson<{ site: Site }>(`/api/sites/${id}`, {
     method: "PATCH",
     headers: { ...authHeaders(token), "content-type": "application/json" },
     body: JSON.stringify(patch)
   });
+}
+
+export type SiteNetworkSummary = {
+  siteId: string;
+  wanUplink: { deviceId: string; ifName: string } | null;
+  wanDeviceName: string | null;
+  uplink: { dns: number | null; vps: number | null };
+  traffic: {
+    inBps: number | null;
+    outBps: number | null;
+    utilInPct: number | null;
+    utilOutPct: number | null;
+    capacityBps: number | null;
+  };
+  trafficSeries: {
+    inBps: Array<{ ts: number; value: number }>;
+    outBps: Array<{ ts: number; value: number }>;
+  };
+  clients: {
+    total: number | null;
+    byDevice: Array<{ deviceId: string; name: string; clients: number | null; vendor: string }>;
+  };
+  incidents: Array<{
+    id: string;
+    title: string;
+    detail: string;
+    openedAt: string;
+    resolvedAt?: string;
+    acknowledgedAt?: string;
+  }>;
+  speedtest: { available: false; message: string };
+};
+
+export async function getSiteNetwork(token: string, siteId: string, hours = 24) {
+  return fetchJson<{ network: SiteNetworkSummary }>(
+    `/api/sites/${siteId}/network?hours=${hours}`,
+    { headers: authHeaders(token) }
+  );
+}
+
+export async function getDeviceInterfaces(token: string, siteId: string, deviceId: string) {
+  return fetchJson<{ interfaces: Array<{ ifName: string; ifDescr?: string; ifIndex?: string }> }>(
+    `/api/sites/${siteId}/devices/${deviceId}/interfaces`,
+    { headers: authHeaders(token) }
+  );
 }
 
 export async function deleteSite(token: string, id: string) {
@@ -344,6 +391,52 @@ export async function getWebsitesSummary(token: string) {
     avgLatencyMs: number | null;
     grafanaUrl?: string;
   }>("/api/websites/summary", { headers: authHeaders(token) });
+}
+
+export type WebsiteDetail = {
+  name: string;
+  url: string;
+  siteId: string;
+  siteName: string;
+  range: "24h" | "7d" | "30d";
+  state: string;
+  notes?: string;
+  latencyMs: number | null;
+  uptime24h: number | null;
+  uptime7d: number | null;
+  uptime30d: number | null;
+  uptimeRangePct: number | null;
+  latencyAvgMs: number | null;
+  latencyMaxMs: number | null;
+  sparkline: number[];
+  latencySeries: Array<{ ts: number; value: number }>;
+  availabilitySeries: Array<{ ts: number; value: number }>;
+  outages: Array<{ start: number; end: number; durationSec: number; ongoing?: boolean }>;
+  weeklyTrend: Array<{ label: string; start: number; end: number; uptimePct: number | null }>;
+  monthlyTrend: Array<{ label: string; start: number; end: number; uptimePct: number | null }>;
+  lastCheckAt: number | null;
+};
+
+export async function getWebsiteDetail(
+  token: string,
+  params: { siteId: string; url: string; range?: "24h" | "7d" | "30d" }
+) {
+  const q = new URLSearchParams({
+    siteId: params.siteId,
+    url: params.url,
+    range: params.range ?? "24h"
+  });
+  return fetchJson<{
+    website: WebsiteDetail;
+    relatedIncidents: Array<{
+      id: string;
+      title: string;
+      detail: string;
+      openedAt: string;
+      resolvedAt?: string;
+      acknowledgedAt?: string;
+    }>;
+  }>(`/api/websites/detail?${q}`, { headers: authHeaders(token) });
 }
 
 export async function getDashboardLayout(token: string) {

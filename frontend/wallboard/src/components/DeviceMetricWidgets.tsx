@@ -418,7 +418,7 @@ export function DeviceStatGauge({
   if (error) return <div className="muted">{error}</div>;
 
   if (isBool) {
-    // Empty instant (silence) = DOWN — same 45s freshness as status API.
+    // Empty instant (silence) = DOWN — same freshness window as status API.
     const up = value != null && value >= 1;
     const tone = up ? "ok" : "bad";
     const label = up ? "UP" : "DOWN";

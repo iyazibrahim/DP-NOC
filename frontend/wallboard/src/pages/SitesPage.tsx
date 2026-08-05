@@ -16,6 +16,7 @@ import {
   getDiscoveredDevices,
   getSite,
   getSites,
+  getWebsites,
   rotateCollectorToken,
   updateSite,
   updateSiteDevice,
@@ -29,6 +30,7 @@ import { collectorOf, localDevicesOf, uplinkOf } from "../statusLabels";
 import { Modal } from "../components/Modal";
 import { SitesLeafletMap } from "../components/SitesLeafletMap";
 import { TablePagination, TableToolbar, paginateItems } from "../components/TableControls";
+import { SiteNetworkPanel } from "../components/SiteNetworkPanel";
 
 export function SitesPage() {
   const { token } = useAuth();
@@ -197,14 +199,31 @@ export function SiteDetailPage() {
   const [revealedCollectorToken, setRevealedCollectorToken] = useState<string | null>(null);
   const [deviceSearch, setDeviceSearch] = useState("");
   const [devicePage, setDevicePage] = useState(1);
+  const [siteTab, setSiteTab] = useState<"overview" | "network">("overview");
+  const [websiteMetrics, setWebsiteMetrics] = useState<
+    Record<string, { state: string; notes?: string; latencyMs?: number | null; uptime24h?: number | null }>
+  >({});
 
   async function reload() {
     if (!token || !id) return;
-    const [s, st, disc] = await Promise.all([
+    const [s, st, disc, webs] = await Promise.all([
       getSite(token, id),
       getAllSiteStatuses(token),
-      getDiscoveredDevices(token, id).catch(() => ({ devices: [] as DiscoveredDevice[] }))
+      getDiscoveredDevices(token, id).catch(() => ({ devices: [] as DiscoveredDevice[] })),
+      getWebsites(token).catch(() => ({ websites: [] as Array<{ siteId: string; url: string; state: string; notes?: string; latencyMs?: number | null; uptime24h?: number | null }> }))
     ]);
+    const metrics: typeof websiteMetrics = {};
+    for (const w of webs.websites) {
+      if (w.siteId === id) {
+        metrics[w.url] = {
+          state: w.state,
+          notes: w.notes,
+          latencyMs: w.latencyMs,
+          uptime24h: w.uptime24h
+        };
+      }
+    }
+    setWebsiteMetrics(metrics);
     setSite(s.site);
     setSiteForm({
       name: s.site.name,
@@ -580,6 +599,36 @@ export function SiteDetailPage() {
       {error ? <div className="bannerError">{error}</div> : null}
       {msg ? <p className="muted">{msg}</p> : null}
 
+      <div className="siteTabBar" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={siteTab === "overview"}
+          className={siteTab === "overview" ? "siteTab siteTab--active" : "siteTab"}
+          onClick={() => setSiteTab("overview")}
+        >
+          Overview
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={siteTab === "network"}
+          className={siteTab === "network" ? "siteTab siteTab--active" : "siteTab"}
+          onClick={() => setSiteTab("network")}
+        >
+          Network
+        </button>
+      </div>
+
+      {siteTab === "network" && token ? (
+        <SiteNetworkPanel
+          token={token}
+          site={site}
+          onSiteUpdated={(s) => {
+            setSite(s);
+          }}
+        />
+      ) : (
       <div className="siteBento">
         <section className="bentoTile bentoHealth">
           <div className="bentoTileHeader">
@@ -836,36 +885,69 @@ export function SiteDetailPage() {
               <tr>
                 <th>Name</th>
                 <th>URL</th>
+                <th>Latency</th>
+                <th>Uptime 24h</th>
+                <th>State</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {(site.websiteTargets ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="muted">
+                  <td colSpan={6} className="muted">
                     No websites yet — optional public URL checks from the central server.
                   </td>
                 </tr>
               ) : (
-                (site.websiteTargets ?? []).map((w) => (
-                  <tr key={w.url}>
-                    <td>{w.name}</td>
-                    <td>{w.url}</td>
-                    <td>
-                      <button type="button" onClick={() => openEditWebsite(w)} disabled={busy}>
-                        Edit
-                      </button>{" "}
-                      <button type="button" onClick={() => onDeleteWebsite(w.url)} disabled={busy}>
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                (site.websiteTargets ?? []).map((w) => {
+                  const detailTo = `/websites/${id}?url=${encodeURIComponent(w.url)}`;
+                  const m = websiteMetrics[w.url];
+                  return (
+                    <tr key={w.url}>
+                      <td>
+                        <Link className="websiteUrlLink" to={detailTo}>
+                          {w.name}
+                        </Link>
+                      </td>
+                      <td>
+                        <Link className="websiteUrlLink" to={detailTo}>
+                          {w.url}
+                        </Link>{" "}
+                        <a
+                          className="muted"
+                          href={w.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Open live site"
+                        >
+                          ↗
+                        </a>
+                      </td>
+                      <td>{m?.latencyMs != null ? `${m.latencyMs} ms` : "—"}</td>
+                      <td>{m?.uptime24h != null ? `${m.uptime24h}%` : "—"}</td>
+                      <td>
+                        {m ? <StatusPill state={m.state} notes={m.notes} /> : <span className="muted">—</span>}
+                      </td>
+                      <td>
+                        <Link className="linkBtn" to={detailTo}>
+                          View
+                        </Link>{" "}
+                        <button type="button" onClick={() => openEditWebsite(w)} disabled={busy}>
+                          Edit
+                        </button>{" "}
+                        <button type="button" onClick={() => onDeleteWebsite(w.url)} disabled={busy}>
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </section>
       </div>
+      )}
 
       <Modal open={editSiteOpen} title="Edit site" onClose={() => setEditSiteOpen(false)} wide>
         <form className="deviceForm" onSubmit={onSaveSite}>

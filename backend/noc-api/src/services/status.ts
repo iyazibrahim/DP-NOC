@@ -3,6 +3,7 @@ import { promQuery, parseFirstVectorValue, parseVectorToNumericValues } from "./
 import { getActiveAlerts, type Alert } from "./alertmanager";
 import { hasUnregisteredHostMetrics, siteHasCollectorMetrics } from "./deviceDiscovery";
 import { getGlobalWebsites } from "../data/globalWebsites";
+import { env } from "../env";
 import {
   dualHostMemFresh,
   dualHostUpFresh,
@@ -63,10 +64,63 @@ export type StatusMeta = {
   scrapeIntervalSec: number;
 };
 
+/** Consecutive healthy status polls before clearing a sticky critical display. */
+const RECOVERY_HEALTHY_POLLS = 2;
+
+type StickyDomain = {
+  displayed: DomainState;
+  consecutiveHealthy: number;
+  lastNotes?: string;
+};
+
+const recoverySticky = new Map<string, StickyDomain>();
+
+/**
+ * Keep critical sticky until ≥2 consecutive healthy samples (reduces flap).
+ * Transition to warning/unknown is allowed immediately (not a false recovery).
+ */
+function applyRecoveryHysteresis(key: string, raw: DomainStatus): DomainStatus {
+  const prev = recoverySticky.get(key);
+
+  if (raw.state === "critical") {
+    recoverySticky.set(key, {
+      displayed: "critical",
+      consecutiveHealthy: 0,
+      lastNotes: raw.notes
+    });
+    return raw;
+  }
+
+  if (prev?.displayed === "critical" && raw.state === "healthy") {
+    const consecutiveHealthy = (prev.consecutiveHealthy ?? 0) + 1;
+    if (consecutiveHealthy >= RECOVERY_HEALTHY_POLLS) {
+      recoverySticky.set(key, { displayed: "healthy", consecutiveHealthy: 0 });
+      return raw;
+    }
+    recoverySticky.set(key, {
+      displayed: "critical",
+      consecutiveHealthy,
+      lastNotes: prev.lastNotes
+    });
+    return {
+      state: "critical",
+      notes: prev.lastNotes ?? raw.notes
+    };
+  }
+
+  recoverySticky.set(key, {
+    displayed: raw.state,
+    consecutiveHealthy: 0,
+    lastNotes: raw.notes
+  });
+  return raw;
+}
+
 export const STATUS_META: Omit<StatusMeta, "checkedAt"> = {
-  dashboardRefreshSec: 5,
-  metricFreshWindowSec: 45,
-  typicalDetectionSec: 45,
+  dashboardRefreshSec: env.STATUS_DASHBOARD_REFRESH_SEC,
+  metricFreshWindowSec: env.STATUS_METRIC_FRESH_SEC,
+  /** Alertmanager for: 2m — typical page time for sustained outages */
+  typicalDetectionSec: 120,
   scrapeIntervalSec: 15
 };
 
@@ -108,6 +162,47 @@ function aggregateProbeStatuses(statuses: DomainStatus[]): DomainStatus {
   }
   if (states.some((s) => s === "unknown")) {
     return { state: "warning", notes: "Partial data — other checks are up" };
+  }
+  return { state: "healthy" };
+}
+
+/** Critical only when both WAN paths fail; single-path failure = warning. */
+function aggregateUplinkQuorum(wanDns: DomainStatus, wanVps: DomainStatus): DomainStatus {
+  const a = wanDns.state;
+  const b = wanVps.state;
+
+  if (a === "healthy" && b === "healthy") {
+    return { state: "healthy" };
+  }
+  if (a === "unknown" && b === "unknown") {
+    return {
+      state: "unknown",
+      notes: wanDns.notes ?? wanVps.notes ?? "No uplink data yet"
+    };
+  }
+
+  const criticalCount = [a, b].filter((s) => s === "critical").length;
+  if (criticalCount >= 2) {
+    return {
+      state: "critical",
+      notes:
+        [wanDns.notes, wanVps.notes].filter(Boolean).join("; ") || "Internet / uplink down"
+    };
+  }
+  if (criticalCount === 1) {
+    const bad = a === "critical" ? wanDns : wanVps;
+    return {
+      state: "warning",
+      notes: bad.notes
+        ? `Partial uplink issue: ${bad.notes}`
+        : "One uplink path down — other still up"
+    };
+  }
+  if (a === "warning" || b === "warning" || a === "unknown" || b === "unknown") {
+    return {
+      state: "warning",
+      notes: "Partial or degraded uplink readings"
+    };
   }
   return { state: "healthy" };
 }
@@ -264,6 +359,23 @@ async function computeCollectorStatus(siteId: string): Promise<{
   };
 }
 
+/**
+ * When the collector is offline, missing uplink probes are a symptom of the metrics path —
+ * demote uplink critical → warning so we do not open a second "Internet DOWN" incident.
+ */
+function applyCollectorInhibitOnUplink(
+  uplink: DomainStatus,
+  collector: DomainStatus
+): DomainStatus {
+  if (collector.state !== "critical" || uplink.state !== "critical") {
+    return uplink;
+  }
+  return {
+    state: "warning",
+    notes: "Unknown — collector offline (cannot confirm uplink)"
+  };
+}
+
 export async function computeSiteStatus(
   siteId: string,
   activeAlerts?: Alert[]
@@ -310,40 +422,38 @@ export async function computeSiteStatus(
     throw new Error(`Unknown site: ${siteId}`);
   }
 
-  const wanDns = await queryBooleanMetricState(
+  const wanDnsRaw = await queryBooleanMetricState(
     `probe_success{site="${siteId}",check="wan_dns"}`,
     {
       silenceMeansDown: true,
       downNotes: `Internet probe silent for ${METRIC_FRESH_WINDOW}`
     }
   );
-  const wanVps = await queryBooleanMetricState(
+  const wanVpsRaw = await queryBooleanMetricState(
     `probe_success{site="${siteId}",check="wan_vps"}`,
     {
       silenceMeansDown: true,
       downNotes: `Central uplink probe silent for ${METRIC_FRESH_WINDOW}`
     }
   );
-  const uplink = aggregateProbeStatuses([
-    {
-      ...wanDns,
-      notes:
-        wanDns.state === "critical"
-          ? wanDns.notes ?? "Cannot reach DNS (internet)"
-          : wanDns.notes
-    },
-    {
-      ...wanVps,
-      notes:
-        wanVps.state === "critical"
-          ? wanVps.notes ?? "Cannot reach central server"
-          : wanVps.notes
-    }
-  ]);
+  const wanDns = {
+    ...wanDnsRaw,
+    notes:
+      wanDnsRaw.state === "critical"
+        ? wanDnsRaw.notes ?? "Cannot reach DNS (internet)"
+        : wanDnsRaw.notes
+  };
+  const wanVps = {
+    ...wanVpsRaw,
+    notes:
+      wanVpsRaw.state === "critical"
+        ? wanVpsRaw.notes ?? "Cannot reach central server"
+        : wanVpsRaw.notes
+  };
+
+  let uplink = aggregateUplinkQuorum(wanDns, wanVps);
   if (uplink.state === "healthy") {
     uplink.notes = undefined;
-  } else if (uplink.state === "critical" && !uplink.notes) {
-    uplink.notes = "Internet / uplink down";
   }
 
   const websiteVector = await queryProbeSuccessVector(siteId, "check", "website");
@@ -360,8 +470,13 @@ export async function computeSiteStatus(
         : { state: "unknown", notes: "No website checks configured" };
   }
 
-  const { aggregate: collector, devices: collectorDeviceStates } =
+  const { aggregate: collectorRaw, devices: collectorDeviceStates } =
     await computeCollectorStatus(siteId);
+
+  uplink = applyCollectorInhibitOnUplink(uplink, collectorRaw);
+
+  const collector = applyRecoveryHysteresis(`collector:${siteId}`, collectorRaw);
+  uplink = applyRecoveryHysteresis(`uplink:${siteId}`, uplink);
 
   let localDevices: DomainStatus = { state: "unknown", notes: "No local devices configured" };
   const localDeviceStates: SiteStatus["localDeviceStates"] = [];

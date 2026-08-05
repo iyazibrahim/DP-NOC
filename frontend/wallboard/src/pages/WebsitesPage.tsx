@@ -194,7 +194,9 @@ export function WebsitesPage() {
                 </td>
               </tr>
             ) : (
-              rows.map((r) => (
+              rows.map((r) => {
+                const detailTo = `/websites/${r.siteId}?url=${encodeURIComponent(r.url)}`;
+                return (
                 <tr key={`${r.siteId}-${r.url}`}>
                   <td>
                     {r.siteId === "global" ? (
@@ -203,8 +205,26 @@ export function WebsitesPage() {
                       <Link to={`/sites/${r.siteId}`}>{r.siteName}</Link>
                     )}
                   </td>
-                  <td>{r.name}</td>
-                  <td>{r.url}</td>
+                  <td>
+                    <Link className="websiteUrlLink" to={detailTo}>
+                      {r.name}
+                    </Link>
+                  </td>
+                  <td>
+                    <Link className="websiteUrlLink" to={detailTo}>
+                      {r.url}
+                    </Link>{" "}
+                    <a
+                      className="muted"
+                      href={r.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Open live site"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      ↗
+                    </a>
+                  </td>
                   <td>{r.latencyMs != null ? `${r.latencyMs} ms` : "—"}</td>
                   <td>{r.uptime24h != null ? `${r.uptime24h}%` : "—"}</td>
                   <td>
@@ -214,6 +234,9 @@ export function WebsitesPage() {
                     <StatusPill state={r.state} notes={r.notes} />
                   </td>
                   <td>
+                    <Link className="linkBtn" to={detailTo}>
+                      View
+                    </Link>{" "}
                     <button type="button" onClick={() => openEdit(r)}>
                       Edit
                     </button>{" "}
@@ -222,7 +245,8 @@ export function WebsitesPage() {
                     </button>
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>

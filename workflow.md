@@ -153,6 +153,19 @@ Collector box → Alloy → Prometheus (central)
 8. Grafana → folder NOC → “NOC — Collector & Uplink”
 9. Site-box cutover: delete Dokploy legacy SNMP patches → rebuild → Default community FortiSNMP → Force apply → `./cutover-sitebox-snmp.sh site-1-fw1` → Grafana `snmp_up=1`
 
+  - **False-alarm hardening + website detail (2026-07-27)**
+    - Freshness **90s** via `STATUS_METRIC_FRESH_SEC`; Prom `absent_over_time[90s]` + `for: 2m`
+    - Uplink **quorum** (both wan_dns + wan_vps); collector offline **inhibits** uplink critical
+    - Incidents open after **~90s** sustained critical; recovery needs **2** healthy polls
+    - Alert copy shortened: **Needs ack** / **Active**; compact incidents widget
+    - Website detail page `/websites/:siteId?url=` with availability/latency charts + outages
+
+  - **Website / Network tab / AP stack (2026-08-05)**
+    - Website checks: name + View links to detail from list and site page; external ↗ for live URL
+    - Detail: 24h / 7d / 30d ranges, weekly+monthly uptime trend bars, clearer outage timeline (ongoing vs ended)
+    - Site detail tabs: Overview | Network — tagged WAN interface (`wanUplink`), traffic charts, AP clients, incidents, speedtest placeholder
+    - Dashboard widget `device_stack`: manual multi-select + LED mini-grid (e.g. many APs in one card)
+
 ## Dokploy notes
 - Publish `noc-app:8080` and optionally `grafana:3000`
 - Keep Prometheus on `127.0.0.1:9090`; expose only via Cloudflare Tunnel `metrics.` + Access Service Token

@@ -11,7 +11,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEVICES_FILE="${1:-$SCRIPT_DIR/devices.json}"
 OUT_FILE="${2:-$SCRIPT_DIR/config.alloy}"
-# Must stay ≤30s (repo default 15s). 60s + 45s NOC freshness = false uplink downs.
+# Must stay ≤30s (repo default 15s). 60s scrape delays detection vs 90s freshness / 2m alerts.
 SCRAPE_INTERVAL_SEC="${SCRAPE_INTERVAL_SEC:-15}"
 # Alloy needs a real duration (e.g. 15s), not a shell placeholder
 if ! [[ "$SCRAPE_INTERVAL_SEC" =~ ^[0-9]+$ ]]; then

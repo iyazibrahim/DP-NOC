@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { getWebsitesSummary } from "../api";
 
@@ -38,6 +39,9 @@ export function WebsiteSummaryWidget({ compact }: { compact?: boolean }) {
         <div className="dotLine dotLine--unknown">Unknown: {counts.unknown}</div>
         <div className="muted">
           Avg latency: {avgLatencyMs != null ? `${avgLatencyMs} ms` : "—"}
+        </div>
+        <div>
+          <Link to="/websites">Open website checks →</Link>
         </div>
       </div>
     </div>

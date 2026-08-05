@@ -13,6 +13,7 @@ const widgetSchema = z.object({
     "site_signal_board",
     "local_devices_board",
     "snmp_device_status",
+    "device_stack",
     "uplink_status",
     "collector_status",
     "alerts_table",

@@ -69,6 +69,7 @@ export type Site = {
   createdAt?: string;
   websiteTargets: Array<{ name: string; url: string }>;
   wan: { dnsTarget: string; vpsTarget: string };
+  wanUplink?: { deviceId: string; ifName: string };
   devices: SiteDevice[];
   /** Present when a collector sync token has been generated */
   hasCollectorToken?: boolean;
@@ -88,6 +89,7 @@ export type WidgetType =
   | "site_signal_board"
   | "local_devices_board"
   | "snmp_device_status"
+  | "device_stack"
   | "uplink_status"
   | "collector_status"
   | "alerts_table"

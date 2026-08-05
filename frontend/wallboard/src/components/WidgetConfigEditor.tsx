@@ -177,6 +177,66 @@ export function WidgetConfigEditor({
     );
   }
 
+  if (widget.type === "device_stack") {
+    const selected = new Set(
+      (config.deviceIds ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    );
+    const pool = (siteId ? sites.filter((s) => s.id === siteId) : sites).flatMap((s) =>
+      (s.devices ?? [])
+        .filter((d) => (d.kind ?? "network") !== "server")
+        .map((d) => ({ ...d, siteName: s.name, siteId: s.id }))
+    );
+    function toggleDevice(id: string) {
+      const next = new Set(selected);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      onChange({ ...config, siteId, deviceIds: [...next].join(",") });
+    }
+    return (
+      <div className="widgetConfig">
+        <TitleField config={config} onChange={onChange} placeholder="e.g. Library APs" />
+        <label className="label">Site filter (optional)</label>
+        <select
+          value={siteId}
+          onChange={(e) => onChange({ ...config, siteId: e.target.value, deviceIds: "" })}
+        >
+          <option value="">All sites</option>
+          {sites.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        <label className="label">Devices in stack</label>
+        <div className="deviceStackPicker">
+          {pool.length === 0 ? (
+            <p className="muted">No SNMP devices to pick.</p>
+          ) : (
+            pool.map((d) => (
+              <label key={`${d.siteId}-${d.id}`} className="deviceStackPickerRow">
+                <input
+                  type="checkbox"
+                  checked={selected.has(d.id)}
+                  onChange={() => toggleDevice(d.id)}
+                />
+                <span>
+                  {d.name}
+                  {d.type ? ` · ${d.type}` : ""}
+                  {!siteId ? ` · ${d.siteName}` : ""}
+                  {d.snmpIp ? ` (${d.snmpIp})` : ""}
+                </span>
+              </label>
+            ))
+          )}
+        </div>
+        <CompactField config={config} onChange={onChange} />
+      </div>
+    );
+  }
+
   if (widget.type === "grafana_panel") {
     const base = grafanaUrl.replace(/\/$/, "");
     return (

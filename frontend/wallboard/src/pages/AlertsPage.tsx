@@ -12,9 +12,9 @@ import type { ActiveAlert } from "../types";
 import { StatusPill } from "../components/StatusPill";
 
 function incidentStatusLabel(i: NocIncident) {
-  if (i.acknowledgedAt) return "acked";
-  if (i.resolvedAt) return "resolved — pending ack";
-  return "firing";
+  if (i.acknowledgedAt) return "Acked";
+  if (i.resolvedAt) return "Needs ack";
+  return "Active";
 }
 
 function formatWhen(iso?: string) {
@@ -96,7 +96,7 @@ export function AlertsPage() {
           <strong>{open.length}</strong>
         </div>
         <div className="healthChip">
-          <span className="healthChipLabel">Pending ack (recovered)</span>
+          <span className="healthChipLabel">Needs ack</span>
           <strong>{pendingAck}</strong>
         </div>
         <div className="healthChip">

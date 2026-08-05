@@ -31,4 +31,10 @@ receivers:
     #     auth_password: "pass"
     #     send_resolved: true
 
-inhibit_rules: []
+# Collector offline explains missing uplink probes — suppress symptom pages.
+inhibit_rules:
+  - source_matchers:
+      - alertname = SiteCollectorDown
+    target_matchers:
+      - alertname = SiteUplinkDown
+    equal: ["site"]

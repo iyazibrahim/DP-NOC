@@ -1,9 +1,10 @@
 import type { Response } from "express";
 import express from "express";
 import { requireJwt } from "../middleware/auth";
-import { siteList } from "../data/sites";
+import { siteList, getSiteById } from "../data/sites";
 import { getGlobalWebsites } from "../data/globalWebsites";
-import { getWebsiteProbeMetrics } from "../services/websiteMetrics";
+import { getWebsiteProbeMetrics, getWebsiteDetailMetrics, type WebsiteRange } from "../services/websiteMetrics";
+import { getHistoryIncidents, getOpenIncidents } from "../data/incidents";
 import { env } from "../env";
 
 export const websitesRouter = express.Router();
@@ -58,6 +59,11 @@ async function buildWebsiteRows(): Promise<WebsiteRow[]> {
   return websites;
 }
 
+function parseRange(raw: string): WebsiteRange {
+  if (raw === "7d" || raw === "30d") return raw;
+  return "24h";
+}
+
 websitesRouter.get(
   "/",
   requireJwt(["operator", "wallboard"]),
@@ -89,5 +95,59 @@ websitesRouter.get(
       avgLatencyMs: latencyN > 0 ? Math.round(latencySum / latencyN) : null,
       grafanaUrl: env.GRAFANA_PUBLIC_URL
     });
+  }
+);
+
+websitesRouter.get(
+  "/detail",
+  requireJwt(["operator", "wallboard"]),
+  async (req, res: Response) => {
+    const siteId = String(req.query.siteId ?? "").trim();
+    const url = String(req.query.url ?? "").trim();
+    const range = parseRange(String(req.query.range ?? "24h").trim());
+
+    if (!siteId || !url) {
+      return res.status(400).json({ error: "siteId and url are required" });
+    }
+
+    let name = url;
+    let siteName = siteId;
+    if (siteId === "global") {
+      siteName = "Global / Central";
+      const match = getGlobalWebsites().find((w) => w.url === url);
+      if (!match) return res.status(404).json({ error: "Website not found" });
+      name = match.name;
+    } else {
+      const site = getSiteById(siteId);
+      if (!site) return res.status(404).json({ error: "Site not found" });
+      siteName = site.name;
+      const match = site.websiteTargets.find((w) => w.url === url);
+      if (!match) return res.status(404).json({ error: "Website not found" });
+      name = match.name;
+    }
+
+    const detail = await getWebsiteDetailMetrics(siteId, url, range, { name, siteName });
+    const relatedIncidents = [...getOpenIncidents(), ...getHistoryIncidents()]
+      .filter((i) => {
+        if (i.siteId !== siteId) return false;
+        const hay = `${i.title} ${i.detail}`.toLowerCase();
+        return (
+          hay.includes("website") ||
+          hay.includes("sitewebsitedown") ||
+          hay.includes(url.toLowerCase()) ||
+          hay.includes(name.toLowerCase())
+        );
+      })
+      .slice(0, 10)
+      .map((i) => ({
+        id: i.id,
+        title: i.title,
+        detail: i.detail,
+        openedAt: i.openedAt,
+        resolvedAt: i.resolvedAt,
+        acknowledgedAt: i.acknowledgedAt
+      }));
+
+    return res.json({ website: detail, relatedIncidents });
   }
 );

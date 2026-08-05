@@ -6,11 +6,33 @@ import {
   upsertOpenIncident,
   type Incident
 } from "../data/incidents";
+import { env } from "../env";
 import type { SiteStatus } from "./status";
 
 function siteName(siteId: string): string {
   if (siteId === "global") return "Global / Central";
   return getSiteById(siteId)?.name ?? siteId;
+}
+
+/** First time each key became critical (for sustained-outage debounce). */
+const criticalSinceByKey = new Map<string, number>();
+
+/**
+ * Returns true only after the condition has been continuously critical for INCIDENT_SUSTAIN_MS.
+ * Clears the timer when not critical so brief blips do not accumulate.
+ */
+function sustainedCritical(key: string, isCritical: boolean): boolean {
+  if (!isCritical) {
+    criticalSinceByKey.delete(key);
+    return false;
+  }
+  const now = Date.now();
+  const since = criticalSinceByKey.get(key);
+  if (since == null) {
+    criticalSinceByKey.set(key, now);
+    return false;
+  }
+  return now - since >= env.INCIDENT_SUSTAIN_MS;
 }
 
 /** Open/resolve status-derived incidents from current site statuses. */
@@ -25,11 +47,11 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
     const up = st.uplink ?? st.wan;
     const col = st.collector;
 
-    if (up?.state === "critical") {
-      const key = `uplink:${st.siteId}`;
-      activeKeys.add(key);
+    const uplinkKey = `uplink:${st.siteId}`;
+    if (sustainedCritical(uplinkKey, up?.state === "critical")) {
+      activeKeys.add(uplinkKey);
       upsertOpenIncident({
-        key,
+        key: uplinkKey,
         siteId: st.siteId,
         siteName: name,
         kind: "uplink",
@@ -38,11 +60,11 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
       });
     }
 
-    if (col?.state === "critical") {
-      const key = `collector:${st.siteId}`;
-      activeKeys.add(key);
+    const collectorKey = `collector:${st.siteId}`;
+    if (sustainedCritical(collectorKey, col?.state === "critical")) {
+      activeKeys.add(collectorKey);
       upsertOpenIncident({
-        key,
+        key: collectorKey,
         siteId: st.siteId,
         siteName: name,
         kind: "collector",
@@ -51,15 +73,15 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
       });
     }
 
-    if (
+    const overallKey = `overall:${st.siteId}`;
+    const overallCritical =
       st.overall === "critical" &&
       up?.state !== "critical" &&
-      col?.state !== "critical"
-    ) {
-      const key = `overall:${st.siteId}`;
-      activeKeys.add(key);
+      col?.state !== "critical";
+    if (sustainedCritical(overallKey, overallCritical)) {
+      activeKeys.add(overallKey);
       upsertOpenIncident({
-        key,
+        key: overallKey,
         siteId: st.siteId,
         siteName: name,
         kind: "overall",

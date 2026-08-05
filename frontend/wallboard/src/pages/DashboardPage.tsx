@@ -77,6 +77,7 @@ function widgetHasConfig(type: DashboardWidget["type"]) {
     type === "collector_status" ||
     type === "local_devices_board" ||
     type === "snmp_device_status" ||
+    type === "device_stack" ||
     type === "site_signal_board"
   );
 }
@@ -234,6 +235,7 @@ export function DashboardPage() {
         const narrowOk =
           w.type === "device_stat_gauge" ||
           w.type === "snmp_device_status" ||
+          w.type === "device_stack" ||
           w.type === "uplink_status" ||
           w.type === "collector_status" ||
           w.type === "website_summary" ||
@@ -326,6 +328,18 @@ export function DashboardPage() {
       config = {
         siteId: firstSite?.id ?? "",
         deviceId: firstNet?.id ?? ""
+      };
+    } else if (type === "device_stack") {
+      const aps = (firstSite?.devices ?? []).filter(
+        (d) => d.type === "ap" && (d.kind ?? "network") !== "server"
+      );
+      const picks =
+        aps.length > 0
+          ? aps
+          : (firstSite?.devices ?? []).filter((d) => (d.kind ?? "network") !== "server");
+      config = {
+        siteId: firstSite?.id ?? "",
+        deviceIds: picks.map((d) => d.id).join(",")
       };
     }
     let maxBottom = 0;

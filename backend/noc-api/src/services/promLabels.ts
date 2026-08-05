@@ -6,6 +6,8 @@
  * - Legacy Alloy integrations: job=integrations/unix, instance=<hostname>
  */
 
+import { env } from "../env";
+
 export const HOST_UP_JOB_SELECTOR = 'job=~"site_host|integrations/unix"';
 
 /** Canonical site-box SNMP scrape job (after generate-config relabel). */
@@ -15,11 +17,12 @@ export const SITE_SNMP_JOB_SELECTOR = 'job="site_snmp_if_mib"';
 export const LEGACY_SNMP_JOB_SELECTOR = 'job=~"integrations/snmp/.*"';
 
 /**
- * Shared freshness for status + gauges (30–60s detection).
+ * Shared freshness for status + gauges (wired from STATUS_METRIC_FRESH_SEC, default 90s).
  * Requires ICMP scrape ≤30s (template uses 15s). A 60s ICMP default will false-down.
  */
-export const METRIC_FRESH_WINDOW = "45s";
+export const METRIC_FRESH_WINDOW = `${env.STATUS_METRIC_FRESH_SEC}s`;
 export const METRIC_HISTORY_WINDOW = "30m";
+export const METRIC_FRESH_SEC = env.STATUS_METRIC_FRESH_SEC;
 
 /**
  * Local-device online:

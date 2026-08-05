@@ -12,6 +12,7 @@ import {
 import { localDevicesOf } from "../statusLabels";
 import {
   CollectorStatusCard,
+  DeviceStackCard,
   LocalDevicesSignalBoard,
   SiteSignalBoard,
   SnmpDeviceStatusCard,
@@ -50,6 +51,13 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
     description: "One device UP/DOWN",
     defaultW: 3,
     defaultH: 3
+  },
+  {
+    type: "device_stack",
+    label: "Device stack",
+    description: "AP LED mini-grid",
+    defaultW: 4,
+    defaultH: 4
   },
   {
     type: "uplink_status",
@@ -125,7 +133,7 @@ export const WIDGET_GROUPS: Array<{ label: string; widgets: WidgetCatalogEntry[]
   {
     label: "SNMP / local devices",
     widgets: WIDGET_CATALOG.filter((w) =>
-      ["local_devices_board", "snmp_device_status"].includes(w.type)
+      ["local_devices_board", "snmp_device_status", "device_stack"].includes(w.type)
     )
   },
   {
@@ -217,6 +225,25 @@ export function WidgetBody({
           site={site}
           status={st}
           deviceId={config?.deviceId}
+          title={config?.title}
+          compact={compact}
+        />
+      </div>
+    );
+  }
+
+  if (type === "device_stack") {
+    const deviceIds = (config?.deviceIds ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return (
+      <div className="widgetInner flush">
+        <DeviceStackCard
+          sites={sites}
+          statuses={statuses}
+          siteId={config?.siteId || undefined}
+          deviceIds={deviceIds}
           title={config?.title}
           compact={compact}
         />

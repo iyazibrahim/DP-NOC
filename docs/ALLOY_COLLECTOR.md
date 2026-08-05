@@ -26,9 +26,9 @@ Collector box (NUC / Pi / mini-PC / server)
 - Host metrics: `job=integrations/unix`, often only `instance=<hostname>` (no `device`)
 - Uplink: `job=integrations/blackbox/ping_*`, `check=wan_dns|wan_vps`
 
-If ICMP scrape is left at Alloy’s default (~60s) while NOC freshness is 45s (30–60s detection), uplink will flicker DOWN every minute even though the collector is fine. **Required:** set ICMP `scrape_interval` to **15s–30s** on the collector (this repo’s template and `generate-config.sh` default to **15s**).
+If ICMP scrape is left at Alloy’s default (~60s) while NOC freshness is **90s** with Alertmanager `for: 2m`, short scrapes still work — but **60s scrape remains a bad default** for timely detection. **Required:** set ICMP `scrape_interval` to **15s–30s** on the collector (this repo’s template and `generate-config.sh` default to **15s**).
 
-The wallboard refreshes status every **~5s**; that only updates the UI. Detection still depends on scrape + 45s freshness (~30–60s). Do **not** set scrape to 60s.
+The wallboard refreshes status every **~5s**; that only updates the UI. Detection uses scrape + **90s** freshness; pages/incidents require sustained outage (~**2 minutes**). Do **not** set scrape to 60s for uplink/collector jobs.
 
 If you use a legacy **host** integrations config, add a relabel so series also carry `device="$HOST_DEVICE_ID"`. Until then, the app adopts the collector using the hostname `instance` value.
 

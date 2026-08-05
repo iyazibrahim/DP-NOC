@@ -30,6 +30,11 @@ export type Site = {
     dnsTarget: string;
     vpsTarget: string;
   };
+  /** Tagged WAN/internet pipe for Network tab charts */
+  wanUplink?: {
+    deviceId: string;
+    ifName: string;
+  };
   devices: SiteDevice[];
   lan?: {
     snmpTargetIp?: string;
@@ -103,11 +108,20 @@ function normalizeDevice(d: SiteDevice): SiteDevice {
 }
 
 function normalizeSite(s: Site): Site {
+  const wanUplink =
+    s.wanUplink &&
+    typeof s.wanUplink.deviceId === "string" &&
+    s.wanUplink.deviceId.trim() &&
+    typeof s.wanUplink.ifName === "string" &&
+    s.wanUplink.ifName.trim()
+      ? { deviceId: s.wanUplink.deviceId.trim(), ifName: s.wanUplink.ifName.trim() }
+      : undefined;
   return {
     ...s,
     devices: (s.devices ?? []).map(normalizeDevice),
     websiteTargets: s.websiteTargets ?? [],
-    wan: s.wan ?? { dnsTarget: "1.1.1.1", vpsTarget: "139.99.88.174" }
+    wan: s.wan ?? { dnsTarget: "1.1.1.1", vpsTarget: "139.99.88.174" },
+    wanUplink
   };
 }
 
@@ -280,12 +294,19 @@ export function createSite(input: {
   return site;
 }
 
-export function updateSite(
-  id: string,
-  patch: Partial<
-    Pick<Site, "name" | "lat" | "lng" | "address" | "notes" | "wan" | "websiteTargets">
-  >
-): Site | null {
+export type UpdateSitePatch = {
+  name?: string;
+  lat?: number;
+  lng?: number;
+  address?: string;
+  notes?: string;
+  wan?: Site["wan"];
+  websiteTargets?: Site["websiteTargets"];
+  /** Pass null to clear the tagged WAN interface */
+  wanUplink?: Site["wanUplink"] | null;
+};
+
+export function updateSite(id: string, patch: UpdateSitePatch): Site | null {
   const site = getSiteById(id);
   if (!site) return null;
   if (typeof patch.name === "string") site.name = patch.name.trim();
@@ -295,6 +316,14 @@ export function updateSite(
   if (patch.notes !== undefined) site.notes = patch.notes?.trim();
   if (patch.wan) site.wan = { ...site.wan, ...patch.wan };
   if (patch.websiteTargets) site.websiteTargets = patch.websiteTargets;
+  if (patch.wanUplink === null) {
+    delete site.wanUplink;
+  } else if (patch.wanUplink) {
+    site.wanUplink = {
+      deviceId: patch.wanUplink.deviceId.trim(),
+      ifName: patch.wanUplink.ifName.trim()
+    };
+  }
   persist();
   return site;
 }

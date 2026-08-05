@@ -156,6 +156,112 @@ export function SnmpDeviceStatusCard({
   );
 }
 
+/** Mini LED grid for manually selected devices (e.g. APs on one site). */
+export function DeviceStackCard({
+  sites,
+  statuses,
+  siteId,
+  deviceIds,
+  title,
+  compact
+}: {
+  sites: Site[];
+  statuses: SiteStatus[];
+  siteId?: string;
+  deviceIds: string[];
+  title?: string;
+  compact?: boolean;
+}) {
+  const scopedSites = siteId ? sites.filter((s) => s.id === siteId) : sites;
+  const tiles = deviceIds
+    .map((id) => {
+      let inventory: Site["devices"][number] | undefined;
+      let siteName = "";
+      let resolvedSiteId = "";
+      for (const s of scopedSites) {
+        const d = s.devices?.find((x) => x.id === id);
+        if (d) {
+          inventory = d;
+          siteName = s.name;
+          resolvedSiteId = s.id;
+          break;
+        }
+      }
+      if (!inventory && !siteId) {
+        for (const s of sites) {
+          const d = s.devices?.find((x) => x.id === id);
+          if (d) {
+            inventory = d;
+            siteName = s.name;
+            resolvedSiteId = s.id;
+            break;
+          }
+        }
+      }
+      const st = statuses.find((x) => x.siteId === resolvedSiteId);
+      const live = st?.localDeviceStates?.find((d) => d.deviceId === id);
+      const state = live?.state ?? "unknown";
+      return {
+        id,
+        name: live?.name ?? inventory?.name ?? id,
+        snmpIp: live?.snmpIp ?? inventory?.snmpIp,
+        siteName,
+        state,
+        notes: live?.notes,
+        tone: stateTone(state)
+      };
+    })
+    .filter(Boolean);
+
+  const upCount = tiles.filter((t) => t.state === "healthy").length;
+  const worst =
+    tiles.some((t) => t.state === "critical")
+      ? "critical"
+      : tiles.some((t) => t.state === "warning")
+        ? "warning"
+        : tiles.some((t) => t.state === "healthy")
+          ? "healthy"
+          : "unknown";
+  const tone = stateTone(worst);
+  const eyebrow = title?.trim() || "Device stack";
+
+  if (deviceIds.length === 0) {
+    return (
+      <div className={cardClass("unk", compact)}>
+        <div className="signalCardEyebrow">{eyebrow}</div>
+        <div className="muted">Pick devices in widget settings</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${cardClass(tone, compact)} deviceStackCard`} title={`${upCount}/${tiles.length} UP`}>
+      <div className="deviceStackHeader">
+        <div>
+          {!sameLabel(eyebrow, `${upCount}/${tiles.length} UP`) ? (
+            <div className="signalCardEyebrow">{eyebrow}</div>
+          ) : null}
+          <div className="signalCardState">
+            {upCount}/{tiles.length} UP
+          </div>
+        </div>
+      </div>
+      <div className={`deviceStackLedGrid${compact ? " deviceStackLedGrid--compact" : ""}`}>
+        {tiles.map((t) => (
+          <div
+            key={t.id}
+            className={`deviceStackLed deviceStackLed--${t.tone}`}
+            title={`${t.name}${t.snmpIp ? ` · ${t.snmpIp}` : ""}${t.siteName ? ` · ${t.siteName}` : ""}${t.notes ? ` — ${t.notes}` : ""}`}
+          >
+            <i />
+            {!compact ? <span className="deviceStackLedLabel">{t.name}</span> : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Per-device SNMP LEDs — one site or all sites. */
 export function LocalDevicesSignalBoard({
   sites,

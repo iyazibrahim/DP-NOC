@@ -28,6 +28,7 @@ import { computeSiteStatus, computeAllSitesStatus } from "../services/status";
 import { applyWebsiteProbes } from "../services/websiteProbes";
 import { discoverDevicesForSite } from "../services/deviceDiscovery";
 import { addGlobalWebsite, removeGlobalWebsite, updateGlobalWebsite, getGlobalWebsites } from "../data/globalWebsites";
+import { getSiteNetworkSummary, listDeviceInterfaces } from "../services/siteNetwork";
 
 export const sitesRouter = express.Router();
 
@@ -147,6 +148,37 @@ sitesRouter.get("/:id/discovered-devices", requireJwt(["operator", "wallboard"])
     });
   }
 });
+
+sitesRouter.get("/:id/network", requireJwt(["operator", "wallboard"]), async (req, res) => {
+  const siteId = req.params.id;
+  if (!getSiteById(siteId)) {
+    return res.status(404).json({ error: "Site not found" });
+  }
+  const hours = Number(req.query.hours ?? 24);
+  try {
+    const network = await getSiteNetworkSummary(siteId, Number.isFinite(hours) ? hours : 24);
+    return res.json({ network });
+  } catch (e) {
+    return res.status(502).json({
+      error: e instanceof Error ? e.message : "Network summary failed"
+    });
+  }
+});
+
+sitesRouter.get(
+  "/:id/devices/:deviceId/interfaces",
+  requireJwt(["operator", "wallboard"]),
+  async (req, res) => {
+    const { id: siteId, deviceId } = req.params;
+    const site = getSiteById(siteId);
+    if (!site) return res.status(404).json({ error: "Site not found" });
+    if (!site.devices.some((d) => d.id === deviceId)) {
+      return res.status(404).json({ error: "Device not found" });
+    }
+    const interfaces = await listDeviceInterfaces(siteId, deviceId);
+    return res.json({ interfaces });
+  }
+);
 
 sitesRouter.get("/:id/export/devices.json", requireJwt(["operator"]), (req, res) => {
   const siteId = req.params.id;
@@ -277,6 +309,18 @@ sitesRouter.patch("/:id", requireJwt(["operator"]), async (req: Request, res: Re
   }
   if (Array.isArray(body.websiteTargets)) {
     patch.websiteTargets = body.websiteTargets as Array<{ name: string; url: string }>;
+  }
+  if (body.wanUplink === null) {
+    patch.wanUplink = null;
+  } else if (body.wanUplink && typeof body.wanUplink === "object") {
+    const w = body.wanUplink as Record<string, unknown>;
+    const deviceId = typeof w.deviceId === "string" ? w.deviceId.trim() : "";
+    const ifName = typeof w.ifName === "string" ? w.ifName.trim() : "";
+    if (deviceId && ifName) {
+      patch.wanUplink = { deviceId, ifName };
+    } else {
+      return res.status(400).json({ error: "wanUplink requires deviceId and ifName" });
+    }
   }
   const site = updateSite(id, patch);
   return res.json({ site: site ? toPublicSite(site) : null });
