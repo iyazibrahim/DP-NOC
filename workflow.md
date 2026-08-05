@@ -167,6 +167,10 @@ Collector box → Alloy → Prometheus (central)
     - Dashboard widget `device_stack`: manual multi-select + LED mini-grid (e.g. many APs in one card)
     - WAN picker fix: list interfaces from `ifName`/`ifDescr` metrics (IF-MIB only labels counters with `ifIndex`); manual name entry for FortiGate `wan1`
     - Network tab UX: WAN config moved to Edit site (no big box); bandwidth 24h/7d/30d; dark tooltips + rounded Mbps; AP clients from inventory + Prom site scrape
+    - **Network visuals + speedtest (2026-08-05)**
+      - Network tab: WAN chart, ISP speedtest chart, AP client/traffic bar+pie, AP table (no incident list)
+      - Per-AP IF-MIB in/out + Cambium/Omada client SNMP; Healthy pill aligned with Edit site
+      - Site-box `speedtest` service every 15m → textfile metrics via Alloy unix exporter
 
 ## Dokploy notes
 - Publish `noc-app:8080` and optionally `grafana:3000`

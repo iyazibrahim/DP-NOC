@@ -5,8 +5,7 @@ import {
   type PromQueryResult
 } from "./prometheus";
 import { getSiteById, type Site } from "../data/sites";
-import { getHistoryIncidents, getOpenIncidents } from "../data/incidents";
-import { probeSuccessFresh, METRIC_FRESH_WINDOW } from "./promLabels";
+import { dualSnmpUpFresh, probeSuccessFresh, METRIC_FRESH_WINDOW } from "./promLabels";
 
 function escapePromLabel(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -19,6 +18,16 @@ export type SnmpInterfaceInfo = {
 };
 
 export type SiteNetworkSeriesPoint = { ts: number; value: number };
+
+export type SiteNetworkApRow = {
+  deviceId: string;
+  name: string;
+  vendor: string;
+  clients: number | null;
+  inBps: number | null;
+  outBps: number | null;
+  snmpUp: number | null;
+};
 
 export type SiteNetworkSummary = {
   siteId: string;
@@ -39,19 +48,22 @@ export type SiteNetworkSummary = {
     inBps: SiteNetworkSeriesPoint[];
     outBps: SiteNetworkSeriesPoint[];
   };
+  /** @deprecated prefer `aps` */
   clients: {
     total: number | null;
     byDevice: Array<{ deviceId: string; name: string; clients: number | null; vendor: string }>;
   };
-  incidents: Array<{
-    id: string;
-    title: string;
-    detail: string;
-    openedAt: string;
-    resolvedAt?: string;
-    acknowledgedAt?: string;
-  }>;
-  speedtest: { available: false; message: string };
+  aps: SiteNetworkApRow[];
+  speedtest: {
+    available: boolean;
+    downloadBps: number | null;
+    uploadBps: number | null;
+    pingMs: number | null;
+    lastSuccessAt: number | null;
+    downloadSeries: SiteNetworkSeriesPoint[];
+    uploadSeries: SiteNetworkSeriesPoint[];
+    message?: string;
+  };
 };
 
 function parseSeries(data: PromQueryResult): SiteNetworkSeriesPoint[] {
@@ -72,7 +84,6 @@ function escapePromRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Match IF-MIB counter series to a human interface name via ifIndex join. */
 function ifNameJoinMatcher(siteId: string, deviceId: string, ifName: string): string {
   const s = escapePromLabel(siteId);
   const d = escapePromLabel(deviceId);
@@ -82,7 +93,6 @@ function ifNameJoinMatcher(siteId: string, deviceId: string, ifName: string): st
   }
   const n = escapePromLabel(ifName);
   const nRe = escapePromRegex(ifName);
-  // Counters only have ifIndex; DisplayString metrics carry ifName/ifDescr labels.
   return `(
   ifName{site="${s}",device="${d}",ifName="${n}"}
   or ifDescr{site="${s}",device="${d}",ifDescr="${n}"}
@@ -110,6 +120,15 @@ function buildIfTrafficQuery(
   rate(${octets}{site="${s}",device="${d}"}[5m]) * 8
   and on(ifIndex) ${join}
 )`;
+}
+
+function buildDeviceTrafficQuery(
+  direction: "in" | "out",
+  siteId: string,
+  deviceId: string
+): string {
+  const octets = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
+  return `sum(rate(${octets}{site="${escapePromLabel(siteId)}",device="${escapePromLabel(deviceId)}"}[5m]) * 8)`;
 }
 
 function buildIfCapacityQuery(siteId: string, deviceId: string, ifName: string): string {
@@ -172,7 +191,6 @@ export async function listDeviceInterfaces(
   const d = escapePromLabel(deviceId);
   const seen = new Map<string, SnmpInterfaceInfo>();
   try {
-    // Prefer DisplayString metrics — IF-MIB counters only label ifIndex.
     const [byName, byDescr, byOper, byOctets] = await Promise.all([
       promQuery(`ifName{site="${s}",device="${d}"}`).catch(() => null),
       promQuery(`ifDescr{site="${s}",device="${d}"}`).catch(() => null),
@@ -230,6 +248,10 @@ export async function getSiteNetworkSummary(
   let inSeries: SiteNetworkSeriesPoint[] = [];
   let outSeries: SiteNetworkSeriesPoint[] = [];
 
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - Math.max(1, hours) * 3600;
+  const step = hours >= 720 ? "1h" : hours > 48 ? "15m" : hours > 6 ? "5m" : "60s";
+
   if (wanUplink) {
     try {
       const [inBps, outBps, utilIn, utilOut, cap] = await Promise.all([
@@ -255,9 +277,6 @@ export async function getSiteNetworkSummary(
       traffic.utilOutPct = utilOut != null ? Math.round(utilOut * 10) / 10 : null;
       traffic.capacityBps = cap;
 
-      const end = Math.floor(Date.now() / 1000);
-      const start = end - Math.max(1, hours) * 3600;
-      const step = hours >= 720 ? "1h" : hours > 48 ? "15m" : hours > 6 ? "5m" : "60s";
       const [inRange, outRange] = await Promise.all([
         promQueryRange(
           buildIfTrafficQuery("in", siteId, wanUplink.deviceId, wanUplink.ifName),
@@ -279,27 +298,17 @@ export async function getSiteNetworkSummary(
     }
   }
 
-  const byDevice = await collectApClientRows(siteId, site);
-  let total = 0;
+  const aps = await collectApRows(siteId, site);
+  let totalClients = 0;
   let anyClient = false;
-  for (const row of byDevice) {
+  for (const row of aps) {
     if (row.clients != null) {
       anyClient = true;
-      total += row.clients;
+      totalClients += row.clients;
     }
   }
 
-  const incidents = [...getOpenIncidents(), ...getHistoryIncidents()]
-    .filter((i) => i.siteId === siteId)
-    .slice(0, 20)
-    .map((i) => ({
-      id: i.id,
-      title: i.title,
-      detail: i.detail,
-      openedAt: i.openedAt,
-      resolvedAt: i.resolvedAt,
-      acknowledgedAt: i.acknowledgedAt
-    }));
+  const speedtest = await collectSpeedtest(siteId, start, end, step);
 
   return {
     siteId,
@@ -309,14 +318,16 @@ export async function getSiteNetworkSummary(
     traffic,
     trafficSeries: { inBps: inSeries, outBps: outSeries },
     clients: {
-      total: anyClient ? total : null,
-      byDevice
+      total: anyClient ? totalClients : null,
+      byDevice: aps.map((a) => ({
+        deviceId: a.deviceId,
+        name: a.name,
+        clients: a.clients,
+        vendor: a.vendor
+      }))
     },
-    incidents,
-    speedtest: {
-      available: false,
-      message: "ISP speedtest coming later — bandwidth above is live link usage."
-    }
+    aps,
+    speedtest
   };
 }
 
@@ -355,23 +366,20 @@ async function readPromDeviceValues(
   }
 }
 
-async function collectApClientRows(
-  siteId: string,
-  site: Site
-): Promise<SiteNetworkSummary["clients"]["byDevice"]> {
+async function collectApRows(siteId: string, site: Site): Promise<SiteNetworkApRow[]> {
   const s = escapePromLabel(siteId);
   const inventoryAps = site.devices.filter(isApLikeDevice);
-  const byId = new Map<
-    string,
-    { deviceId: string; name: string; clients: number | null; vendor: string }
-  >();
+  const byId = new Map<string, SiteNetworkApRow>();
 
   for (const ap of inventoryAps) {
     byId.set(ap.id, {
       deviceId: ap.id,
       name: ap.name,
+      vendor: ap.vendor || "generic",
       clients: null,
-      vendor: ap.vendor || "generic"
+      inBps: null,
+      outBps: null,
+      snmpUp: null
     });
   }
 
@@ -390,8 +398,11 @@ async function collectApClientRows(
       byId.set(row.deviceId, {
         deviceId: row.deviceId,
         name: inv?.name ?? row.deviceId,
+        vendor: inv?.vendor || "cambium",
         clients: row.value,
-        vendor: inv?.vendor || "cambium"
+        inBps: null,
+        outBps: null,
+        snmpUp: null
       });
     }
   }
@@ -406,8 +417,11 @@ async function collectApClientRows(
       byId.set(row.deviceId, {
         deviceId: row.deviceId,
         name: inv?.name ?? row.deviceId,
+        vendor: inv?.vendor || "omada",
         clients: row.value,
-        vendor: inv?.vendor || "omada"
+        inBps: null,
+        outBps: null,
+        snmpUp: null
       });
     }
   }
@@ -433,5 +447,83 @@ async function collectApClientRows(
     }
   }
 
+  await Promise.all(
+    [...byId.values()].map(async (row) => {
+      try {
+        const [inBps, outBps, snmpUp] = await Promise.all([
+          parseFirstVectorValue(await promQuery(buildDeviceTrafficQuery("in", siteId, row.deviceId))),
+          parseFirstVectorValue(await promQuery(buildDeviceTrafficQuery("out", siteId, row.deviceId))),
+          parseFirstVectorValue(await promQuery(dualSnmpUpFresh(siteId, row.deviceId, METRIC_FRESH_WINDOW)))
+        ]);
+        row.inBps = inBps;
+        row.outBps = outBps;
+        row.snmpUp = snmpUp;
+      } catch {
+        /* leave nulls */
+      }
+    })
+  );
+
   return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function collectSpeedtest(
+  siteId: string,
+  start: number,
+  end: number,
+  step: string
+): Promise<SiteNetworkSummary["speedtest"]> {
+  const s = escapePromLabel(siteId);
+  const empty: SiteNetworkSummary["speedtest"] = {
+    available: false,
+    downloadBps: null,
+    uploadBps: null,
+    pingMs: null,
+    lastSuccessAt: null,
+    downloadSeries: [],
+    uploadSeries: [],
+    message:
+      "No speedtest data yet. Deploy the site-box speedtest service (every 15m) and Force-apply collectors."
+  };
+  try {
+    const [downloadBps, uploadBps, pingMs, lastSuccessAt] = await Promise.all([
+      parseFirstVectorValue(
+        await promQuery(`last_over_time(noc_speedtest_download_bps{site="${s}"}[30m])`)
+      ),
+      parseFirstVectorValue(
+        await promQuery(`last_over_time(noc_speedtest_upload_bps{site="${s}"}[30m])`)
+      ),
+      parseFirstVectorValue(
+        await promQuery(`last_over_time(noc_speedtest_ping_ms{site="${s}"}[30m])`)
+      ),
+      parseFirstVectorValue(
+        await promQuery(`last_over_time(noc_speedtest_last_success_timestamp{site="${s}"}[30m])`)
+      )
+    ]);
+
+    if (downloadBps == null && uploadBps == null && pingMs == null) {
+      return empty;
+    }
+
+    const [downloadSeries, uploadSeries] = await Promise.all([
+      promQueryRange(`noc_speedtest_download_bps{site="${s}"}`, start, end, step)
+        .then(parseSeries)
+        .catch(() => [] as SiteNetworkSeriesPoint[]),
+      promQueryRange(`noc_speedtest_upload_bps{site="${s}"}`, start, end, step)
+        .then(parseSeries)
+        .catch(() => [] as SiteNetworkSeriesPoint[])
+    ]);
+
+    return {
+      available: true,
+      downloadBps,
+      uploadBps,
+      pingMs: pingMs != null ? Math.round(pingMs * 10) / 10 : null,
+      lastSuccessAt: lastSuccessAt != null ? Math.floor(lastSuccessAt) : null,
+      downloadSeries,
+      uploadSeries
+    };
+  } catch {
+    return empty;
+  }
 }

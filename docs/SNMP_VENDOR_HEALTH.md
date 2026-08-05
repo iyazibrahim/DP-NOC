@@ -9,6 +9,8 @@ Each network device always scrapes **`if_mib`**. `generate-config.sh` adds **one
 | `ap` | `cambium` | `cambium_ap_health` | `cambiumAPCPUUtilization`, `cambiumAPTotalClients` |
 | `ap` | `omada` / `tp-link` / `tplink` | `omada_ap_health` | `omadaClientCount` |
 
+**Network tab clients:** Site → Network shows AP client bars/pies from these series. Inventory must use `type=ap` and the matching vendor; Force-apply so Alloy scrapes the vendor module. Omada OID is fragile — empty series means walk the AP and update `omada_ap_health` if needed.
+
 ## Ops: apply on collectors
 
 1. Redeploy / refresh the site-box template so `snmp.yml` includes the new modules.

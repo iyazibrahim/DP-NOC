@@ -1,0 +1,21 @@
+# Ookla speedtest → Prometheus textfile for Alloy unix exporter (every 15m).
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl jq gnupg \
+  && curl -fsSL https://packagecloud.io/ookla/speedtest-cli/gpgkey \
+    | gpg --dearmor -o /usr/share/keyrings/ookla.gpg \
+  && echo "deb [signed-by=/usr/share/keyrings/ookla.gpg] https://packagecloud.io/ookla/speedtest-cli/debian/ bookworm main" \
+    > /etc/apt/sources.list.d/ookla.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends speedtest \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY speedtest-to-prom.sh /usr/local/bin/speedtest-to-prom.sh
+RUN chmod +x /usr/local/bin/speedtest-to-prom.sh
+
+ENV TEXTFILE_DIR=/textfile \
+    INTERVAL_SEC=900 \
+    SITE_NAME=site-1
+
+CMD ["/usr/local/bin/speedtest-to-prom.sh"]

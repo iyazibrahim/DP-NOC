@@ -9,8 +9,20 @@ Responsibilities:
 2. SNMP polling for local devices (from `devices.json`)
 3. **Host metrics** on the collector itself (CPU, memory, disk via `prometheus.exporter.unix`)
 4. Push metrics to central Prometheus via `remote_write` over **HTTPS + Cloudflare Access Service Token**
+5. **ISP speedtest** every 15 minutes (`speedtest` service → textfile → Alloy unix `textfile` collector)
 
 Labels: set `SITE_NAME=site-1` and `HOST_DEVICE_ID=site-1-nuc` so React can auto-adopt the collector. See identity contract in [`docs/ALLOY_COLLECTOR.md`](../../../docs/ALLOY_COLLECTOR.md).
+
+## ISP speedtest (15m)
+
+Compose service `speedtest` runs Ookla CLI, writes Prometheus textfile metrics:
+
+- `noc_speedtest_download_bps{site}`
+- `noc_speedtest_upload_bps{site}`
+- `noc_speedtest_ping_ms{site}`
+- `noc_speedtest_last_success_timestamp{site}`
+
+Alloy mounts volume `noc_speedtest_textfile` at `/var/lib/node_exporter/textfile`. First run accepts Ookla license via `--accept-license --accept-gdpr`. Override interval with `SPEEDTEST_INTERVAL_SEC` (default `900`). After deploy, Site → Network shows speedtest KPIs/chart once the first run completes.
 
 ## Quick deploy (NUC)
 

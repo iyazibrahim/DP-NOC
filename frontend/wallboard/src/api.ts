@@ -128,15 +128,25 @@ export type SiteNetworkSummary = {
     total: number | null;
     byDevice: Array<{ deviceId: string; name: string; clients: number | null; vendor: string }>;
   };
-  incidents: Array<{
-    id: string;
-    title: string;
-    detail: string;
-    openedAt: string;
-    resolvedAt?: string;
-    acknowledgedAt?: string;
+  aps: Array<{
+    deviceId: string;
+    name: string;
+    vendor: string;
+    clients: number | null;
+    inBps: number | null;
+    outBps: number | null;
+    snmpUp: number | null;
   }>;
-  speedtest: { available: false; message: string };
+  speedtest: {
+    available: boolean;
+    downloadBps: number | null;
+    uploadBps: number | null;
+    pingMs: number | null;
+    lastSuccessAt: number | null;
+    downloadSeries: Array<{ ts: number; value: number }>;
+    uploadSeries: Array<{ ts: number; value: number }>;
+    message?: string;
+  };
 };
 
 export async function getSiteNetwork(token: string, siteId: string, hours = 24) {

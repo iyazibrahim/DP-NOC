@@ -663,11 +663,7 @@ export function SiteDetailPage() {
       </div>
 
       {siteTab === "network" && token ? (
-        <SiteNetworkPanel
-          token={token}
-          site={site}
-          onEditSite={() => setEditSiteOpen(true)}
-        />
+        <SiteNetworkPanel token={token} site={site} />
       ) : (
       <div className="siteBento">
         <section className="bentoTile bentoHealth">

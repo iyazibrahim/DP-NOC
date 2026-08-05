@@ -78,6 +78,7 @@ services:
       - ./blackbox.yml:/etc/alloy/blackbox.yml:ro
       - ./snmp.yml:/etc/alloy/snmp.yml:ro
       - /:/rootfs:ro
+      - noc_speedtest_textfile:/var/lib/node_exporter/textfile
     working_dir: /etc/alloy
     command:
       - run
@@ -87,5 +88,21 @@ services:
     depends_on:
       - collector-console
 
+  # ISP speedtest every 15m → textfile metrics scraped by Alloy unix exporter
+  speedtest:
+    build:
+      context: .
+      dockerfile: Dockerfile.speedtest
+    container_name: noc_site_speedtest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      SITE_NAME: ${SITE_NAME:-site-1}
+      TEXTFILE_DIR: /textfile
+      INTERVAL_SEC: ${SPEEDTEST_INTERVAL_SEC:-900}
+    volumes:
+      - noc_speedtest_textfile:/textfile
+
 volumes:
   noc_sitebox_state:
+  noc_speedtest_textfile:

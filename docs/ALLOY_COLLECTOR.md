@@ -2,11 +2,13 @@
 
 ```text
 Collector box (NUC / Pi / mini-PC / server)
-  → Alloy (uplink pings + host metrics + SNMP)
+  → Alloy (uplink pings + host metrics + SNMP + speedtest textfile)
   → Prometheus (central)
        ├─→ React dashboard
        └─→ Grafana
 ```
+
+**ISP speedtest:** Compose service `speedtest` runs Ookla CLI every **15m**, writes `noc_speedtest_*` gauges to a shared textfile volume; Alloy `prometheus.exporter.unix` `textfile` collector scrapes them. Site → Network shows KPIs/chart. See [`sites/templates/site-box/README.md`](../sites/templates/site-box/README.md).
 
 ## Identity contract (required)
 
