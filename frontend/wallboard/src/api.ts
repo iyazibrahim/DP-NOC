@@ -131,6 +131,8 @@ export type SiteNetworkSummary = {
   aps: Array<{
     deviceId: string;
     name: string;
+    nickname: string | null;
+    label: string;
     vendor: string;
     clients: number | null;
     inBps: number | null;
@@ -183,6 +185,7 @@ export async function addSiteDevice(
   device: {
     id: string;
     name: string;
+    nickname?: string;
     type: string;
     kind: SiteDevice["kind"];
     snmpIp?: string;

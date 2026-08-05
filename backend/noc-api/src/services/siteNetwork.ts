@@ -22,6 +22,9 @@ export type SiteNetworkSeriesPoint = { ts: number; value: number };
 export type SiteNetworkApRow = {
   deviceId: string;
   name: string;
+  nickname: string | null;
+  /** nickname if set, else inventory name — use for charts/table */
+  label: string;
   vendor: string;
   clients: number | null;
   inBps: number | null;
@@ -321,7 +324,7 @@ export async function getSiteNetworkSummary(
       total: anyClient ? totalClients : null,
       byDevice: aps.map((a) => ({
         deviceId: a.deviceId,
-        name: a.name,
+        name: a.label,
         clients: a.clients,
         vendor: a.vendor
       }))
@@ -366,15 +369,28 @@ async function readPromDeviceValues(
   }
 }
 
+function deviceLabel(d: { name: string; nickname?: string } | undefined, fallback: string): {
+  name: string;
+  nickname: string | null;
+  label: string;
+} {
+  const name = d?.name?.trim() || fallback;
+  const nickname = d?.nickname?.trim() ? d.nickname.trim() : null;
+  return { name, nickname, label: nickname || name };
+}
+
 async function collectApRows(siteId: string, site: Site): Promise<SiteNetworkApRow[]> {
   const s = escapePromLabel(siteId);
   const inventoryAps = site.devices.filter(isApLikeDevice);
   const byId = new Map<string, SiteNetworkApRow>();
 
   for (const ap of inventoryAps) {
+    const labels = deviceLabel(ap, ap.id);
     byId.set(ap.id, {
       deviceId: ap.id,
-      name: ap.name,
+      name: labels.name,
+      nickname: labels.nickname,
+      label: labels.label,
       vendor: ap.vendor || "generic",
       clients: null,
       inBps: null,
@@ -395,9 +411,12 @@ async function collectApRows(siteId: string, site: Site): Promise<SiteNetworkApR
       if (normalizeVendorKey(existing.vendor) === "generic") existing.vendor = "cambium";
     } else {
       const inv = site.devices.find((d) => d.id === row.deviceId);
+      const labels = deviceLabel(inv, row.deviceId);
       byId.set(row.deviceId, {
         deviceId: row.deviceId,
-        name: inv?.name ?? row.deviceId,
+        name: labels.name,
+        nickname: labels.nickname,
+        label: labels.label,
         vendor: inv?.vendor || "cambium",
         clients: row.value,
         inBps: null,
@@ -414,9 +433,12 @@ async function collectApRows(siteId: string, site: Site): Promise<SiteNetworkApR
       if (normalizeVendorKey(existing.vendor) === "generic") existing.vendor = "omada";
     } else {
       const inv = site.devices.find((d) => d.id === row.deviceId);
+      const labels = deviceLabel(inv, row.deviceId);
       byId.set(row.deviceId, {
         deviceId: row.deviceId,
-        name: inv?.name ?? row.deviceId,
+        name: labels.name,
+        nickname: labels.nickname,
+        label: labels.label,
         vendor: inv?.vendor || "omada",
         clients: row.value,
         inBps: null,

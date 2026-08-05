@@ -57,6 +57,8 @@ function parseDeviceBody(body: unknown): SiteDevice | { error: string } {
   const snmpIp = typeof b.snmpIp === "string" ? b.snmpIp.trim() : "";
   const hostMetricId = typeof b.hostMetricId === "string" ? b.hostMetricId.trim() : "";
   const vendor = typeof b.vendor === "string" ? b.vendor.trim() : "generic";
+  const nickname =
+    typeof b.nickname === "string" && b.nickname.trim() ? b.nickname.trim() : undefined;
   const snmpCommunity =
     typeof b.snmpCommunity === "string" && b.snmpCommunity.trim()
       ? b.snmpCommunity.trim()
@@ -68,6 +70,7 @@ function parseDeviceBody(body: unknown): SiteDevice | { error: string } {
     return {
       id,
       name,
+      nickname,
       type: type || "server",
       kind,
       hostMetricId: id,
@@ -77,6 +80,7 @@ function parseDeviceBody(body: unknown): SiteDevice | { error: string } {
   return {
     id,
     name,
+    nickname,
     type: type || (kind === "server" ? "server" : "switch"),
     kind,
     snmpIp: kind === "network" ? snmpIp : undefined,
@@ -361,6 +365,12 @@ sitesRouter.patch("/:id/devices/:deviceId", requireJwt(["operator"]), async (req
   const body = (req.body ?? {}) as Record<string, unknown>;
   const patch: Partial<Omit<SiteDevice, "id">> = {};
   if (typeof body.name === "string") patch.name = body.name.trim();
+  if ("nickname" in body) {
+    patch.nickname =
+      typeof body.nickname === "string" && body.nickname.trim()
+        ? body.nickname.trim()
+        : undefined;
+  }
   if (typeof body.type === "string") patch.type = body.type.trim();
   if (body.kind === "server" || body.kind === "network") patch.kind = body.kind;
   if (typeof body.snmpIp === "string") patch.snmpIp = body.snmpIp.trim();

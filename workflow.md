@@ -175,6 +175,9 @@ Collector box → Alloy → Prometheus (central)
       - Root cause: Cambium module used PhysAddress48 indexes; E-series expose scalar `.0` → no `cambiumAPTotalClients`
       - Also: Collector Console type `access-point` did not match `generate-config` `ap` gate (now aliased)
       - Fix: scalar OIDs in `snmp.yml`, type aliases, Console option `ap`; replace collector snmp.yml + Force-apply
+    - **Network 1h range + AP nickname (2026-08-05)**
+      - WAN/speedtest range toggles: 1h / 24h / 7d / 30d
+      - Optional device `nickname` — Network charts/AP table prefer nickname over display name
 
 ## Dokploy notes
 - Publish `noc-app:8080` and optionally `grafana:3000`

@@ -170,6 +170,7 @@ export function SitesPage() {
 const emptyForm = {
   id: "",
   name: "",
+  nickname: "",
   type: "switch",
   kind: "network" as DeviceKind,
   snmpIp: "",
@@ -282,7 +283,7 @@ export function SiteDetailPage() {
     const list = site?.devices ?? [];
     if (!deviceQ) return list;
     return list.filter((d) => {
-      const hay = [d.name, d.id, d.hostMetricId, d.snmpIp, d.type, d.kind, d.vendor]
+      const hay = [d.name, d.nickname, d.id, d.hostMetricId, d.snmpIp, d.type, d.kind, d.vendor]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -304,6 +305,7 @@ export function SiteDetailPage() {
     setForm({
       id: d.id,
       name: d.name,
+      nickname: d.nickname ?? "",
       type: d.type,
       kind: d.kind ?? "network",
       snmpIp: d.snmpIp ?? "",
@@ -364,6 +366,7 @@ export function SiteDetailPage() {
       const payload = {
         id: form.id || `${site.id}-nuc`,
         name: form.name,
+        nickname: form.nickname.trim() || "",
         type: form.type,
         kind: form.kind,
         vendor: form.vendor,
@@ -397,6 +400,7 @@ export function SiteDetailPage() {
       setForm({
         id: d.deviceId,
         name: d.suggestedName,
+        nickname: "",
         type: d.suggestedType,
         kind: "network",
         snmpIp: "",
@@ -804,8 +808,8 @@ export function SiteDetailPage() {
                   return (
                     <tr key={d.id}>
                       <td>
-                        {d.name}
-                        <div className="muted">{d.id}</div>
+                        {d.nickname?.trim() ? d.nickname.trim() : d.name}
+                        <div className="muted">{d.nickname?.trim() ? d.name : d.id}</div>
                         {collectorRow?.live ? (
                           <span className="liveBadge" title="Receiving host metrics">
                             Live
@@ -1102,9 +1106,18 @@ export function SiteDetailPage() {
           <input
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="Core switch"
+            placeholder="CN-E410-5F861A"
             required
           />
+          <label className="label">Nickname (optional)</label>
+          <input
+            value={form.nickname}
+            onChange={(e) => setForm((f) => ({ ...f, nickname: e.target.value }))}
+            placeholder="Lobby AP / Floor 2"
+          />
+          <p className="hint" style={{ marginTop: 4 }}>
+            Shown on Network charts and the AP table. Leave blank to use display name.
+          </p>
           {form.kind === "network" ? (
             <>
               <label className="label">SNMP IP</label>

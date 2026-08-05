@@ -8,6 +8,8 @@ export type DeviceKind = "server" | "network";
 export type SiteDevice = {
   id: string;
   name: string;
+  /** Optional friendly label (Network charts / AP table prefer this over name) */
+  nickname?: string;
   type: string;
   kind: DeviceKind;
   snmpIp?: string;
@@ -97,9 +99,12 @@ function normalizeDevice(d: SiteDevice): SiteDevice {
     kind === "network" && typeof d.snmpCommunity === "string" && d.snmpCommunity.trim()
       ? d.snmpCommunity.trim()
       : undefined;
+  const nickname =
+    typeof d.nickname === "string" && d.nickname.trim() ? d.nickname.trim() : undefined;
   return {
     ...d,
     kind,
+    nickname,
     vendor: d.vendor || "generic",
     snmpIp: kind === "network" ? d.snmpIp : d.snmpIp || undefined,
     snmpCommunity: community,

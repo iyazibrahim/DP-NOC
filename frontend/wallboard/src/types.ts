@@ -50,6 +50,8 @@ export type DeviceTypeDef = {
 export type SiteDevice = {
   id: string;
   name: string;
+  /** Optional friendly label for Network charts / AP table */
+  nickname?: string;
   type: string;
   kind: DeviceKind;
   snmpIp?: string;

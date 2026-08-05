@@ -18,14 +18,19 @@ import { getSiteNetwork, STATUS_POLL_MS, type SiteNetworkSummary } from "../api"
 import type { Site } from "../types";
 import { StatusPill } from "./StatusPill";
 
-type ChartRange = "24h" | "7d" | "30d";
+type ChartRange = "1h" | "24h" | "7d" | "30d";
 
 const PIE_COLORS = ["#00b5e2", "#f5c400", "#34d399", "#a78bfa", "#f87171", "#60a5fa", "#fb923c", "#2dd4bf"];
 
 function hoursForRange(range: ChartRange): number {
+  if (range === "1h") return 1;
   if (range === "30d") return 720;
   if (range === "7d") return 168;
   return 24;
+}
+
+function apLabel(a: { label?: string; nickname?: string | null; name: string }): string {
+  return (a.label || a.nickname || a.name).trim() || a.name;
 }
 
 function formatBitrate(value: number | null): string {
@@ -105,6 +110,8 @@ export function SiteNetworkPanel({ token, site }: Props) {
     : (network?.clients.byDevice ?? []).map((d) => ({
         deviceId: d.deviceId,
         name: d.name,
+        nickname: null as string | null,
+        label: d.name,
         vendor: d.vendor,
         clients: d.clients,
         inBps: null as number | null,
@@ -117,7 +124,7 @@ export function SiteNetworkPanel({ token, site }: Props) {
     const outMap = new Map((network?.trafficSeries.outBps ?? []).map((p) => [p.ts, p.value]));
     const tsSet = new Set([...inMap.keys(), ...outMap.keys()]);
     const fmt =
-      range === "24h"
+      range === "1h" || range === "24h"
         ? { hour: "2-digit" as const, minute: "2-digit" as const }
         : { month: "short" as const, day: "numeric" as const, hour: "2-digit" as const };
     return [...tsSet]
@@ -134,7 +141,7 @@ export function SiteNetworkPanel({ token, site }: Props) {
     const up = new Map((network?.speedtest.uploadSeries ?? []).map((p) => [p.ts, p.value]));
     const tsSet = new Set([...down.keys(), ...up.keys()]);
     const fmt =
-      range === "24h"
+      range === "1h" || range === "24h"
         ? { hour: "2-digit" as const, minute: "2-digit" as const }
         : { month: "short" as const, day: "numeric" as const };
     return [...tsSet]
@@ -150,7 +157,7 @@ export function SiteNetworkPanel({ token, site }: Props) {
     () =>
       aps
         .filter((a) => a.clients != null)
-        .map((a) => ({ name: a.name, clients: a.clients ?? 0 }))
+        .map((a) => ({ name: apLabel(a), clients: a.clients ?? 0 }))
         .sort((a, b) => b.clients - a.clients),
     [aps]
   );
@@ -164,7 +171,7 @@ export function SiteNetworkPanel({ token, site }: Props) {
     () =>
       aps
         .map((a) => ({
-          name: a.name,
+          name: apLabel(a),
           totalMbps: ((a.inBps ?? 0) + (a.outBps ?? 0)) / 1_000_000,
           inMbps: (a.inBps ?? 0) / 1_000_000,
           outMbps: (a.outBps ?? 0) / 1_000_000
@@ -258,7 +265,7 @@ export function SiteNetworkPanel({ token, site }: Props) {
         <div className="bentoTileHeader">
           <div className="tableTitle">WAN bandwidth ({range})</div>
           <div className="formActions">
-            {(["24h", "7d", "30d"] as ChartRange[]).map((r) => (
+            {(["1h", "24h", "7d", "30d"] as ChartRange[]).map((r) => (
               <button
                 key={r}
                 type="button"
@@ -511,7 +518,10 @@ export function SiteNetworkPanel({ token, site }: Props) {
             ) : (
               aps.map((d) => (
                 <tr key={d.deviceId}>
-                  <td>{d.name}</td>
+                  <td>
+                    {apLabel(d)}
+                    {d.nickname ? <div className="muted">{d.name}</div> : null}
+                  </td>
                   <td>{d.vendor}</td>
                   <td>{d.clients != null ? d.clients : "—"}</td>
                   <td>{formatBitrate(d.inBps)}</td>
