@@ -356,8 +356,18 @@ export function SiteNetworkPanel({ token, site }: Props) {
           <div className="websiteChartInner">
             {clientBarData.length === 0 ? (
               <p className="muted">
-                No AP client metrics. Add devices type <code>ap</code>, vendor{" "}
-                <code>cambium</code> or <code>omada</code>, then Force-apply the collector.
+                {aps.length > 0 ? (
+                  <>
+                    APs are online (IF-MIB) but client SNMP is empty. Confirm type{" "}
+                    <code>ap</code> + vendor <code>cambium</code>/<code>omada</code>, replace
+                    collector <code>snmp.yml</code> from the template, then Force-apply.
+                  </>
+                ) : (
+                  <>
+                    No AP client metrics. Add devices type <code>ap</code>, vendor{" "}
+                    <code>cambium</code> or <code>omada</code>, then Force-apply the collector.
+                  </>
+                )}
               </p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">

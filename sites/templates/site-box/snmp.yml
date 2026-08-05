@@ -180,26 +180,22 @@ modules:
           - labelname: hrStorageIndex
             type: gauge
 
-  # Cambium cnPilot AP health
+  # Cambium cnPilot E-series (standalone AP).
+  # MIB indexes by MAC, but E410/E-series expose a single instance as .0
+  # (snmpget …1.14.0). PhysAddress48 indexing yields empty series on these APs.
   cambium_ap_health:
     walk:
-      - 1.3.6.1.4.1.17713.22.1.1.1.6   # cambiumAPCPUUtilization
-      - 1.3.6.1.4.1.17713.22.1.1.1.14  # cambiumAPTotalClients
+      - 1.3.6.1.4.1.17713.22.1.1.1.6.0   # cambiumAPCPUUtilization.0
+      - 1.3.6.1.4.1.17713.22.1.1.1.14.0  # cambiumAPTotalClients.0
     metrics:
       - name: cambiumAPCPUUtilization
-        oid: 1.3.6.1.4.1.17713.22.1.1.1.6
+        oid: 1.3.6.1.4.1.17713.22.1.1.1.6.0
         type: gauge
-        help: Cambium AP CPU utilization percent
-        indexes:
-          - labelname: cambiumAPMACAddress
-            type: PhysAddress48
+        help: Cambium AP CPU utilization percent (E-series scalar .0)
       - name: cambiumAPTotalClients
-        oid: 1.3.6.1.4.1.17713.22.1.1.1.14
+        oid: 1.3.6.1.4.1.17713.22.1.1.1.14.0
         type: gauge
-        help: Cambium AP total associated clients
-        indexes:
-          - labelname: cambiumAPMACAddress
-            type: PhysAddress48
+        help: Cambium AP total associated clients (E-series scalar .0)
 
   # Omada / TP-Link EAP — client count OID is model/firmware dependent.
   # Empty series = unsupported; charts show unknown (no crash).

@@ -30,8 +30,12 @@ Each network device always scrapes **`if_mib`**. `generate-config.sh` adds **one
 
 ### Cambium cnPilot
 
-- CPU: `1.3.6.1.4.1.17713.22.1.1.1.6`
-- Clients: `1.3.6.1.4.1.17713.22.1.1.1.14`
+- CPU: `1.3.6.1.4.1.17713.22.1.1.1.6.0`
+- Clients: `1.3.6.1.4.1.17713.22.1.1.1.14.0`
+
+E-series (E410 etc.) expose these as **scalar `.0`**, not MAC-indexed rows. Older templates used `PhysAddress48` indexes and produced **empty** `cambiumAPTotalClients` while IF-MIB traffic still worked.
+
+Collector Console historically stored type as `access-point`; Alloy only attached `cambium_ap_health` for type `ap`. Both are accepted now. Existing devices with type `access-point` get the module after Force-apply; prefer renaming type to `ap` in Sites.
 
 ### Omada / TP-Link EAP
 

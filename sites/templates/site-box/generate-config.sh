@@ -282,6 +282,10 @@ print()
 def norm(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
 
+def is_ap_type(t):
+    # Wallboard uses type id "ap"; Collector Console historically used "access-point".
+    return t in ("ap", "accesspoint", "wifi", "wireless")
+
 def vendor_module(dtype, vendor):
     """Extra SNMP module from device type + vendor (if_mib is always scraped)."""
     t = norm(dtype)
@@ -291,9 +295,9 @@ def vendor_module(dtype, vendor):
     if t == "switch" and v == "maipu":
         return "maipu_health"
     # Portable HOST-RESOURCES for any switch when vendor unset — keep Maipu-only per plan
-    if t == "ap" and v == "cambium":
+    if is_ap_type(t) and v == "cambium":
         return "cambium_ap_health"
-    if t == "ap" and v in ("omada", "tplink"):
+    if is_ap_type(t) and v in ("omada", "tplink"):
         return "omada_ap_health"
     return None
 
