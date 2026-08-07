@@ -577,8 +577,9 @@ textarea {
   background: rgba(239, 68, 68, 0.12);
 }
 .pillUnknown {
-  color: var(--muted);
-  background: rgba(148, 163, 184, 0.1);
+  color: #c8d4de;
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.45);
 }
 
 .tableCard {

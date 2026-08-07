@@ -189,6 +189,7 @@ Collector box → Alloy → Prometheus (central)
     - Modal → Dialog; ToastStack → sonner; View actions use `Button asChild` + Link
     - Website charts: dark tooltips + 1-decimal % / integer ms formatters
     - Backend event-level website outages: fine-grained probe series (`15s` / `1m` / `5m`), down if `value < 1`, separate from smoothed chart series
+    - Outage table pagination (10/25/50/All); StatusBadge contrast fix for UNKNOWN/Ended on dark UI
 
 ## Dokploy notes
 - Publish `noc-app:8080` and optionally `grafana:3000`

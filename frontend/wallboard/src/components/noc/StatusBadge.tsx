@@ -2,11 +2,16 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { DomainState } from "@/types";
 
+/** High-contrast status chips for dark ops UI (readable on near-black cards). */
 const stateStyles: Record<string, string> = {
-  healthy: "border-transparent bg-[color-mix(in_srgb,var(--success)_22%,transparent)] text-[var(--success)]",
-  warning: "border-transparent bg-[color-mix(in_srgb,var(--warning)_22%,transparent)] text-[var(--warning)]",
-  critical: "border-transparent bg-destructive/20 text-destructive",
-  unknown: "border-transparent bg-muted text-muted-foreground"
+  healthy:
+    "border-[color-mix(in_srgb,var(--success)_45%,transparent)] bg-[color-mix(in_srgb,var(--success)_18%,#07090c)] text-[var(--success)]",
+  warning:
+    "border-[color-mix(in_srgb,var(--warning)_50%,transparent)] bg-[color-mix(in_srgb,var(--warning)_16%,#07090c)] text-[var(--warning)]",
+  critical:
+    "border-[color-mix(in_srgb,var(--destructive)_50%,transparent)] bg-[color-mix(in_srgb,var(--destructive)_18%,#07090c)] text-[var(--destructive)]",
+  unknown:
+    "border-[rgba(148,163,184,0.45)] bg-[rgba(148,163,184,0.12)] text-[#c8d4de]"
 };
 
 export function StatusBadge({
@@ -26,7 +31,11 @@ export function StatusBadge({
     <Badge
       variant="outline"
       title={notes}
-      className={cn(stateStyles[s] ?? stateStyles.unknown, "font-semibold uppercase tracking-wide", className)}
+      className={cn(
+        "h-6 rounded-full px-2.5 font-mono text-[11px] font-bold uppercase tracking-wide",
+        stateStyles[s] ?? stateStyles.unknown,
+        className
+      )}
     >
       {text}
     </Badge>
