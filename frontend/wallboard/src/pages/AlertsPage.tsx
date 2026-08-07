@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "@/auth/AuthContext";
 import {
   acknowledgeIncident,
   getIncidents,
   getRecentAlerts,
   STATUS_POLL_MS,
   type NocIncident
-} from "../api";
-import type { ActiveAlert } from "../types";
-import { StatusPill } from "../components/StatusPill";
+} from "@/api";
+import type { ActiveAlert } from "@/types";
+import { StatusPill } from "@/components/StatusPill";
+import { PageHeader } from "@/components/noc/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 function incidentStatusLabel(i: NocIncident) {
   if (i.acknowledgedAt) return "Acked";
@@ -79,16 +82,16 @@ export function AlertsPage() {
 
   return (
     <div className="page">
-      <div className="pageHeader">
-        <div>
-          <h1>Alerts</h1>
-          <p className="pageSub">
-            Incidents stay until you acknowledge them — even after the site recovers
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Alerts"
+        subtitle="Incidents stay until you acknowledge them — even after the site recovers"
+      />
 
-      {error ? <div className="bannerError">{error}</div> : null}
+      {error ? (
+        <Alert variant="destructive" className="mb-3">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="healthStrip" style={{ marginBottom: 14 }}>
         <div className="healthChip">
@@ -149,14 +152,13 @@ export function AlertsPage() {
                   <td>{r.detail}</td>
                   <td>{formatWhen(r.openedAt)}</td>
                   <td>
-                    <button
+                    <Button
                       type="button"
-                      className="primary"
                       disabled={busyId === r.id}
                       onClick={() => onAck(r.id)}
                     >
                       Acknowledge
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))

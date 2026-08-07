@@ -14,9 +14,12 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { getSiteNetwork, STATUS_POLL_MS, type SiteNetworkSummary } from "../api";
-import type { Site } from "../types";
-import { StatusPill } from "./StatusPill";
+import { getSiteNetwork, STATUS_POLL_MS, type SiteNetworkSummary } from "@/api";
+import type { Site } from "@/types";
+import { StatusPill } from "@/components/StatusPill";
+import { MetricChartFrame, darkTooltipProps } from "@/components/noc/MetricChart";
+import { RangeToggle } from "@/components/noc/RangeToggle";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type ChartRange = "1h" | "24h" | "7d" | "30d";
 
@@ -60,19 +63,6 @@ function uplinkLabel(v: number | null): { state: string; label: string } {
   if (v == null) return { state: "unknown", label: "Unknown" };
   if (v >= 1) return { state: "healthy", label: "UP" };
   return { state: "critical", label: "DOWN" };
-}
-
-function darkTooltipProps() {
-  return {
-    contentStyle: {
-      background: "var(--panel-2)",
-      border: "1px solid var(--border)",
-      borderRadius: 8,
-      color: "var(--text)"
-    },
-    labelStyle: { color: "var(--muted)" },
-    itemStyle: { color: "var(--text)" }
-  };
 }
 
 type Props = {
@@ -195,7 +185,11 @@ export function SiteNetworkPanel({ token, site }: Props) {
 
   return (
     <div className="siteNetworkPanel">
-      {error ? <div className="bannerError">{error}</div> : null}
+      {error ? (
+        <Alert variant="destructive" className="mb-3">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="websiteKpiStrip">
         <div className="healthChip">
@@ -261,22 +255,17 @@ export function SiteNetworkPanel({ token, site }: Props) {
         )}
       </p>
 
-      <div className="tableCard websiteChartCard" style={{ marginBottom: 14 }}>
-        <div className="bentoTileHeader">
-          <div className="tableTitle">WAN bandwidth ({range})</div>
-          <div className="formActions">
-            {(["1h", "24h", "7d", "30d"] as ChartRange[]).map((r) => (
-              <button
-                key={r}
-                type="button"
-                className={range === r ? "primary" : undefined}
-                onClick={() => setRange(r)}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-        </div>
+      <MetricChartFrame
+        title={`WAN bandwidth (${range})`}
+        className="websiteChartCard mb-3.5"
+        actions={
+          <RangeToggle
+            value={range}
+            onChange={(v) => setRange(v as ChartRange)}
+            options={["1h", "24h", "7d", "30d"]}
+          />
+        }
+      >
         <div className="websiteChartInner">
           {!network?.wanUplink || wanChartData.length < 2 ? (
             <p className="muted">No WAN traffic history yet.</p>
@@ -314,10 +303,9 @@ export function SiteNetworkPanel({ token, site }: Props) {
             </ResponsiveContainer>
           )}
         </div>
-      </div>
+      </MetricChartFrame>
 
-      <div className="tableCard websiteChartCard" style={{ marginBottom: 14 }}>
-        <div className="tableTitle">ISP speedtest (15m cadence)</div>
+      <MetricChartFrame title="ISP speedtest (15m cadence)" className="websiteChartCard mb-3.5">
         <div className="websiteChartInner">
           {!st?.available || speedChartData.length < 2 ? (
             <p className="muted">{st?.message ?? "Waiting for first collector speedtest…"}</p>
@@ -355,11 +343,10 @@ export function SiteNetworkPanel({ token, site }: Props) {
             </ResponsiveContainer>
           )}
         </div>
-      </div>
+      </MetricChartFrame>
 
       <div className="siteNetworkVisualGrid">
-        <div className="tableCard websiteChartCard">
-          <div className="tableTitle">AP clients (bar)</div>
+        <MetricChartFrame title="AP clients (bar)" className="websiteChartCard">
           <div className="websiteChartInner">
             {clientBarData.length === 0 ? (
               <p className="muted">
@@ -393,10 +380,9 @@ export function SiteNetworkPanel({ token, site }: Props) {
               </ResponsiveContainer>
             )}
           </div>
-        </div>
+        </MetricChartFrame>
 
-        <div className="tableCard websiteChartCard">
-          <div className="tableTitle">AP clients (share)</div>
+        <MetricChartFrame title="AP clients (share)" className="websiteChartCard">
           <div className="websiteChartInner">
             {clientPieData.length === 0 ? (
               <p className="muted">No client share data yet.</p>
@@ -423,10 +409,9 @@ export function SiteNetworkPanel({ token, site }: Props) {
               </ResponsiveContainer>
             )}
           </div>
-        </div>
+        </MetricChartFrame>
 
-        <div className="tableCard websiteChartCard">
-          <div className="tableTitle">AP traffic (bar)</div>
+        <MetricChartFrame title="AP traffic (bar)" className="websiteChartCard">
           <div className="websiteChartInner">
             {trafficBarData.length === 0 ? (
               <p className="muted">No AP IF-MIB traffic yet (device must be SNMP-scraped).</p>
@@ -455,10 +440,9 @@ export function SiteNetworkPanel({ token, site }: Props) {
               </ResponsiveContainer>
             )}
           </div>
-        </div>
+        </MetricChartFrame>
 
-        <div className="tableCard websiteChartCard">
-          <div className="tableTitle">AP traffic (share)</div>
+        <MetricChartFrame title="AP traffic (share)" className="websiteChartCard">
           <div className="websiteChartInner">
             {trafficPieData.length === 0 ? (
               <p className="muted">No traffic share data yet.</p>
@@ -491,7 +475,7 @@ export function SiteNetworkPanel({ token, site }: Props) {
               </ResponsiveContainer>
             )}
           </div>
-        </div>
+        </MetricChartFrame>
       </div>
 
       <div className="tableCard" style={{ marginTop: 14 }}>

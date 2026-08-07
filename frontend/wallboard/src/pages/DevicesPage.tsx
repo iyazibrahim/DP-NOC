@@ -1,21 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "@/auth/AuthContext";
 import {
   getAllSiteStatuses,
   getDevices,
   getDiscoveredDevicesAll,
   STATUS_POLL_MS
-} from "../api";
-import type { DeviceRow, DiscoveredDevice, DiscoveryDiagnostics, DomainState, SiteStatus } from "../types";
-import { StatusPill } from "../components/StatusPill";
+} from "@/api";
+import type { DeviceRow, DiscoveredDevice, DiscoveryDiagnostics, DomainState, SiteStatus } from "@/types";
+import { StatusPill } from "@/components/StatusPill";
 import {
   KindFilter,
   SiteOption,
   TablePagination,
   TableToolbar,
   paginateItems
-} from "../components/TableControls";
+} from "@/components/TableControls";
+import { PageHeader } from "@/components/noc/PageHeader";
 
 function kindLabel(kind: string | undefined) {
   if (kind === "server") return "Collector / server";
@@ -138,12 +139,7 @@ export function DevicesPage() {
 
   return (
     <div className="page">
-      <div className="pageHeader">
-        <div>
-          <h1>Devices</h1>
-          <p className="pageSub">Collectors and local gear across all sites</p>
-        </div>
-      </div>
+      <PageHeader title="Devices" subtitle="Collectors and local gear across all sites" />
 
       <div className="healthStrip">
         <button

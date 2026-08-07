@@ -1,6 +1,13 @@
-import { useEffect, useId, useRef, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import type { ReactNode } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
+/** Dialog-backed modal keeping the existing open/title/onClose API. */
 export function Modal({
   open,
   title,
@@ -14,78 +21,21 @@ export function Modal({
   children: ReactNode;
   wide?: boolean;
 }) {
-  const titleId = useId();
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-  const didFocusRef = useRef(false);
-
-  useEffect(() => {
-    if (!open) {
-      didFocusRef.current = false;
-      return;
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRef.current();
-    };
-    document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    // Focus first field once — never re-run on parent re-renders (that stole focus to ×).
-    if (!didFocusRef.current) {
-      didFocusRef.current = true;
-      const t = window.setTimeout(() => {
-        const el = panelRef.current?.querySelector<HTMLElement>(
-          "input, select, textarea, button:not(.modalClose), [href], [tabindex]:not([tabindex='-1'])"
-        );
-        el?.focus();
-      }, 0);
-      return () => {
-        document.removeEventListener("keydown", onKey);
-        document.body.style.overflow = prev;
-        window.clearTimeout(t);
-      };
-    }
-
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-
-  if (!open) return null;
-
-  return createPortal(
-    <div
-      className="modalOverlay"
-      role="presentation"
-      onClick={() => onCloseRef.current()}
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
     >
-      <div
-        ref={panelRef}
-        className={`modalPanel${wide ? " modalPanel--wide" : ""}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onClick={(e) => e.stopPropagation()}
+      <DialogContent
+        className={cn("max-h-[90vh] overflow-y-auto", wide ? "sm:max-w-2xl" : "sm:max-w-lg")}
       >
-        <div className="modalHeader">
-          <h2 id={titleId} className="modalTitle">
-            {title}
-          </h2>
-          <button
-            type="button"
-            className="iconBtn modalClose"
-            onClick={() => onCloseRef.current()}
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
-        <div className="modalBody">{children}</div>
-      </div>
-    </div>,
-    document.body
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">{children}</div>
+      </DialogContent>
+    </Dialog>
   );
 }

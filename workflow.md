@@ -178,6 +178,17 @@ Collector box → Alloy → Prometheus (central)
     - **Network 1h range + AP nickname (2026-08-05)**
       - WAN/speedtest range toggles: 1h / 24h / 7d / 30d
       - Optional device `nickname` — Network charts/AP table prefer nickname over display name
+    - **shadcn/NOC kit chrome migration (2026-08-07)**
+      - Remaining pages use `PageHeader` / `Button` / `Alert`: Sites, Devices, Alerts, Maps, Settings, Dashboard
+      - SiteNetworkPanel: shared `darkTooltipProps` + `MetricChartFrame` / `RangeToggle`
+      - DeviceMetricWidgets tooltips aligned to kit dark tooltip tokens
+      - `tsc --noEmit` clean
+  - **Full wallboard UI framework revamp (2026-08-07)**
+    - Tailwind v4 + shadcn/ui (radix-nova) themed Digital Penang (cyan `#00b5e2` / yellow `#f5c400` on near-black)
+    - Domain kit under `frontend/wallboard/src/components/noc/`: PageHeader, StatusBadge, MetricChart, OutageTimeline (green+red), RangeToggle, DataTable, KpiStrip, AppSidebar
+    - Modal → Dialog; ToastStack → sonner; View actions use `Button asChild` + Link
+    - Website charts: dark tooltips + 1-decimal % / integer ms formatters
+    - Backend event-level website outages: fine-grained probe series (`15s` / `1m` / `5m`), down if `value < 1`, separate from smoothed chart series
 
 ## Dokploy notes
 - Publish `noc-app:8080` and optionally `grafana:3000`

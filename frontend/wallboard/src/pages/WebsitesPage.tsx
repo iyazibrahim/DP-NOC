@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "@/auth/AuthContext";
 import {
   addSiteWebsite,
   applyWebsiteProbes,
@@ -8,10 +8,24 @@ import {
   getSites,
   getWebsites,
   updateSiteWebsite
-} from "../api";
-import { StatusPill } from "../components/StatusPill";
-import { Modal } from "../components/Modal";
-import type { Site } from "../types";
+} from "@/api";
+import { PageHeader } from "@/components/noc/PageHeader";
+import { StatusBadge } from "@/components/noc/StatusBadge";
+import {
+  DataTableCard,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/noc/DataTable";
+import { Modal } from "@/components/Modal";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import type { Site } from "@/types";
 
 type WebsiteRow = {
   siteId: string;
@@ -28,7 +42,7 @@ type WebsiteRow = {
 function UptimeSparkline({ values }: { values?: number[] }) {
   const pts = values?.length ? values : [];
   if (pts.length < 2) {
-    return <span className="muted">—</span>;
+    return <span className="text-muted-foreground">—</span>;
   }
   const w = 72;
   const h = 22;
@@ -43,8 +57,8 @@ function UptimeSparkline({ values }: { values?: number[] }) {
     })
     .join(" ");
   return (
-    <svg className="uptimeSparkline" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden>
-      <path d={d} fill="none" stroke="var(--accent)" strokeWidth="1.5" />
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden>
+      <path d={d} fill="none" stroke="var(--primary)" strokeWidth="1.5" />
     </svg>
   );
 }
@@ -152,151 +166,165 @@ export function WebsitesPage() {
 
   return (
     <div className="page">
-      <div className="pageHeader">
-        <div>
-          <h1>Website checks</h1>
-          <p className="pageSub">We check if your public websites respond</p>
-        </div>
-        <div className="pageActions">
-          <button type="button" className="primary" onClick={openAdd}>
+      <PageHeader
+        title="Website checks"
+        subtitle="We check if your public websites respond"
+        actions={
+          <Button type="button" onClick={openAdd}>
             Add website
-          </button>
-        </div>
-      </div>
+          </Button>
+        }
+      />
 
-      {error ? <div className="bannerError">{error}</div> : null}
-      {msg ? <p className="muted">{msg}</p> : null}
+      {error ? (
+        <Alert variant="destructive" className="mb-3">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+      {msg ? <p className="mb-3 text-sm text-muted-foreground">{msg}</p> : null}
 
-      <div className="tableCard">
-        <div className="tableTitle">Checked URLs</div>
-        <table className="dataTable">
-          <thead>
-            <tr>
-              <th>Site</th>
-              <th>Name</th>
-              <th>URL</th>
-              <th>Latency</th>
-              <th>Uptime 24h</th>
-              <th>24h</th>
-              <th>State</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
+      <DataTableCard title="Checked URLs" empty={false}>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Site</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>URL</TableHead>
+              <TableHead>Latency</TableHead>
+              <TableHead>Uptime 24h</TableHead>
+              <TableHead>24h</TableHead>
+              <TableHead>State</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="muted">
+              <TableRow>
+                <TableCell colSpan={8} className="text-muted-foreground">
                   No websites yet —{" "}
-                  <button type="button" className="linkBtn" onClick={openAdd}>
+                  <Button type="button" variant="link" className="h-auto p-0" onClick={openAdd}>
                     add one
-                  </button>{" "}
+                  </Button>{" "}
                   or use a <Link to="/sites">site detail page</Link>.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : (
               rows.map((r) => {
                 const detailTo = `/websites/${r.siteId}?url=${encodeURIComponent(r.url)}`;
                 return (
-                <tr key={`${r.siteId}-${r.url}`}>
-                  <td>
-                    {r.siteId === "global" ? (
-                      <span>{r.siteName}</span>
-                    ) : (
-                      <Link to={`/sites/${r.siteId}`}>{r.siteName}</Link>
-                    )}
-                  </td>
-                  <td>
-                    <Link className="websiteUrlLink" to={detailTo}>
-                      {r.name}
-                    </Link>
-                  </td>
-                  <td>
-                    <Link className="websiteUrlLink" to={detailTo}>
-                      {r.url}
-                    </Link>{" "}
-                    <a
-                      className="muted"
-                      href={r.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      title="Open live site"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      ↗
-                    </a>
-                  </td>
-                  <td>{r.latencyMs != null ? `${r.latencyMs} ms` : "—"}</td>
-                  <td>{r.uptime24h != null ? `${r.uptime24h}%` : "—"}</td>
-                  <td>
-                    <UptimeSparkline values={r.sparkline} />
-                  </td>
-                  <td>
-                    <StatusPill state={r.state} notes={r.notes} />
-                  </td>
-                  <td>
-                    <Link className="linkBtn" to={detailTo}>
-                      View
-                    </Link>{" "}
-                    <button type="button" onClick={() => openEdit(r)}>
-                      Edit
-                    </button>{" "}
-                    <button type="button" onClick={() => onDelete(r.siteId, r.url)}>
-                      Remove
-                    </button>
-                  </td>
-                </tr>
+                  <TableRow key={`${r.siteId}-${r.url}`}>
+                    <TableCell>
+                      {r.siteId === "global" ? (
+                        <span>{r.siteName}</span>
+                      ) : (
+                        <Link to={`/sites/${r.siteId}`}>{r.siteName}</Link>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Link className="text-primary underline-offset-4 hover:underline" to={detailTo}>
+                        {r.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <Link className="text-primary underline-offset-4 hover:underline" to={detailTo}>
+                        {r.url}
+                      </Link>{" "}
+                      <a
+                        className="text-muted-foreground"
+                        href={r.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Open live site"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        ↗
+                      </a>
+                    </TableCell>
+                    <TableCell>{r.latencyMs != null ? `${r.latencyMs} ms` : "—"}</TableCell>
+                    <TableCell>{r.uptime24h != null ? `${r.uptime24h}%` : "—"}</TableCell>
+                    <TableCell>
+                      <UptimeSparkline values={r.sparkline} />
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge state={r.state} notes={r.notes} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Button asChild variant="outline" size="sm">
+                          <Link to={detailTo}>View</Link>
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => openEdit(r)}>
+                          Edit
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void onDelete(r.siteId, r.url)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 );
               })
             )}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </DataTableCard>
 
-      <Modal
-        open={modalOpen}
-        title={editingUrl ? "Edit website" : "Add website"}
-        onClose={closeModal}
-      >
-        <form className="deviceForm" onSubmit={onSubmit}>
-          <label className="label">Site</label>
-          <select
-            value={form.siteId}
-            onChange={(e) => setForm((f) => ({ ...f, siteId: e.target.value }))}
-            required
-            disabled={Boolean(editingUrl)}
-          >
-            <option value="global">Global / Central</option>
-            {sites.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-          <label className="label">Name</label>
-          <input
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            required
-          />
-          <label className="label">URL</label>
-          <input
-            value={form.url}
-            onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
-            required
-            placeholder="https://example.com"
-          />
-          <div className="formActions">
-            <button type="submit" className="primary" disabled={busy}>
+      <Modal open={modalOpen} title={editingUrl ? "Edit website" : "Add website"} onClose={closeModal}>
+        <form className="flex flex-col gap-3" onSubmit={onSubmit}>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="ws-site">Site</Label>
+            <select
+              id="ws-site"
+              className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+              value={form.siteId}
+              onChange={(e) => setForm((f) => ({ ...f, siteId: e.target.value }))}
+              required
+              disabled={Boolean(editingUrl)}
+            >
+              <option value="global">Global / Central</option>
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="ws-name">Name</Label>
+            <Input
+              id="ws-name"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="ws-url">URL</Label>
+            <Input
+              id="ws-url"
+              value={form.url}
+              onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
+              required
+              placeholder="https://example.com"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" disabled={busy}>
               {editingUrl ? "Save" : "Add"}
-            </button>
+            </Button>
             {form.siteId ? (
-              <button type="button" disabled={busy} onClick={() => onApply(form.siteId)}>
+              <Button type="button" variant="outline" disabled={busy} onClick={() => void onApply(form.siteId)}>
                 Save and start checking
-              </button>
+              </Button>
             ) : null}
-            <button type="button" onClick={closeModal}>
+            <Button type="button" variant="ghost" onClick={closeModal}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>

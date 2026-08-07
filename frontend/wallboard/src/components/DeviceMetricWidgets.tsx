@@ -14,9 +14,10 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { useAuth } from "../auth/AuthContext";
-import { getMetricInstant, getMetricRange, getMetricPresets } from "../api";
-import type { MetricPreset, PromQueryResult, Site } from "../types";
+import { useAuth } from "@/auth/AuthContext";
+import { getMetricInstant, getMetricRange, getMetricPresets } from "@/api";
+import type { MetricPreset, PromQueryResult, Site } from "@/types";
+import { darkTooltipProps } from "@/components/noc/MetricChart";
 
 const TIME_RANGES = [
   { hours: 1, label: "1h" },
@@ -108,10 +109,22 @@ function ChartTooltip({
 }) {
   if (!active || !payload?.[0]?.payload) return null;
   const { t, v } = payload[0].payload;
+  const tip = darkTooltipProps();
   return (
-    <div className="chartTooltip">
-      <div className="chartTooltipTime">{t}</div>
-      <div className="chartTooltipValue">{formatMetricValue(v, unit)}</div>
+    <div
+      className="chartTooltip"
+      style={{
+        ...tip.contentStyle,
+        padding: "8px 10px",
+        fontSize: 12
+      }}
+    >
+      <div className="chartTooltipTime" style={tip.labelStyle}>
+        {t}
+      </div>
+      <div className="chartTooltipValue" style={{ ...tip.itemStyle, fontWeight: 700 }}>
+        {formatMetricValue(v, unit)}
+      </div>
     </div>
   );
 }

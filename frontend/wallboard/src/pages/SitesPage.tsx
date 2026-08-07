@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "@/auth/AuthContext";
 import {
   addDeviceType,
   addSiteDevice,
@@ -22,16 +22,19 @@ import {
   updateSite,
   updateSiteDevice,
   updateSiteWebsite
-} from "../api";
-import type { DeviceKind, DiscoveredDevice, Site, SiteDevice, SiteStatus } from "../types";
-import { StatusPill } from "../components/StatusPill";
-import { SiteLocationPicker } from "../components/SiteLocationPicker";
-import { DeviceTypePicker, useDeviceTypes, type DeviceTypeOption } from "../components/DeviceTypePicker";
-import { collectorOf, localDevicesOf, uplinkOf } from "../statusLabels";
-import { Modal } from "../components/Modal";
-import { SitesLeafletMap } from "../components/SitesLeafletMap";
-import { TablePagination, TableToolbar, paginateItems } from "../components/TableControls";
-import { SiteNetworkPanel } from "../components/SiteNetworkPanel";
+} from "@/api";
+import type { DeviceKind, DiscoveredDevice, Site, SiteDevice, SiteStatus } from "@/types";
+import { StatusPill } from "@/components/StatusPill";
+import { SiteLocationPicker } from "@/components/SiteLocationPicker";
+import { DeviceTypePicker, useDeviceTypes, type DeviceTypeOption } from "@/components/DeviceTypePicker";
+import { collectorOf, localDevicesOf, uplinkOf } from "@/statusLabels";
+import { Modal } from "@/components/Modal";
+import { SitesLeafletMap } from "@/components/SitesLeafletMap";
+import { TablePagination, TableToolbar, paginateItems } from "@/components/TableControls";
+import { SiteNetworkPanel } from "@/components/SiteNetworkPanel";
+import { PageHeader } from "@/components/noc/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function SitesPage() {
   const { token } = useAuth();
@@ -79,19 +82,25 @@ export function SitesPage() {
 
   return (
     <div className="page">
-      <div className="pageHeader">
-        <div>
-          <h1>Sites</h1>
-          <p className="pageSub">All monitored locations</p>
-        </div>
-        <div className="pageActions">
-          <button type="button" className="primary" onClick={() => setShowCreate((v) => !v)}>
+      <PageHeader
+        title="Sites"
+        subtitle="All monitored locations"
+        actions={
+          <Button
+            type="button"
+            variant={showCreate ? "outline" : "default"}
+            onClick={() => setShowCreate((v) => !v)}
+          >
             {showCreate ? "Cancel" : "Add site"}
-          </button>
-        </div>
-      </div>
+          </Button>
+        }
+      />
 
-      {error ? <div className="bannerError">{error}</div> : null}
+      {error ? (
+        <Alert variant="destructive" className="mb-3">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
 
       {showCreate ? (
         <form className="tableCard deviceForm" onSubmit={onCreate} style={{ marginBottom: 16 }}>
@@ -113,9 +122,9 @@ export function SitesPage() {
             onChange={(lat, lng) => setCreateForm((f) => ({ ...f, lat, lng }))}
           />
           <div className="formActions">
-            <button className="primary" type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy}>
               Create site
-            </button>
+            </Button>
           </div>
         </form>
       ) : null}
@@ -621,28 +630,31 @@ export function SiteDetailPage() {
 
   return (
     <div className="page">
-      <div className="pageHeader">
-        <div>
-          <p className="pageEyebrow">
+      <PageHeader
+        breadcrumb={
+          <>
             <Link to="/sites">Sites</Link>
             <span aria-hidden> / </span>
             {site.id}
-          </p>
-          <h1>{site.name}</h1>
-          {site.address ? <p className="pageSub">{site.address}</p> : null}
-        </div>
-        <div className="pageActions">
-          <StatusPill
-            state={status?.overall ?? "unknown"}
-            notes={col.notes ?? up.notes}
-          />
-          <button type="button" onClick={() => setEditSiteOpen(true)}>
-            Edit site
-          </button>
-        </div>
-      </div>
+          </>
+        }
+        title={site.name}
+        subtitle={site.address || undefined}
+        actions={
+          <>
+            <StatusPill state={status?.overall ?? "unknown"} notes={col.notes ?? up.notes} />
+            <Button type="button" variant="outline" onClick={() => setEditSiteOpen(true)}>
+              Edit site
+            </Button>
+          </>
+        }
+      />
 
-      {error ? <div className="bannerError">{error}</div> : null}
+      {error ? (
+        <Alert variant="destructive" className="mb-3">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
       {msg ? <p className="muted">{msg}</p> : null}
 
       <div className="siteTabBar" role="tablist">
@@ -674,12 +686,12 @@ export function SiteDetailPage() {
           <div className="bentoTileHeader">
             <div className="tableTitle">Health</div>
             <div className="formActions">
-              <button type="button" onClick={() => setEditSiteOpen(true)}>
+              <Button type="button" variant="outline" onClick={() => setEditSiteOpen(true)}>
                 Edit details
-              </button>
-              <button type="button" onClick={onDeleteSite} disabled={busy}>
+              </Button>
+              <Button type="button" variant="destructive" onClick={onDeleteSite} disabled={busy}>
                 Delete site
-              </button>
+              </Button>
             </div>
           </div>
           <div className="healthMiniGrid">
@@ -731,12 +743,12 @@ export function SiteDetailPage() {
           <div className="bentoTileHeader">
             <div className="tableTitle">Devices</div>
             <div className="formActions">
-              <button type="button" className="primary" onClick={openAddDevice}>
+              <Button type="button" onClick={openAddDevice}>
                 Add device
-              </button>
-              <button type="button" onClick={onDownloadDevices}>
+              </Button>
+              <Button type="button" variant="outline" onClick={onDownloadDevices}>
                 Download devices.json
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -751,14 +763,13 @@ export function SiteDetailPage() {
                       {d.deviceId} · {d.kind === "server" ? "Collector" : "Local device"}
                     </div>
                   </div>
-                  <button
+                  <Button
                     type="button"
-                    className="primary"
                     onClick={() => onRegisterDiscovered(d)}
                     disabled={busy}
                   >
                     {d.kind === "server" ? "Add collector" : "Add details"}
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -845,12 +856,26 @@ export function SiteDetailPage() {
                         )}
                       </td>
                       <td>
-                        <button type="button" onClick={() => startEdit(d)} disabled={busy}>
-                          Edit
-                        </button>{" "}
-                        <button type="button" onClick={() => onDeleteDevice(d.id)} disabled={busy}>
-                          Remove
-                        </button>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => startEdit(d)}
+                            disabled={busy}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onDeleteDevice(d.id)}
+                            disabled={busy}
+                          >
+                            Remove
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -896,13 +921,13 @@ export function SiteDetailPage() {
               </div>
             ) : null}
             <div className="formActions" style={{ marginTop: 10 }}>
-              <button type="button" className="primary" onClick={onRotateCollectorToken} disabled={busy}>
+              <Button type="button" onClick={onRotateCollectorToken} disabled={busy}>
                 {site.hasCollectorToken ? "Rotate token" : "Generate token"}
-              </button>
+              </Button>
               {site.hasCollectorToken ? (
-                <button type="button" onClick={onClearCollectorToken} disabled={busy}>
+                <Button type="button" variant="outline" onClick={onClearCollectorToken} disabled={busy}>
                   Clear token
-                </button>
+                </Button>
               ) : null}
             </div>
           </div>
@@ -912,12 +937,12 @@ export function SiteDetailPage() {
           <div className="bentoTileHeader">
             <div className="tableTitle">Website checks</div>
             <div className="formActions">
-              <button type="button" className="primary" onClick={openAddWebsite}>
+              <Button type="button" onClick={openAddWebsite}>
                 Add website
-              </button>
-              <button type="button" onClick={onApplyProbes} disabled={busy}>
+              </Button>
+              <Button type="button" variant="outline" onClick={onApplyProbes} disabled={busy}>
                 Save and start checking
-              </button>
+              </Button>
             </div>
           </div>
           <table className="dataTable">
@@ -969,15 +994,29 @@ export function SiteDetailPage() {
                         {m ? <StatusPill state={m.state} notes={m.notes} /> : <span className="muted">—</span>}
                       </td>
                       <td>
-                        <Link className="linkBtn" to={detailTo}>
-                          View
-                        </Link>{" "}
-                        <button type="button" onClick={() => openEditWebsite(w)} disabled={busy}>
-                          Edit
-                        </button>{" "}
-                        <button type="button" onClick={() => onDeleteWebsite(w.url)} disabled={busy}>
-                          Remove
-                        </button>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Button asChild variant="outline" size="sm">
+                            <Link to={detailTo}>View</Link>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditWebsite(w)}
+                            disabled={busy}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onDeleteWebsite(w.url)}
+                            disabled={busy}
+                          >
+                            Remove
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1066,12 +1105,12 @@ export function SiteDetailPage() {
             disabled={!siteForm.wanDeviceId}
           />
           <div className="formActions">
-            <button className="primary" type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy}>
               Save site
-            </button>
-            <button type="button" onClick={() => setEditSiteOpen(false)} disabled={busy}>
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setEditSiteOpen(false)} disabled={busy}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>
@@ -1150,12 +1189,12 @@ export function SiteDetailPage() {
             </>
           )}
           <div className="formActions">
-            <button className="primary" type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy}>
               {editingId ? "Save" : "Add device"}
-            </button>
-            <button type="button" onClick={cancelEdit} disabled={busy}>
+            </Button>
+            <Button type="button" variant="outline" onClick={cancelEdit} disabled={busy}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>
@@ -1184,11 +1223,12 @@ export function SiteDetailPage() {
             required
           />
           <div className="formActions">
-            <button className="primary" type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy}>
               {editingWebsiteUrl ? "Save website" : "Add website"}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="outline"
               onClick={() => {
                 setWebsiteModalOpen(false);
                 setEditingWebsiteUrl(null);
@@ -1197,7 +1237,7 @@ export function SiteDetailPage() {
               disabled={busy}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>

@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/600.css";
 import "@fontsource/ibm-plex-mono/400.css";
+import "./index.css";
 import "./styles.css";
 import { AuthProvider } from "./auth/AuthContext";
 import { CommandCenterProvider } from "./commandCenter/CommandCenterContext";

@@ -108,7 +108,33 @@ function rangeConfig(range: WebsiteRange): {
   return { rangeSec: 24 * 3600, step: "5m", avgWindow: "5m" };
 }
 
-/** Derive contiguous down intervals from availability samples (0 = down). */
+/** Fine-grained probe series for event-level outage detection (separate from chart smoothing). */
+function outageSeriesConfig(range: WebsiteRange): {
+  query: (sel: string) => string;
+  step: string;
+} {
+  if (range === "30d") {
+    return {
+      query: (sel) => `min_over_time(probe_success{${sel}}[5m])`,
+      step: "5m"
+    };
+  }
+  if (range === "7d") {
+    return {
+      query: (sel) => `min_over_time(probe_success{${sel}}[1m])`,
+      step: "1m"
+    };
+  }
+  return {
+    query: (sel) => `probe_success{${sel}}`,
+    step: "15s"
+  };
+}
+
+/**
+ * Derive contiguous down intervals from probe samples.
+ * Event-level: any sample with value &lt; 1 counts as down (not majority avg &lt; 0.5).
+ */
 export function outagesFromAvailability(
   series: WebsiteSeriesPoint[],
   rangeEndSec: number
@@ -117,7 +143,7 @@ export function outagesFromAvailability(
   let downStart: number | null = null;
 
   for (const p of series) {
-    const down = p.value < 0.5;
+    const down = p.value < 1;
     if (down && downStart == null) {
       downStart = p.ts;
     } else if (!down && downStart != null) {
@@ -322,6 +348,15 @@ export async function getWebsiteDetailMetrics(
     /* keep base + empty series */
   }
 
+  let outages: WebsiteOutageInterval[] = [];
+  try {
+    const outageCfg = outageSeriesConfig(range);
+    const outageRange = await promQueryRange(outageCfg.query(sel), start, end, outageCfg.step);
+    outages = outagesFromAvailability(parseSeries(outageRange), end);
+  } catch {
+    /* leave empty */
+  }
+
   return {
     ...base,
     name: meta.name,
@@ -336,7 +371,7 @@ export async function getWebsiteDetailMetrics(
     latencyMaxMs,
     latencySeries,
     availabilitySeries,
-    outages: outagesFromAvailability(availabilitySeries, end),
+    outages,
     weeklyTrend,
     monthlyTrend,
     lastCheckAt

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "@/auth/AuthContext";
 import {
   applyRetentionSettings,
   applyNotificationsSettings,
@@ -15,15 +15,18 @@ import {
   runExport,
   saveNotificationsSettings,
   saveRetentionSettings
-} from "../api";
+} from "@/api";
 import type {
   ExportRecord,
   MonthlyReportPayload,
   NotificationsConfig,
   RetentionConfig,
   StatusTimingInfo
-} from "../types";
-import { Modal } from "../components/Modal";
+} from "@/types";
+import { Modal } from "@/components/Modal";
+import { PageHeader } from "@/components/noc/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 function formatBytes(n: number | null) {
   if (n == null) return "—";
@@ -209,14 +212,13 @@ export function SettingsPage() {
 
   return (
     <div className="page">
-      <div className="pageHeader">
-        <div>
-          <h1>Settings</h1>
-          <p className="pageSub">Open a module to configure — keeps the page clear</p>
-        </div>
-      </div>
+      <PageHeader title="Settings" subtitle="Open a module to configure — keeps the page clear" />
 
-      {error ? <div className="bannerError">{error}</div> : null}
+      {error ? (
+        <Alert variant="destructive" className="mb-3">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
       {msg ? <p className="muted">{msg}</p> : null}
 
       <div className="settingsBento">
@@ -431,15 +433,15 @@ export function SettingsPage() {
             />
 
             <div className="formActions">
-              <button className="primary" type="submit" disabled={busy}>
+              <Button type="submit" disabled={busy}>
                 Save notifications
-              </button>
-              <button type="button" onClick={onApplyNotifications} disabled={busy}>
+              </Button>
+              <Button type="button" variant="outline" onClick={onApplyNotifications} disabled={busy}>
                 Apply to Alertmanager
-              </button>
-              <button type="button" onClick={() => setModal(null)} disabled={busy}>
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setModal(null)} disabled={busy}>
                 Cancel
-              </button>
+              </Button>
             </div>
           </form>
         ) : (
@@ -510,15 +512,15 @@ export function SettingsPage() {
               Enable scheduled exports
             </label>
             <div className="formActions">
-              <button className="primary" type="submit" disabled={busy}>
+              <Button type="submit" disabled={busy}>
                 Save retention
-              </button>
-              <button type="button" onClick={onApplyRetention} disabled={busy}>
+              </Button>
+              <Button type="button" variant="outline" onClick={onApplyRetention} disabled={busy}>
                 Apply to Prometheus
-              </button>
-              <button type="button" onClick={() => setModal(null)} disabled={busy}>
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setModal(null)} disabled={busy}>
                 Cancel
-              </button>
+              </Button>
             </div>
           </form>
         ) : (
@@ -532,12 +534,12 @@ export function SettingsPage() {
           is 30 days — apply storage settings and restart Prometheus so monthly history is complete.
         </p>
         <div className="formActions">
-          <button type="button" className="primary" onClick={() => onRunExport("weekly")} disabled={busy}>
+          <Button type="button" onClick={() => onRunExport("weekly")} disabled={busy}>
             Export now (weekly)
-          </button>
-          <button type="button" onClick={() => onRunExport("monthly")} disabled={busy}>
+          </Button>
+          <Button type="button" variant="outline" onClick={() => onRunExport("monthly")} disabled={busy}>
             Export now (monthly)
-          </button>
+          </Button>
         </div>
 
         <div className="tableTitle" style={{ marginTop: 18 }}>
@@ -718,15 +720,15 @@ export function SettingsPage() {
           </div>
         </div>
         <div className="formActions" style={{ marginTop: 16 }}>
-          <button type="button" onClick={resetLayout}>
+          <Button type="button" variant="outline" onClick={resetLayout}>
             Reset my dashboard layout
-          </button>
-          <button type="button" onClick={onResetSites} disabled={busy}>
+          </Button>
+          <Button type="button" variant="outline" onClick={onResetSites} disabled={busy}>
             Reset sites from seed
-          </button>
-          <button type="button" onClick={() => setModal(null)}>
+          </Button>
+          <Button type="button" variant="outline" onClick={() => setModal(null)}>
             Close
-          </button>
+          </Button>
         </div>
       </Modal>
     </div>

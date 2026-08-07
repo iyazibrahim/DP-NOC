@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import GridLayout, { type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
-import { useAuth } from "../auth/AuthContext";
-import { useCommandCenter } from "../commandCenter/CommandCenterContext";
+import { useAuth } from "@/auth/AuthContext";
+import { useCommandCenter } from "@/commandCenter/CommandCenterContext";
 import {
   getAllSiteStatuses,
   getDashboardLayout,
@@ -14,7 +14,7 @@ import {
   resetDashboardLayout,
   saveDashboardLayout,
   STATUS_POLL_MS
-} from "../api";
+} from "@/api";
 import type {
   ActiveAlert,
   DashboardLayout,
@@ -23,12 +23,15 @@ import type {
   DomainState,
   Site,
   SiteStatus
-} from "../types";
-import { WidgetBody, WIDGET_GROUPS } from "../components/WidgetBody";
-import { WidgetConfigEditor } from "../components/WidgetConfigEditor";
-import { useMetricPresets } from "../components/DeviceMetricWidgets";
-import { pushToast, ToastStack, type ToastItem } from "../components/ToastStack";
-import { uplinkOf } from "../statusLabels";
+} from "@/types";
+import { WidgetBody, WIDGET_GROUPS } from "@/components/WidgetBody";
+import { WidgetConfigEditor } from "@/components/WidgetConfigEditor";
+import { useMetricPresets } from "@/components/DeviceMetricWidgets";
+import { pushToast, ToastStack, type ToastItem } from "@/components/ToastStack";
+import { uplinkOf } from "@/statusLabels";
+import { PageHeader } from "@/components/noc/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 function safeInt(value: unknown, fallback: number): number {
   const n = typeof value === "number" ? value : Number(value);
@@ -409,15 +412,14 @@ export function DashboardPage() {
     <div className={`page dashboardPage${commandCenter ? " page--commandCenter" : ""}`}>
       <ToastStack toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
       {!commandCenter ? (
-        <div className="pageHeader">
-          <div>
-            <h1>Dashboard</h1>
-          </div>
-          <div className="pageActions">
-            {editing ? (
+        <PageHeader
+          title="Dashboard"
+          actions={
+            editing ? (
               <>
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   title={compact ? "Switch to comfortable spacing" : "Pack more sites on screen"}
                   onClick={() => {
                     const next = density === "compact" ? "comfortable" : "compact";
@@ -430,21 +432,22 @@ export function DashboardPage() {
                   }}
                 >
                   {density === "compact" ? "Comfortable" : "Compact"}
-                </button>
-                <button type="button" onClick={() => setDrawerOpen(true)}>
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setDrawerOpen(true)}>
                   Add widget
-                </button>
-                <button type="button" className="primary" onClick={persist}>
+                </Button>
+                <Button type="button" onClick={persist}>
                   Save layout
-                </button>
-                <button type="button" onClick={cancelEdit}>
+                </Button>
+                <Button type="button" variant="outline" onClick={cancelEdit}>
                   Cancel
-                </button>
+                </Button>
               </>
             ) : (
               <>
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   title={compact ? "Switch to comfortable spacing" : "Pack more sites on screen"}
                   onClick={() => {
                     const next = density === "compact" ? "comfortable" : "compact";
@@ -457,20 +460,20 @@ export function DashboardPage() {
                   }}
                 >
                   {density === "compact" ? "Comfortable" : "Compact"}
-                </button>
-                <button type="button" onClick={() => void enterCommandCenter()}>
+                </Button>
+                <Button type="button" variant="outline" onClick={() => void enterCommandCenter()}>
                   Fullscreen
-                </button>
-                <button type="button" className="primary" onClick={() => setEditing(true)}>
+                </Button>
+                <Button type="button" onClick={() => setEditing(true)}>
                   Edit layout
-                </button>
-                <button type="button" onClick={doReset}>
+                </Button>
+                <Button type="button" variant="outline" onClick={doReset}>
                   Reset
-                </button>
+                </Button>
               </>
-            )}
-          </div>
-        </div>
+            )
+          }
+        />
       ) : null}
 
       {canEdit ? (
@@ -481,8 +484,11 @@ export function DashboardPage() {
         </div>
       ) : null}
 
-      {error && <div className="bannerError">{error}</div>}
-
+      {error ? (
+        <Alert variant="destructive" className="mb-3">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
       <div
         id="dashboard-grid-host"
         ref={hostRef}

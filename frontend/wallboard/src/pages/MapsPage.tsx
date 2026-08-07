@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "../auth/AuthContext";
-import { useCommandCenter } from "../commandCenter/CommandCenterContext";
+import { useAuth } from "@/auth/AuthContext";
+import { useCommandCenter } from "@/commandCenter/CommandCenterContext";
 import {
   getAllSiteStatuses,
   getRecentAlerts,
   getSites,
   getTopDevices,
   STATUS_POLL_MS
-} from "../api";
-import type { ActiveAlert, DeviceRow, Site, SiteStatus } from "../types";
-import { SitesLeafletMap } from "../components/SitesLeafletMap";
-import { MapsOpsRail } from "../components/MapsOpsRail";
+} from "@/api";
+import type { ActiveAlert, DeviceRow, Site, SiteStatus } from "@/types";
+import { SitesLeafletMap } from "@/components/SitesLeafletMap";
+import { MapsOpsRail } from "@/components/MapsOpsRail";
+import { PageHeader } from "@/components/noc/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function MapsPage() {
   const { token } = useAuth();
@@ -54,19 +57,21 @@ export function MapsPage() {
   return (
     <div className={`page${commandCenter ? " page--commandCenter" : ""}`}>
       {!commandCenter ? (
-        <div className="pageHeader">
-          <div>
-            <h1>Maps</h1>
-            <p className="pageSub">Site geography, uplink, and alert hotspots</p>
-          </div>
-          <div className="pageActions">
-            <button type="button" onClick={() => void enterCommandCenter()}>
+        <PageHeader
+          title="Maps"
+          subtitle="Site geography, uplink, and alert hotspots"
+          actions={
+            <Button type="button" variant="outline" onClick={() => void enterCommandCenter()}>
               Fullscreen
-            </button>
-          </div>
-        </div>
+            </Button>
+          }
+        />
       ) : null}
-      {error && <div className="bannerError">{error}</div>}
+      {error ? (
+        <Alert variant="destructive" className="mb-3">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
       <div className="mapPageLayout">
         <div className="mapPane">
           <SitesLeafletMap
