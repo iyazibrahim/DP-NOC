@@ -311,7 +311,7 @@ export function WebsiteDetailPage() {
             </Button>
             {detail ? (
               <Button asChild>
-                <a href={detail.url} target="_blank" rel="noreferrer">
+                <a href={detail.url} target="_blank" rel="noreferrer" className="text-primary-foreground no-underline hover:no-underline">
                   Open URL
                 </a>
               </Button>

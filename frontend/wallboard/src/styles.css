@@ -34,13 +34,22 @@ body,
   font-family: var(--font-body);
 }
 
-a {
+a:not([data-slot="button"]) {
   color: var(--accent);
   text-decoration: none;
 }
 
-a:hover {
+a:not([data-slot="button"]):hover {
   text-decoration: underline;
+}
+
+/* Button-as-link: let shadcn button text color win (avoid cyan-on-cyan). */
+a[data-slot="button"] {
+  text-decoration: none;
+}
+
+a[data-slot="button"]:hover {
+  text-decoration: none;
 }
 
 .appShell {
