@@ -122,6 +122,9 @@ Collector box → Alloy → Prometheus (central)
     - Bind to Dokploy `code/.../site-box` went empty after checkout replace (ENOENT on config.alloy)
     - `noc_sitebox_data` named volume shared Console `/data` + Alloy `/etc/alloy`
     - Console seeds toolkit + regenerates config on boot; `/api/ready` healthgate for Alloy
+  - **Website probes duplicate job_name (2026-08-07)**
+    - `syncWebsiteProbes` emitted one `job_name: blackbox-website` per URL → Prometheus refused reload
+    - Fixed: single scrape job with multiple `static_configs` targets
   - **Temporary SNMP status bridge (2026-07-22)**
     - While `site_snmp_if_mib` / `snmp_up` empty, NOC Local devices use `up{job=~"integrations/snmp/.*"}`
   - **Dashboard layout null coerce + compact density (2026-07-22)**
