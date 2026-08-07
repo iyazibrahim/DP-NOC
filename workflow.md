@@ -118,6 +118,10 @@ Collector box → Alloy → Prometheus (central)
   - **Dokploy /data mount fix (2026-07-22)**
     - Root `docker-compose.site-box.yml` mounts `./sites/templates/site-box:/data`
     - Console image bakes toolkit; detects monorepo-mounted `/data`
+  - **Dokploy stale /data → named volume (2026-08-07)**
+    - Bind to Dokploy `code/.../site-box` went empty after checkout replace (ENOENT on config.alloy)
+    - `noc_sitebox_data` named volume shared Console `/data` + Alloy `/etc/alloy`
+    - Console seeds toolkit + regenerates config on boot; `/api/ready` healthgate for Alloy
   - **Temporary SNMP status bridge (2026-07-22)**
     - While `site_snmp_if_mib` / `snmp_up` empty, NOC Local devices use `up{job=~"integrations/snmp/.*"}`
   - **Dashboard layout null coerce + compact density (2026-07-22)**
@@ -198,5 +202,7 @@ Collector box → Alloy → Prometheus (central)
 - Volumes: `noc_runtime` (sites + retention flags), `noc_exports`, `prometheus_data`
 - Site-box: secrets in Dokploy **Environment** only; do not patch live `config.alloy` when Console sync is used
 - Site-box SNMP: never patch `integrations/snmp`; use site-box compose only (see CUTOVER_SITEBOX_SNMP.md)
-- **Dokploy Compose Path (required):** `docker-compose.site-box.yml` (repo root) — NOT `sites/templates/site-box/docker-compose.yml` (that `.:/data` mounts monorepo → `generate-config.sh not found`)
-- Console bakes `generate-config.sh` into image (`/opt/sitebox`) and auto-detects nested `sites/templates/site-box` under `/data`
+- **Dokploy Compose Path (required):** `docker-compose.site-box.yml` (repo root) — NOT `sites/templates/site-box/docker-compose.yml`
+- Runtime config volume: `noc_sitebox_data` (Console `/data` + Alloy `/etc/alloy`) — survives Dokploy `code/` replacement; avoid bind-mounting `sites/templates/site-box` for `/data`
+- Console bakes `generate-config.sh` into image (`/opt/sitebox`), seeds the data volume on boot, `/api/ready` gates Alloy start
+- Token/devices volume: `noc_sitebox_state`

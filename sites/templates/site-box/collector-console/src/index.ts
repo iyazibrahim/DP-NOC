@@ -2,8 +2,11 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import {
+  alloyConfigReady,
   alloyReloadNeeded,
+  assertDataDirWritable,
   bootstrapPersistentEnv,
+  dataDir,
   ensureBundledToolkit,
   maskConfig,
   readConfig,
@@ -25,7 +28,14 @@ import { alloySnmpConfigStale, getLastSync, startSyncLoop, syncDevices } from ".
 import { pushDeviceToNoc } from "./pushDevice";
 
 const PORT = Number(process.env.PORT || "8090");
-const dir = ensureBundledToolkit();
+
+let dir: string;
+try {
+  dir = ensureBundledToolkit();
+} catch (err) {
+  console.error("[boot] DATA_DIR not usable:", err instanceof Error ? err.message : err);
+  dir = process.env.DATA_DIR || "/data";
+}
 
 const app = express();
 app.use(express.json({ limit: "64kb" }));
@@ -85,6 +95,28 @@ function alloyLogCrashHints(logs: string): string[] {
   }
   return hints;
 }
+
+/** Compose healthcheck — Alloy waits until shared volume has loadable config. */
+app.get("/api/ready", (_req, res) => {
+  try {
+    assertDataDirWritable();
+    if (!alloyConfigReady()) {
+      res.status(503).json({
+        ok: false,
+        ready: false,
+        message: "Waiting for config.alloy / blackbox.yml / snmp.yml on DATA_DIR volume"
+      });
+      return;
+    }
+    res.json({ ok: true, ready: true, dataDir: dataDir() });
+  } catch (err) {
+    res.status(503).json({
+      ok: false,
+      ready: false,
+      message: err instanceof Error ? err.message : String(err)
+    });
+  }
+});
 
 app.get("/api/catalog", (_req, res) => {
   res.json(CATALOG);
@@ -372,10 +404,33 @@ app.get("*", (_req, res) => {
   }
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  const boot = bootstrapPersistentEnv();
-  console.log(
-    `collector-console listening on :${PORT} (data=${dir} state=${process.env.STATE_DIR || dir} boot=${boot.source} keys=${boot.keys.length})`
-  );
-  startSyncLoop(dir);
-});
+async function boot(): Promise<void> {
+  try {
+    dir = ensureBundledToolkit();
+  } catch (err) {
+    console.error("[boot] ensureBundledToolkit:", err instanceof Error ? err.message : err);
+  }
+
+  const bootEnv = bootstrapPersistentEnv();
+
+  try {
+    if (!alloyConfigReady() || alloySnmpConfigStale(dir)) {
+      const msg = await regenerateAlloyConfig();
+      console.log("[boot] seeded/regenerated config.alloy:", msg || "ok");
+    }
+  } catch (err) {
+    console.error(
+      "[boot] regenerateAlloyConfig failed (healthcheck will stay down until fixed):",
+      err instanceof Error ? err.message : err
+    );
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(
+      `collector-console listening on :${PORT} (data=${dir} state=${process.env.STATE_DIR || dir} boot=${bootEnv.source} keys=${bootEnv.keys.length} alloyReady=${alloyConfigReady()})`
+    );
+    startSyncLoop(dir);
+  });
+}
+
+void boot();

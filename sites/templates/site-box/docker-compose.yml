@@ -2,13 +2,13 @@
 #
 # DOKPLOY: do NOT use this file as Compose Path. Use repo-root:
 #   docker-compose.site-box.yml
-# Otherwise `.:/data` can mount the whole monorepo and Console fails with
-# "generate-config.sh not found in data directory".
+# That file uses named volume `noc_sitebox_data` for /data (survives Dokploy
+# code/ replacement). This local file still bind-mounts `.:/data` for editing.
 #
 # WHY COLLECTOR GOES DOWN AFTER REDEPLOY:
 # Dokploy replaces the git checkout — a Setup-written .env in the project folder is LOST.
 # Fix: put metrics secrets in Dokploy → Environment (they survive redeploy), AND use the
-# named volume below for collector token / devices.json / .env backup.
+# named volumes in docker-compose.site-box.yml (noc_sitebox_state + noc_sitebox_data).
 #
 # Dokploy Environment (set once — required for Alloy metrics after redeploy):
 #   CENTRAL_REMOTE_WRITE_URL=https://metrics.iyazbrhm.cloud/api/v1/write

@@ -135,13 +135,18 @@ export async function regenerateAlloyConfig(): Promise<string> {
     );
   }
 
+  if (fs.existsSync(out) && fs.statSync(out).isDirectory()) {
+    throw new Error(
+      `${out} is a directory (Docker file-mount trap). Remove it from volume noc_sitebox_data and Force apply.`
+    );
+  }
+
   // Always write a numeric interval — Alloy rejects "${SCRAPE_INTERVAL_SEC}s"
   const interval = process.env.SCRAPE_INTERVAL_SEC || "15";
   const safeInterval = /^\d+$/.test(interval) ? interval : "15";
   const defaultCommunity = readSnmpCommunity();
 
-  // cwd must be script dir so generate-config.sh updates snmp.yml beside itself —
-  // prefer work dir copy; if running from /opt/sitebox, copy snmp back to work dir after.
+  // Prefer script in DATA_DIR so snmp.yml is updated beside Alloy's mount.
   const scriptDir = path.dirname(script);
   const msg = await run("bash", [script, devicesFile, out], {
     cwd: scriptDir,

@@ -46,7 +46,9 @@ Set Dokploy **Compose Path** to the **repo-root** file:
 docker-compose.site-box.yml
 ```
 
-Do **not** use `sites/templates/site-box/docker-compose.yml` in Dokploy. That file uses `.:/data`, and Dokploy’s working directory is the monorepo root — `/data` becomes the whole repo and Console fails with `generate-config.sh not found`.
+Do **not** use `sites/templates/site-box/docker-compose.yml` in Dokploy. That file bind-mounts `.:/data` for local editing; Dokploy’s working directory is the monorepo root, and bind mounts to `code/` go **stale** when Dokploy replaces the checkout (Console sees empty `/data` → `config.alloy: No such file`).
+
+Repo-root `docker-compose.site-box.yml` uses named volume **`noc_sitebox_data`** for runtime `config.alloy` / `snmp.yml` / `blackbox.yml`. Console seeds them from the image on boot; Alloy mounts the same volume at `/etc/alloy`.
 
 ### Environment only (survives redeploy)
 
@@ -65,7 +67,11 @@ COLLECTOR_TOKEN=nocc_...
 SCRAPE_INTERVAL_SEC=15
 ```
 
-Compose mounts named volume `noc_sitebox_state` for token/devices backup.
+Compose mounts named volumes:
+- `noc_sitebox_state` — token / devices.json / etag (survives redeploy)
+- `noc_sitebox_data` — generated `config.alloy`, `snmp.yml`, `blackbox.yml` (shared Console ↔ Alloy)
+
+After changing compose to named volumes: **Redeploy with rebuild** in Dokploy (recreate containers). Then open Console → **Force apply SNMP**.
 
 ### Patches — what is allowed
 

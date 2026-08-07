@@ -1,8 +1,13 @@
 # Dokploy site-box collector (use THIS file as Compose Path).
 #
-# Dokploy always runs from the git repo root. The nested compose under
-# sites/templates/site-box/ with `.:/data` can mount the whole monorepo into
-# /data — then Console looks for /data/generate-config.sh and fails.
+# Dokploy always runs from the git repo root. Do NOT use
+# sites/templates/site-box/docker-compose.yml as Compose Path.
+#
+# Runtime config lives in named volume `noc_sitebox_data` (NOT a bind to
+# Dokploy's code/ tree). Dokploy replaces code/ on redeploy; bind mounts
+# go stale and Console sees an empty /data → "config.alloy: No such file".
+# Console seeds toolkit + config.alloy into the volume on boot; Alloy mounts
+# the same volume at /etc/alloy.
 #
 # Dokploy → Compose Path:
 #   docker-compose.site-box.yml
@@ -35,7 +40,8 @@ services:
     ports:
       - "8090:8090"
     volumes:
-      - ./sites/templates/site-box:/data
+      # Survives Dokploy code/ replacement (generated config.alloy + snmp/blackbox)
+      - noc_sitebox_data:/data
       - noc_sitebox_state:/state
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
@@ -44,6 +50,18 @@ services:
       STATE_DIR: /state
       SYNC_INTERVAL_SEC: ${SYNC_INTERVAL_SEC:-90}
       PORT: "8090"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:8090/api/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 18
+      start_period: 25s
 
   alloy:
     image: grafana/alloy:v1.5.1
@@ -56,9 +74,8 @@ services:
     environment:
       <<: *collector-env
     volumes:
-      - ./sites/templates/site-box/config.alloy:/etc/alloy/config.alloy:ro
-      - ./sites/templates/site-box/blackbox.yml:/etc/alloy/blackbox.yml:ro
-      - ./sites/templates/site-box/snmp.yml:/etc/alloy/snmp.yml:ro
+      # Same volume Console writes — blackbox.yml, snmp.yml, config.alloy
+      - noc_sitebox_data:/etc/alloy:ro
       - /:/rootfs:ro
       - noc_speedtest_textfile:/var/lib/node_exporter/textfile
     working_dir: /etc/alloy
@@ -68,7 +85,8 @@ services:
       - --storage.path=/var/lib/alloy/data
       - --server.http.listen-addr=127.0.0.1:12345
     depends_on:
-      - collector-console
+      collector-console:
+        condition: service_healthy
 
   speedtest:
     build:
@@ -86,4 +104,5 @@ services:
 
 volumes:
   noc_sitebox_state:
+  noc_sitebox_data:
   noc_speedtest_textfile:

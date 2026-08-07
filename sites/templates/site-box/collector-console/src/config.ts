@@ -58,14 +58,52 @@ export function dataDir(): string {
   return resolvedDataDir;
 }
 
-/** Copy generate-config.sh (+ friends) from image into work dir if missing / stale. */
-export function ensureBundledToolkit(): string {
+/**
+ * Fail fast when /data is a stale Dokploy code/ bind (empty deleted inode) or read-only.
+ * Named volume noc_sitebox_data must be writable.
+ */
+export function assertDataDirWritable(): void {
   const dir = dataDir();
   try {
     fs.mkdirSync(dir, { recursive: true });
-  } catch {
-    /* ignore */
+  } catch (err) {
+    throw new Error(
+      `DATA_DIR ${dir} missing and cannot be created: ${err instanceof Error ? err.message : String(err)}. ` +
+        "Use docker-compose.site-box.yml with volume noc_sitebox_data:/data."
+    );
   }
+  if (fs.existsSync(path.join(dir, "config.alloy")) && fs.statSync(path.join(dir, "config.alloy")).isDirectory()) {
+    throw new Error(
+      `${path.join(dir, "config.alloy")} is a directory (Docker file-mount trap). ` +
+        "Remove it from the volume, then Force apply SNMP."
+    );
+  }
+  const probe = path.join(dir, ".write_probe");
+  try {
+    fs.writeFileSync(probe, "ok", "utf8");
+    fs.unlinkSync(probe);
+  } catch (err) {
+    throw new Error(
+      `DATA_DIR ${dir} is not writable (${err instanceof Error ? err.message : String(err)}). ` +
+        "Stale Dokploy code/ bind mounts break after redeploy — use named volume noc_sitebox_data:/data in docker-compose.site-box.yml, rebuild, and recreate containers."
+    );
+  }
+}
+
+/** True when Alloy can load from the shared data volume. */
+export function alloyConfigReady(): boolean {
+  const dir = dataDir();
+  const required = ["config.alloy", "blackbox.yml", "snmp.yml"] as const;
+  return required.every((name) => {
+    const p = path.join(dir, name);
+    return fs.existsSync(p) && fs.statSync(p).isFile();
+  });
+}
+
+/** Copy generate-config.sh (+ friends) from image into work dir if missing / stale. */
+export function ensureBundledToolkit(): string {
+  const dir = dataDir();
+  assertDataDirWritable();
 
   const scripts = ["generate-config.sh", "validate-config.sh"] as const;
   const seeds = ["blackbox.yml", "snmp.yml"] as const;
@@ -77,19 +115,21 @@ export function ensureBundledToolkit(): string {
     try {
       fs.copyFileSync(src, dest);
       fs.chmodSync(dest, 0o755);
-    } catch {
-      /* data dir may be read-only; regenerate will still try /opt/sitebox */
+    } catch (err) {
+      console.warn(`[toolkit] copy ${name} failed:`, err instanceof Error ? err.message : err);
     }
   }
 
   for (const name of seeds) {
     const src = path.join(BUNDLED_TOOLKIT, name);
     const dest = path.join(dir, name);
-    if (!fs.existsSync(src) || fs.existsSync(dest)) continue;
+    if (!fs.existsSync(src)) continue;
+    // Always refresh seeds from image when dest missing; keep existing snmp communities
+    if (fs.existsSync(dest)) continue;
     try {
       fs.copyFileSync(src, dest);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.warn(`[toolkit] seed ${name} failed:`, err instanceof Error ? err.message : err);
     }
   }
 

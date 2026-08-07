@@ -26,7 +26,8 @@ Host metrics may still use `integrations/unix` dual-read in NOC until all sites 
    - Any patch that injects legacy Alloy config with `integrations.snmp` / job names `integrations/snmp/site_1_*`
    - Any hand-edited live `config.alloy` patch (Console sync regenerates it)
    - Keep only: repo-root `docker-compose.site-box.yml` (Dokploy Compose Path) + Environment secrets; optional community note
-   - Do **not** use `sites/templates/site-box/docker-compose.yml` as Dokploy Compose Path (`.:/data` mounts monorepo → generate-config missing)
+   - Do **not** use `sites/templates/site-box/docker-compose.yml` as Dokploy Compose Path
+   - Prefer repo-root compose named volume `noc_sitebox_data` (not bind to `code/`) so redeploy does not stale-mount empty `/data`
 
 3. **Redeploy** site-box from git with **rebuild** (`collector-console` + `noc_site_alloy`) so `/opt/sitebox/generate-config.sh` includes SNMP job relabel.
 
