@@ -138,11 +138,12 @@ Collector box → Alloy → Prometheus (central)
     - Normalize to `firing`/`resolved` in `alertmanager.ts`
   - **Alloy remote_write out-of-order → local SNMP DOWN (2026-08-11)**
     - Alloy logged `400 out of order sample` to metrics.iyazbrhm.cloud — samples dropped → devices DOWN
-    - Central Prometheus: `--storage.tsdb.out_of_order_time_window=6h` (was 30m; WAL + CF tunnel lag)
+    - Central Prometheus: `storage.tsdb.out_of_order_time_window: 6h` in prometheus.yml (not a CLI flag; was wrongly set as --storage.tsdb… and crashed startup)
     - Site-box remote_write: `max_shards=1`, `enable_http2=false` (v1.5.1 still used HTTP/2), `sample_age_limit=5h`, longer backoff/timeout, `noc_site`+`noc_collector` labels
     - Persist Alloy WAL `noc_alloy_wal`; ops wipe volume if OOO storms after downtime (see `docs/ALLOY_COLLECTOR.md`)
     - Log clue: reshard `to=6` means stale config still on default `max_shards=50` — Force apply / rebuild console
-  - **Temporary SNMP status bridge (2026-07-22)**
+  - **Prometheus OOO config fix (2026-08-11)**
+    - Moved OOO window from invalid CLI flag into `infra/prometheus/prometheus.yml` `storage.tsdb`  - **Temporary SNMP status bridge (2026-07-22)**
     - While `site_snmp_if_mib` / `snmp_up` empty, NOC Local devices use `up{job=~"integrations/snmp/.*"}`
   - **Dashboard layout null coerce + compact density (2026-07-22)**
     - Fix 400 Invalid layout: RGL `Infinity`/`NaN` serialized as JSON `null` on x/y/w/h
@@ -218,7 +219,7 @@ Collector box → Alloy → Prometheus (central)
 ## Dokploy notes
 - Publish `noc-app:8080` and optionally `grafana:3000`
 - Keep Prometheus on `127.0.0.1:9090`; expose only via Cloudflare Tunnel `metrics.` + Access Service Token
-- Prometheus accepts out-of-order remote_write for **6h** (`--storage.tsdb.out_of_order_time_window`) so site Alloy WAL replay / CF tunnel lag does not drop SNMP; recreate prometheus after pull to load entrypoint
+- Prometheus accepts out-of-order remote_write for **6h** via `storage.tsdb.out_of_order_time_window` in `prometheus.yml` (not a CLI flag) so site Alloy WAL replay / CF tunnel lag does not drop SNMP; recreate/reload prometheus after pull
 - Optional: `PROMETHEUS_APPLY_CMD=docker restart noc_prometheus` on noc-app (Docker socket required)
 - Volumes: `noc_runtime` (sites + retention flags), `noc_exports`, `prometheus_data`
 - Site-box: secrets in Dokploy **Environment** only; do not patch live `config.alloy` when Console sync is used

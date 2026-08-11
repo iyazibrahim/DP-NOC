@@ -290,18 +290,20 @@ docker start noc_site_alloy   # or Dokploy Redeploy site-box
 
 Then Force apply again and watch logs — no more `out of order sample`.
 
-**4) VPS — confirm Prometheus OOO flag is live** (compose must use `docker-entrypoint.sh`)
+**4) VPS — confirm Prometheus OOO window is live** (in `prometheus.yml`, not a CLI flag)
 
 ```bash
-docker inspect noc_prometheus --format '{{json .Config.Entrypoint}}'
-# Expect: ["/bin/sh","/etc/prometheus/docker-entrypoint.sh"]
+docker exec noc_prometheus cat /etc/prometheus/prometheus.yml | grep -A2 'out_of_order'
+# Expect:
+#   storage:
+#     tsdb:
+#       out_of_order_time_window: 6h
 
-docker exec noc_prometheus ps aux | grep -o 'out_of_order[^ ]*' || \
-  docker exec noc_prometheus sh -c 'tr "\0" " " </proc/1/cmdline; echo'
-# Expect: --storage.tsdb.out_of_order_time_window=6h
-
-# If still 30m or missing: pull latest compose + entrypoint, then:
+# After pull: recreate so the mounted prometheus.yml is picked up
 docker compose up -d prometheus --force-recreate
+
+# Or hot-reload if already running with lifecycle enabled:
+curl -X POST http://127.0.0.1:9090/-/reload
 ```
 
 ### Three-query SNMP prove (Grafana Explore or Prometheus)
