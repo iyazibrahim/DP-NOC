@@ -322,22 +322,33 @@ export async function getHetrixUptimeReport(
     const data = asRecord(root.data) ?? root;
     const summary = asRecord(data.summary) ?? asRecord(root.summary) ?? {};
     const uptimeObj = asRecord(summary.uptime) ?? asRecord(data.uptime) ?? {};
-    const uptimePct = normalizeUptimePct(
+    let uptimePct = normalizeUptimePct(
       numOrNull(
         uptimeObj.percentage ??
+          uptimeObj.percentage_incl_maint ??
           uptimeObj.uptime ??
           summary.uptime_percentage ??
           summary.percentage ??
-          data.uptime_percentage
+          data.uptime_percentage ??
+          data.percentage ??
+          root.uptime
       )
     );
+    // Some plans return only daily points — average them for the window summary
+    const daily = parseDailyFromReport(data, days);
+    if (uptimePct == null && daily.length > 0) {
+      const nums = daily.map((d) => d.uptimePct).filter((n): n is number => n != null);
+      if (nums.length > 0) {
+        uptimePct = Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10;
+      }
+    }
     const downtimeCount =
       numOrNull(uptimeObj.downtimes ?? summary.downtimes ?? data.downtimes) ?? null;
 
     const report: HetrixUptimeReport = {
       uptimePct,
       downtimeCount,
-      daily: parseDailyFromReport(data, days),
+      daily,
       hourlySeries: hourlyStats ? parseHourlySeries(data) : []
     };
     reportCache.set(cacheKey, { at: Date.now(), report });

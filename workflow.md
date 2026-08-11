@@ -223,7 +223,7 @@ Collector box → Alloy → Prometheus (central)
 - Compose must pass them through: `HETRIXTOOLS_API_TOKEN=${HETRIXTOOLS_API_TOKEN:-}` (commented lines never reach the container even if Dokploy has the var)
 - Without token, create/delete/status overlay are no-ops (silent)
 - Live overlay: list/detail prefer Hetrix up/down + uptime % when a monitor matches the URL
-- **History fallback:** website detail fills empty Prom uptime / availability / outages / daily trends from Hetrix `report` + `downtimes` APIs (gap-fill only; does not overwrite local probe series). UI shows Source chip when `metricsSource` is `hetrix` or `mixed`. History responses cached ~3 min.
+- **History fallback:** website detail fills empty Prom uptime / availability / outages / daily trends from Hetrix `report` + `downtimes` APIs. Also **replaces** Prom history when blackbox is all-failures (`probe_success=0`, e.g. CF/WAF) while Hetrix says up (Eventree case). UI shows Source chip when `metricsSource` is `hetrix` or `mixed`. History responses cached ~3 min.
 - Check: Settings → Status strip (Hetrix pill), or `sudo docker exec noc_app printenv HETRIXTOOLS_API_TOKEN`
 - VPS docker needs `sudo` (or add user to `docker` group) — plain `docker` gets permission denied on `/var/run/docker.sock`
 

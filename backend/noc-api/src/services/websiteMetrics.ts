@@ -338,6 +338,24 @@ function trendAllMissing(bars: WebsiteTrendBar[]): boolean {
   return bars.length === 0 || bars.every((b) => b.uptimePct == null);
 }
 
+/** True when every sample is down (probe failing) — not the same as "no data". */
+function availabilityAllFailed(series: WebsiteSeriesPoint[]): boolean {
+  return series.length >= 2 && series.every((p) => p.value < 1);
+}
+
+function uptimeUnusable(pct: number | null): boolean {
+  return pct == null || pct <= 0;
+}
+
+function trendUnusable(bars: WebsiteTrendBar[]): boolean {
+  return bars.length === 0 || bars.every((b) => b.uptimePct == null || b.uptimePct <= 0);
+}
+
+function hetrixSaysUp(notes?: string, state?: string): boolean {
+  if (state === "healthy" && /HetrixTools:\s*up/i.test(notes || "")) return true;
+  return /HetrixTools:\s*up/i.test(notes || "");
+}
+
 function dailyBarsFromHetrix(
   daily: Array<{ dayStart: number | null; label: string; uptimePct: number | null }>,
   days: number,
@@ -484,10 +502,24 @@ export async function getWebsiteDetailMetrics(
   let usedHetrixHistory = false;
   let notes = base.notes;
 
-  const needUptime = uptimeRangePct == null || uptime7d == null || uptime30d == null;
-  const needSeries = availabilitySeries.length < 2;
-  const needOutages = outages.length === 0;
-  const needTrends = trendAllMissing(weeklyTrend) || trendAllMissing(monthlyTrend);
+  // Blackbox often stores probe_success=0 (CF/WAF) while Hetrix multi-location says up.
+  // Treat all-failed Prom series as unusable and prefer Hetrix history (not only null/empty).
+  const promProbeFailed =
+    availabilityAllFailed(availabilitySeries) ||
+    (availabilitySeries.length >= 2 && uptimeUnusable(uptimeRangePct));
+  const preferHetrixHistory = hetrixSaysUp(base.notes, base.state) || promProbeFailed;
+
+  const needUptime =
+    uptimeUnusable(uptimeRangePct) ||
+    uptimeUnusable(uptime7d) ||
+    uptimeUnusable(uptime30d) ||
+    preferHetrixHistory;
+  const needSeries =
+    availabilitySeries.length < 2 || (preferHetrixHistory && availabilityAllFailed(availabilitySeries));
+  const needOutages =
+    outages.length === 0 || (preferHetrixHistory && availabilityAllFailed(availabilitySeries));
+  const needTrends =
+    trendUnusable(weeklyTrend) || trendUnusable(monthlyTrend) || preferHetrixHistory;
 
   if (needUptime || needSeries || needOutages || needTrends) {
     try {
@@ -497,7 +529,8 @@ export async function getWebsiteDetailMetrics(
         getHetrixUptimeReport,
         listHetrixDowntimes,
         downtimesToOutages,
-        availabilitySeriesFromDowntimes
+        availabilitySeriesFromDowntimes,
+        getHetrixStatusForUrl
       } = await import("./hetrixtools");
 
       if (hetrixEnabled()) {
@@ -506,8 +539,9 @@ export async function getWebsiteDetailMetrics(
         if (monitorId) {
           const reportDays = range === "30d" ? 30 : range === "7d" ? 7 : 2;
           const stepSec = range === "30d" ? 6 * 3600 : range === "7d" ? 3600 : 5 * 60;
+          const replaceUptime = preferHetrixHistory;
 
-          const [report7, report30, reportRange, downtimes] = await Promise.all([
+          const [report7, report30, reportRange, downtimes, hxLive] = await Promise.all([
             needUptime || needTrends
               ? getHetrixUptimeReport(monitorId, { days: 7, hourlyStats: false })
               : Promise.resolve(null),
@@ -519,40 +553,63 @@ export async function getWebsiteDetailMetrics(
               : Promise.resolve(null),
             needUptime || needSeries
               ? getHetrixUptimeReport(monitorId, {
-                  days: reportDays,
+                  days: Math.max(reportDays, 1),
                   hourlyStats: needSeries
                 })
               : Promise.resolve(null),
             needOutages || needSeries
               ? listHetrixDowntimes(monitorId, { startAfter: start, startBefore: end })
-              : Promise.resolve([])
+              : Promise.resolve([]),
+            replaceUptime && uptimeUnusable(base.uptime24h)
+              ? getHetrixStatusForUrl(url)
+              : Promise.resolve(null)
           ]);
 
-          if (uptime7d == null && report7?.uptimePct != null) {
+          if ((uptime7d == null || replaceUptime) && report7?.uptimePct != null) {
             uptime7d = report7.uptimePct;
             usedHetrixHistory = true;
           }
-          if (uptime30d == null && report30?.uptimePct != null) {
+          if ((uptime30d == null || replaceUptime) && report30?.uptimePct != null) {
             uptime30d = report30.uptimePct;
             usedHetrixHistory = true;
           }
-          if (uptimeRangePct == null) {
+          if (uptimeRangePct == null || replaceUptime) {
             const fromRange = reportRange?.uptimePct;
             if (fromRange != null) {
               uptimeRangePct = fromRange;
               usedHetrixHistory = true;
-            } else if (range === "24h" && base.uptime24h != null) {
-              uptimeRangePct = base.uptime24h;
+            } else if (range === "24h" && (base.uptime24h != null || hxLive?.uptimePct != null)) {
+              uptimeRangePct = hxLive?.uptimePct ?? base.uptime24h;
+              usedHetrixHistory = true;
             } else if (range === "7d" && uptime7d != null) {
               uptimeRangePct = uptime7d;
+              usedHetrixHistory = true;
             } else if (range === "30d" && uptime30d != null) {
               uptimeRangePct = uptime30d;
+              usedHetrixHistory = true;
             }
           }
 
-          if (needOutages && downtimes.length > 0) {
-            outages = downtimesToOutages(downtimes, start, end);
-            if (outages.length > 0) usedHetrixHistory = true;
+          // Keep KPI "uptime24h" aligned when Prom was 0% and Hetrix has a value
+          let uptime24h = base.uptime24h;
+          if (replaceUptime || uptimeUnusable(uptime24h)) {
+            const fromHx =
+              hxLive?.uptimePct ??
+              (range === "24h" ? uptimeRangePct : null) ??
+              report7?.uptimePct ??
+              reportRange?.uptimePct;
+            if (fromHx != null) {
+              uptime24h = fromHx;
+              usedHetrixHistory = true;
+            }
+          }
+
+          if (needOutages) {
+            const hxOutages = downtimesToOutages(downtimes, start, end);
+            if (hxOutages.length > 0 || preferHetrixHistory) {
+              outages = hxOutages;
+              usedHetrixHistory = true;
+            }
           }
 
           if (needSeries) {
@@ -575,20 +632,63 @@ export async function getWebsiteDetailMetrics(
           }
 
           const trendSource = report30?.daily?.length ? report30 : report7;
-          if (trendAllMissing(weeklyTrend) && trendSource) {
-            weeklyTrend = dailyBarsFromHetrix(trendSource.daily, 7, end);
-            if (!trendAllMissing(weeklyTrend)) usedHetrixHistory = true;
+          if ((trendUnusable(weeklyTrend) || preferHetrixHistory) && trendSource) {
+            const bars = dailyBarsFromHetrix(trendSource.daily, 7, end);
+            if (!trendAllMissing(bars) || bars.some((b) => b.uptimePct != null)) {
+              weeklyTrend = bars;
+              usedHetrixHistory = true;
+            }
           }
-          if (trendAllMissing(monthlyTrend) && report30) {
-            monthlyTrend = dailyBarsFromHetrix(report30.daily, 30, end);
-            if (!trendAllMissing(monthlyTrend)) usedHetrixHistory = true;
+          if ((trendUnusable(monthlyTrend) || preferHetrixHistory) && report30) {
+            const bars = dailyBarsFromHetrix(report30.daily, 30, end);
+            if (!trendAllMissing(bars) || bars.some((b) => b.uptimePct != null)) {
+              monthlyTrend = bars;
+              usedHetrixHistory = true;
+            }
           }
 
           if (usedHetrixHistory) {
-            const tag = "History: HetrixTools (local probe empty)";
+            const tag = preferHetrixHistory
+              ? "History: HetrixTools (local probe unreliable)"
+              : "History: HetrixTools (local probe empty)";
             notes = notes ? `${notes} · ${tag}` : tag;
             if (monitorId) void persistHetrixId(siteId, url, monitorId);
           }
+
+          const hadAnyProm =
+            (hadPromUptime && !preferHetrixHistory) ||
+            (hadPromSeries && !availabilityAllFailed(availabilitySeries)) ||
+            hadPromOutages ||
+            (hadPromTrends && !preferHetrixHistory);
+          // latency series still from Prom when present → mixed
+          const metricsSource: WebsiteDetailMetrics["metricsSource"] = usedHetrixHistory
+            ? latencySeries.length > 0 || hadAnyProm
+              ? "mixed"
+              : "hetrix"
+            : "prometheus";
+
+          return {
+            ...base,
+            uptime24h,
+            notes,
+            name: meta.name,
+            url,
+            siteId,
+            siteName: meta.siteName,
+            range,
+            uptime7d,
+            uptime30d,
+            uptimeRangePct: uptimeRangePct ?? (range === "24h" ? uptime24h : null),
+            latencyAvgMs,
+            latencyMaxMs,
+            latencySeries,
+            availabilitySeries,
+            outages,
+            weeklyTrend,
+            monthlyTrend,
+            lastCheckAt,
+            metricsSource
+          };
         }
       }
     } catch (err) {
