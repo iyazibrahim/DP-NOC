@@ -220,7 +220,7 @@ Collector box → Alloy → Prometheus (central)
 - Env on **noc-app** (Dokploy Environment, then redeploy): `HETRIXTOOLS_API_TOKEN`, optional `HETRIXTOOLS_LOCATIONS=sgp,ams,nyc`, `HETRIXTOOLS_CONTACT_LIST`
 - Compose must pass them through: `HETRIXTOOLS_API_TOKEN=${HETRIXTOOLS_API_TOKEN:-}` (commented lines never reach the container even if Dokploy has the var)
 - Without token, create/delete/status overlay are no-ops (silent)
-- Check: Settings → HetrixTools card, or `sudo docker exec noc_app printenv HETRIXTOOLS_API_TOKEN`
+- Check: Settings → Status strip (Hetrix pill), or `sudo docker exec noc_app printenv HETRIXTOOLS_API_TOKEN`
 - VPS docker needs `sudo` (or add user to `docker` group) — plain `docker` gets permission denied on `/var/run/docker.sock`
 
 ## Dokploy notes

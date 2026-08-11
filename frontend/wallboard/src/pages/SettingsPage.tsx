@@ -220,9 +220,28 @@ export function SettingsPage() {
         .join(" · ") || "All channels off"
     : "Loading…";
 
+  const hetrixLabel = !hetrix
+    ? "…"
+    : !hetrix.configured
+      ? "Not configured"
+      : hetrix.ok
+        ? "Connected"
+        : "API error";
+
+  const hetrixTone = !hetrix
+    ? "neutral"
+    : !hetrix.configured
+      ? "warn"
+      : hetrix.ok
+        ? "ok"
+        : "bad";
+
   return (
     <div className="page">
-      <PageHeader title="Settings" subtitle="Open a module to configure — keeps the page clear" />
+      <PageHeader
+        title="Settings"
+        subtitle="Status above · open a tile below to configure"
+      />
 
       {error ? (
         <Alert variant="destructive" className="mb-3">
@@ -231,97 +250,112 @@ export function SettingsPage() {
       ) : null}
       {msg ? <p className="muted">{msg}</p> : null}
 
-      <div className="settingsBento">
-        <section className="settingsBentoCard settingsBentoCard--detection">
-          <div className="settingsBentoEyebrow">Read-only</div>
-          <h2 className="settingsBentoTitle">Detection</h2>
-          <p className="muted settingsBentoBlurb">
-            UI refreshes every 5s. Outages show in ~30–60s. Collector ICMP scrape must be 15–30s.
-          </p>
-          {statusTiming ? (
-            <ul className="settingsBentoList">
-              <li>Refresh every {statusTiming.dashboardRefreshSec}s</li>
-              <li>Down after {statusTiming.metricFreshWindowSec}s silence</li>
-              <li>Typical detection ~{statusTiming.typicalDetectionSec}s</li>
-            </ul>
-          ) : (
-            <p className="muted">Loading…</p>
-          )}
-        </section>
+      <section className="settingsStatus" aria-label="Read-only status">
+        <div className="settingsSectionHead">
+          <span className="settingsSectionEyebrow">Read-only</span>
+          <h2 className="settingsSectionTitle">Status</h2>
+        </div>
+        <div className="settingsStatusGrid">
+          <div className="settingsStatusPanel">
+            <div className="settingsStatusPanelTop">
+              <span className="settingsStatusName">Detection</span>
+              <span className="settingsStatusHint">Collector ICMP 15–30s</span>
+            </div>
+            <div className="settingsStatRow">
+              <div className="settingsStat">
+                <span className="settingsStatLabel">Refresh</span>
+                <strong className="settingsStatValue">
+                  {statusTiming ? `${statusTiming.dashboardRefreshSec}s` : "—"}
+                </strong>
+              </div>
+              <div className="settingsStat">
+                <span className="settingsStatLabel">Down after</span>
+                <strong className="settingsStatValue">
+                  {statusTiming ? `${statusTiming.metricFreshWindowSec}s` : "—"}
+                </strong>
+              </div>
+              <div className="settingsStat">
+                <span className="settingsStatLabel">Typical</span>
+                <strong className="settingsStatValue">
+                  {statusTiming ? `~${statusTiming.typicalDetectionSec}s` : "—"}
+                </strong>
+              </div>
+            </div>
+          </div>
 
-        <section className="settingsBentoCard">
-          <div className="settingsBentoEyebrow">Websites</div>
-          <h2 className="settingsBentoTitle">HetrixTools</h2>
-          <p className="muted settingsBentoBlurb">
-            Multi-location uptime overlay. Token is set in Dokploy env (not in this UI).
-          </p>
-          {hetrix ? (
-            <ul className="settingsBentoList">
-              <li>{hetrix.configured ? (hetrix.ok ? "Connected" : "Token set — API error") : "Not configured"}</li>
-              <li>Locations: {hetrix.locations || "—"}</li>
-              <li>
-                Monitors:{" "}
-                {hetrix.monitorCount != null ? hetrix.monitorCount : "—"}
-              </li>
-              <li className="muted" style={{ fontSize: 12 }}>
-                {hetrix.message}
-              </li>
-            </ul>
-          ) : (
-            <p className="muted">Loading…</p>
-          )}
-        </section>
+          <div className="settingsStatusPanel">
+            <div className="settingsStatusPanelTop">
+              <span className="settingsStatusName">HetrixTools</span>
+              <span className={`settingsStatusPill settingsStatusPill--${hetrixTone}`}>
+                {hetrixLabel}
+              </span>
+            </div>
+            <div className="settingsStatRow">
+              <div className="settingsStat">
+                <span className="settingsStatLabel">Locations</span>
+                <strong className="settingsStatValue settingsStatValue--sm">
+                  {hetrix?.locations || "—"}
+                </strong>
+              </div>
+              <div className="settingsStat">
+                <span className="settingsStatLabel">Monitors</span>
+                <strong className="settingsStatValue">
+                  {hetrix?.monitorCount != null ? hetrix.monitorCount : "—"}
+                </strong>
+              </div>
+            </div>
+            <p className="settingsStatusNote" title={hetrix?.message || undefined}>
+              {hetrix?.message || "Loading…"}
+            </p>
+          </div>
+        </div>
+      </section>
 
-        <button
-          type="button"
-          className="settingsBentoCard settingsBentoCard--click"
-          onClick={() => setModal("notifications")}
-        >
-          <div className="settingsBentoEyebrow">Alerts</div>
-          <h2 className="settingsBentoTitle">Notifications</h2>
-          <p className="muted settingsBentoBlurb">{notifSummary}</p>
-          <span className="settingsBentoCta">Configure →</span>
-        </button>
+      <section className="settingsModules" aria-label="Configurable modules">
+        <div className="settingsSectionHead">
+          <span className="settingsSectionEyebrow">Actions</span>
+          <h2 className="settingsSectionTitle">Configure</h2>
+        </div>
+        <div className="settingsModuleGrid">
+          <button
+            type="button"
+            className="settingsModule"
+            onClick={() => setModal("notifications")}
+          >
+            <span className="settingsModuleEyebrow">Alerts</span>
+            <span className="settingsModuleTitle">Notifications</span>
+            <span className="settingsModuleBlurb">{notifSummary}</span>
+            <span className="settingsModuleCta">Configure →</span>
+          </button>
 
-        <button
-          type="button"
-          className="settingsBentoCard settingsBentoCard--click"
-          onClick={() => setModal("storage")}
-        >
-          <div className="settingsBentoEyebrow">Prometheus</div>
-          <h2 className="settingsBentoTitle">Storage</h2>
-          <p className="muted settingsBentoBlurb">
-            Retention & scrape · {formatBytes(storageBytes)}
-          </p>
-          <span className="settingsBentoCta">Configure →</span>
-        </button>
+          <button type="button" className="settingsModule" onClick={() => setModal("storage")}>
+            <span className="settingsModuleEyebrow">Prometheus</span>
+            <span className="settingsModuleTitle">Storage</span>
+            <span className="settingsModuleBlurb">
+              Retention & scrape · {formatBytes(storageBytes)}
+            </span>
+            <span className="settingsModuleCta">Configure →</span>
+          </button>
 
-        <button
-          type="button"
-          className="settingsBentoCard settingsBentoCard--click"
-          onClick={() => setModal("exports")}
-        >
-          <div className="settingsBentoEyebrow">Reports</div>
-          <h2 className="settingsBentoTitle">Exports</h2>
-          <p className="muted settingsBentoBlurb">
-            {exports.length === 0
-              ? "No exports yet — run weekly or monthly"
-              : `${exports.length} export record(s)`}
-          </p>
-          <span className="settingsBentoCta">Open →</span>
-        </button>
+          <button type="button" className="settingsModule" onClick={() => setModal("exports")}>
+            <span className="settingsModuleEyebrow">Reports</span>
+            <span className="settingsModuleTitle">Exports</span>
+            <span className="settingsModuleBlurb">
+              {exports.length === 0
+                ? "No exports yet — run weekly or monthly"
+                : `${exports.length} export record(s)`}
+            </span>
+            <span className="settingsModuleCta">Open →</span>
+          </button>
 
-        <button
-          type="button"
-          className="settingsBentoCard settingsBentoCard--click settingsBentoCard--accent"
-          onClick={() => setModal("advanced")}
-        >
-          <div className="settingsBentoEyebrow">System</div>
-          <h2 className="settingsBentoTitle">Advanced</h2>
-          <p className="muted settingsBentoBlurb">Grafana URL, layout reset, seed sites</p>
-          <span className="settingsBentoCta">Open →</span>
-        </button>
-      </div>
+          <button type="button" className="settingsModule" onClick={() => setModal("advanced")}>
+            <span className="settingsModuleEyebrow">System</span>
+            <span className="settingsModuleTitle">Advanced</span>
+            <span className="settingsModuleBlurb">Grafana URL, layout reset, seed sites</span>
+            <span className="settingsModuleCta">Open →</span>
+          </button>
+        </div>
+      </section>
 
       <Modal
         open={modal === "notifications"}
