@@ -325,6 +325,14 @@ app.get("/api/diagnostics", async (_req, res) => {
   if (logLower.includes("remote_write") && (logLower.includes("error") || logLower.includes("failed"))) {
     remoteWriteHints.push("Alloy logs mention remote_write errors — open Settings → View Alloy logs");
   }
+  if (logLower.includes("out of order sample")) {
+    remoteWriteHints.push(
+      "400 out of order sample — Force apply SNMP, check NTP, wipe noc_alloy_wal if stuck (see docs/ALLOY_COLLECTOR.md)"
+    );
+  }
+  if (logLower.includes("http2") && logLower.includes("connection lost")) {
+    remoteWriteHints.push("HTTP/2 connection lost — Force apply so config has enable_http2=false");
+  }
   const crashHints = alloyLogCrashHints(logs);
   const cfgHealth = inspectConfigAlloyHealth();
 

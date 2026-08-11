@@ -1,7 +1,8 @@
 #!/bin/sh
 set -eu
 
-BASE_FLAGS="--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --web.enable-lifecycle --web.enable-remote-write-receiver --storage.tsdb.out_of_order_time_window=30m"
+# 6h OOO: site Alloy WAL replay after CF tunnel downtime can lag >30m; still bounded.
+BASE_FLAGS="--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --web.enable-lifecycle --web.enable-remote-write-receiver --storage.tsdb.out_of_order_time_window=6h"
 
 EXTRA=""
 FLAGS_FILE="/etc/prometheus/runtime/prometheus-retention.flags"

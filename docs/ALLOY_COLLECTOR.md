@@ -246,11 +246,63 @@ docker logs -f noc_site_alloy
 # Look for remote_write errors:
 #   403 = bad/missing Access token
 #   502 = metrics origin down
-#   400 "out of order sample" = NUC clock skew / duplicate Alloy / Prometheus needs
-#        --storage.tsdb.out_of_order_time_window (central stack enables 30m)
+#   400 "out of order sample" = NUC clock skew / WAL backlog / multi-shard /
+#        duplicate Alloy / Prometheus OOO window too small (central stack: 6h)
 ```
 
-Keep the NUC on NTP (`timedatectl status`). After Alloy recreate, Force apply SNMP so `config.alloy` includes the hardened `remote_write` queue.
+Keep the NUC on NTP (`timedatectl status`). After Alloy recreate, **Force apply** SNMP so volume `config.alloy` includes the hardened `remote_write` queue (`max_shards=1`, `enable_http2=false`, `sample_age_limit=5h`).
+
+### Recovery: `400 out of order sample` / WAL stuck after downtime
+
+Typical log sequence: `Done replaying WAL` → `context deadline exceeded` / `http2: client connection lost` → `resharding … to=N` → `non-recoverable error … out of order sample`.
+
+**1) NUC — NTP + confirm one Alloy**
+
+```bash
+timedatectl status   # System clock synchronized: yes
+docker ps -a --filter name=alloy
+# Expect exactly one: noc_site_alloy. Stop/remove any duplicate writers.
+```
+
+**2) NUC — regenerate hardened remote_write + restart**
+
+Prefer Collector Console → **Force apply** (rebuilds `config.alloy` from image `generate-config.sh`). Or on host:
+
+```bash
+# If toolkit is in the data volume / Dokploy code tree:
+grep -A20 'queue_config' /path/to/config.alloy
+# Must show max_shards = 1 and enable_http2 = false
+docker restart noc_site_alloy
+```
+
+**3) NUC — wipe Alloy WAL if OOO storms continue** (drops unsent backlog; scrapes resume from now)
+
+```bash
+docker stop noc_site_alloy
+# Dokploy project prefix varies — pick the WAL volume for this site:
+docker volume ls | grep -i alloy_wal
+docker volume rm <project>_noc_alloy_wal
+# If volume is still in use, remove the container first, then:
+# docker rm -f noc_site_alloy && docker volume rm <project>_noc_alloy_wal
+# Redeploy / compose up so Alloy recreates with empty WAL
+docker start noc_site_alloy   # or Dokploy Redeploy site-box
+```
+
+Then Force apply again and watch logs — no more `out of order sample`.
+
+**4) VPS — confirm Prometheus OOO flag is live** (compose must use `docker-entrypoint.sh`)
+
+```bash
+docker inspect noc_prometheus --format '{{json .Config.Entrypoint}}'
+# Expect: ["/bin/sh","/etc/prometheus/docker-entrypoint.sh"]
+
+docker exec noc_prometheus ps aux | grep -o 'out_of_order[^ ]*' || \
+  docker exec noc_prometheus sh -c 'tr "\0" " " </proc/1/cmdline; echo'
+# Expect: --storage.tsdb.out_of_order_time_window=6h
+
+# If still 30m or missing: pull latest compose + entrypoint, then:
+docker compose up -d prometheus --force-recreate
+```
 
 ### Three-query SNMP prove (Grafana Explore or Prometheus)
 
@@ -303,6 +355,11 @@ Open **Sites** → site should leave WAN `unknown` once `probe_success` series e
 | `stat /rootfs/proc: no such file` | Missing host volume `/:/rootfs:ro` on alloy (Dokploy) |
 | Series under wrong site | `SITE_NAME` ≠ seed registry id |
 | Writing to noc. domain | Wrong URL — use `metrics.` + `/api/v1/write` |
+| `400 out of order sample` after WAL replay | Tunnel timeout + multi-shard / old WAL timestamps; see recovery above (NTP, Force apply, wipe `noc_alloy_wal`, verify Prom `6h` OOO) |
+| Resharding `to=6` (or high) | Stale `config.alloy` still on default `max_shards=50` — Force apply / redeploy console image |
+| Two `noc_site_alloy` / old SNMP patch Alloy | Duplicate writers → OOO; keep a single site-box Alloy |
+
+Speedtest textfile metrics (`noc_speedtest_*`) and SNMP (`snmp_*` / IF-MIB) use different metric names and jobs — they do not collide. Collision risk is **two Alloy processes** writing the same `site`/`device` series.
 
 ---
 

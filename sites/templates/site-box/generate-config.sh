@@ -64,29 +64,41 @@ cat > "$OUT_FILE" <<EOF
 //   SITE_NAME, PING_TARGET_1, PING_TARGET_2, HOST_DEVICE_ID
 
 prometheus.remote_write "central" {
-  // Distinguishes series if multiple collectors ever share labels; helps ops debug.
+  // Unique per site + collector instance (avoids colliding writers / aids debug).
   external_labels = {
-    noc_site = sys.env("SITE_NAME"),
+    noc_site      = sys.env("SITE_NAME"),
+    noc_collector = sys.env("HOST_DEVICE_ID"),
   }
 
   endpoint {
     url = sys.env("CENTRAL_REMOTE_WRITE_URL")
-    remote_timeout = "30s"
+    remote_timeout = "60s"
+    // CF tunnel flaps often surface as http2 connection lost; force HTTP/1.1.
+    enable_http2 = false
 
     headers = {
       "CF-Access-Client-Id"     = sys.env("CF_ACCESS_CLIENT_ID"),
       "CF-Access-Client-Secret" = sys.env("CF_ACCESS_CLIENT_SECRET"),
     }
 
-    // Smaller shards reduce duplicate-writer OOO storms after Alloy recreate.
+    // Single shard keeps timestamps ordered; age limit drops WAL backlog older
+    // than central Prometheus OOO window (6h) so 400s do not storm.
     queue_config {
       capacity             = 10000
-      max_shards           = 2
+      max_shards           = 1
       min_shards           = 1
-      max_samples_per_send = 1000
+      max_samples_per_send = 500
       batch_send_deadline  = "5s"
-      min_backoff          = "100ms"
-      max_backoff          = "5s"
+      min_backoff          = "500ms"
+      max_backoff          = "30s"
+      sample_age_limit     = "5h"
+      retry_on_http_429    = true
+    }
+
+    metadata_config {
+      send               = true
+      send_interval      = "5m"
+      max_samples_per_send = 500
     }
   }
 }

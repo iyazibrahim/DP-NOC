@@ -72,6 +72,17 @@ if grep -qiE 'integrations\.snmp|job_name.*=.*"integrations/snmp' "$CFG"; then
   fail "legacy integrations/snmp found in config.alloy — use site-box site_snmp_if_mib only (see CUTOVER_SITEBOX_SNMP.md)"
 fi
 
+# Hardened remote_write (OOO / CF tunnel) — regenerate if missing
+if ! grep -qE 'max_shards[[:space:]]*=[[:space:]]*1' "$CFG"; then
+  fail "remote_write queue_config max_shards must be 1 (stale config causes OOO after WAL replay)"
+fi
+if ! grep -qE 'enable_http2[[:space:]]*=[[:space:]]*false' "$CFG"; then
+  fail "remote_write enable_http2 = false required (Alloy v1.5.1 defaults can use HTTP/2 → connection lost)"
+fi
+if ! grep -qE 'sample_age_limit[[:space:]]*=' "$CFG"; then
+  fail "remote_write sample_age_limit missing — regenerate generate-config.sh output"
+fi
+
 if [[ "$errors" -gt 0 ]]; then
   echo "validate-config.sh: $errors error(s) in $CFG" >&2
   exit 1
