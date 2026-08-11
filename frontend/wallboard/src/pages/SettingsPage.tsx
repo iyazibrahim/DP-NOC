@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import {
   applyRetentionSettings,
@@ -597,8 +598,9 @@ export function SettingsPage() {
 
       <Modal open={modal === "exports"} title="Reports & exports" onClose={() => setModal(null)} wide>
         <p className="muted">
-          Weekly (Sunday 00:00 MYT) and monthly (1st 00:00 MYT) when enabled. Metrics retention default
-          is 30 days — apply storage settings and restart Prometheus so monthly history is complete.
+          Weekly (Sunday 00:00 MYT) and monthly (1st 00:00 MYT) when enabled. Each run produces a formal
+          A4 HTML report (Print → Save as PDF) plus machine-readable JSON. Metrics retention default is
+          30 days — apply storage settings and restart Prometheus so monthly history is complete.
         </p>
         <div className="formActions">
           <Button type="button" onClick={() => onRunExport("weekly")} disabled={busy}>
@@ -742,7 +744,7 @@ export function SettingsPage() {
             <tr>
               <th>Period</th>
               <th>Created</th>
-              <th>Files</th>
+              <th>Report</th>
             </tr>
           </thead>
           <tbody>
@@ -758,16 +760,23 @@ export function SettingsPage() {
                   <td>{rec.period}</td>
                   <td>{new Date(rec.createdAt).toLocaleString()}</td>
                   <td>
-                    {rec.files.map((f) => (
-                      <button
-                        key={f}
-                        type="button"
-                        onClick={() => onDownload(rec, f)}
-                        style={{ marginRight: 8 }}
-                      >
-                        {f}
-                      </button>
-                    ))}
+                    <Button asChild type="button" variant="outline" size="sm" className="mr-2">
+                      <Link to={`/reports/${encodeURIComponent(rec.id)}`} onClick={() => setModal(null)}>
+                        View A4 / PDF
+                      </Link>
+                    </Button>
+                    {rec.files
+                      .filter((f) => f !== "report.csv")
+                      .map((f) => (
+                        <button
+                          key={f}
+                          type="button"
+                          onClick={() => onDownload(rec, f)}
+                          style={{ marginRight: 8 }}
+                        >
+                          {f}
+                        </button>
+                      ))}
                   </td>
                 </tr>
               ))

@@ -540,6 +540,24 @@ export async function listExports(token: string) {
   });
 }
 
+export async function getExportReport(token: string, exportId: string) {
+  return fetchJson<{ report: MonthlyReportPayload }>(`/api/exports/${encodeURIComponent(exportId)}`, {
+    headers: authHeaders(token)
+  });
+}
+
+/** Fetch formal A4 HTML report (for iframe / print). */
+export async function fetchExportReportHtml(token: string, exportId: string): Promise<string> {
+  const res = await fetch(url(`/api/exports/${encodeURIComponent(exportId)}/view`), {
+    headers: authHeaders(token)
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res.text();
+}
+
 export async function getLatestMonthlyReport(token: string) {
   return fetchJson<{ report: MonthlyReportPayload | null }>("/api/exports/latest/monthly", {
     headers: authHeaders(token)

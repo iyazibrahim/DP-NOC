@@ -17,6 +17,7 @@ import { DevicesPage } from "./pages/DevicesPage";
 import { AlertsPage } from "./pages/AlertsPage";
 import { WebsitesPage } from "./pages/WebsitesPage";
 import { WebsiteDetailPage } from "./pages/WebsiteDetailPage";
+import { FormalReportPage } from "./pages/FormalReportPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
 function LoginScreen() {
@@ -113,6 +114,7 @@ function Shell() {
           <Route path="/websites" element={<WebsitesPage />} />
           <Route path="/websites/:siteId" element={<WebsiteDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/reports/:exportId" element={<FormalReportPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

@@ -7,6 +7,7 @@ import { getActiveAlerts } from "./alertmanager";
 import { dualSnmpUpAvg } from "./promLabels";
 import { listIncidents, type Incident } from "../data/incidents";
 import { buildIfUtilQuery } from "./metrics";
+import { renderExportReportHtml } from "./exportReportHtml";
 
 export type ExportPeriod = "weekly" | "monthly";
 
@@ -262,34 +263,8 @@ export async function runExport(period: ExportPeriod): Promise<ExportRecord> {
   const jsonPath = path.join(dir, "report.json");
   fs.writeFileSync(jsonPath, JSON.stringify(payload, null, 2) + "\n", "utf8");
 
-  const csvLines = [
-    "section,siteId,deviceId,name,metric,value",
-    ...siteRows.map(
-      (r) => `site,${r.siteId},,${JSON.stringify(r.name)},overall,${r.overall}`
-    ),
-    ...siteRows.map(
-      (r) =>
-        `site,${r.siteId},,${JSON.stringify(r.name)},wan_uptime_pct,${r.wanUptimePct ?? ""}`
-    ),
-    ...deviceRows.map(
-      (r) =>
-        `device,${r.siteId},${r.deviceId},${JSON.stringify(r.name)},uptime_pct,${r.uptimePct ?? ""}`
-    ),
-    ...deviceRows
-      .filter((r) => r.kind === "network")
-      .flatMap((r) => [
-        `device,${r.siteId},${r.deviceId},${JSON.stringify(r.name)},avg_util_in_pct,${r.avgUtilInPct ?? ""}`,
-        `device,${r.siteId},${r.deviceId},${JSON.stringify(r.name)},peak_util_in_pct,${r.peakUtilInPct ?? ""}`,
-        `device,${r.siteId},${r.deviceId},${JSON.stringify(r.name)},avg_util_out_pct,${r.avgUtilOutPct ?? ""}`,
-        `device,${r.siteId},${r.deviceId},${JSON.stringify(r.name)},peak_util_out_pct,${r.peakUtilOutPct ?? ""}`
-      ]),
-    ...incidents.timeline.map(
-      (i) =>
-        `incident,${i.siteId},,${JSON.stringify(i.title)},opened_at,${i.openedAt}`
-    )
-  ];
-  const csvPath = path.join(dir, "report.csv");
-  fs.writeFileSync(csvPath, csvLines.join("\n") + "\n", "utf8");
+  const htmlPath = path.join(dir, "report.html");
+  fs.writeFileSync(htmlPath, renderExportReportHtml(payload), "utf8");
 
   pruneExports(period, 12);
 
@@ -298,7 +273,7 @@ export async function runExport(period: ExportPeriod): Promise<ExportRecord> {
     period,
     createdAt: payload.generatedAt,
     dir,
-    files: ["report.json", "report.csv"]
+    files: ["report.html", "report.json"]
   };
 }
 
@@ -307,7 +282,14 @@ export function listExports(): ExportRecord[] {
   for (const period of ["weekly", "monthly"] as ExportPeriod[]) {
     for (const dir of listExportDirs(period)) {
       const date = path.basename(dir);
-      const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json") || f.endsWith(".csv"));
+      const files = fs
+        .readdirSync(dir)
+        .filter((f) => /\.(json|html|csv)$/i.test(f))
+        .sort((a, b) => {
+          const rank = (n: string) =>
+            n.endsWith(".html") ? 0 : n.endsWith(".json") ? 1 : 2;
+          return rank(a) - rank(b) || a.localeCompare(b);
+        });
       out.push({
         id: `${period}-${date}`,
         period,
@@ -318,6 +300,41 @@ export function listExports(): ExportRecord[] {
     }
   }
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function getExportPayload(id: string): ExportReportPayload | null {
+  for (const rec of listExports()) {
+    if (rec.id === id || rec.id.startsWith(id)) {
+      const jsonPath = path.join(rec.dir, "report.json");
+      if (!fs.existsSync(jsonPath)) return null;
+      try {
+        return JSON.parse(fs.readFileSync(jsonPath, "utf8")) as ExportReportPayload;
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+/** Ensure report.html exists for an export (regenerate from JSON if missing). */
+export function ensureExportHtml(id: string): string | null {
+  for (const rec of listExports()) {
+    if (rec.id === id || rec.id.startsWith(id)) {
+      const htmlPath = path.join(rec.dir, "report.html");
+      if (fs.existsSync(htmlPath)) return htmlPath;
+      const jsonPath = path.join(rec.dir, "report.json");
+      if (!fs.existsSync(jsonPath)) return null;
+      try {
+        const payload = JSON.parse(fs.readFileSync(jsonPath, "utf8")) as ExportReportPayload;
+        fs.writeFileSync(htmlPath, renderExportReportHtml(payload), "utf8");
+        return htmlPath;
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
 }
 
 export function resolveExportFile(id: string, filename: string): string | null {

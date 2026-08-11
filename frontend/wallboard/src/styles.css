@@ -2234,7 +2234,37 @@ textarea {
   padding-left: 18px;
 }
 
-/* Settings: status strip (read-only) + equal configure tiles */
+/* Formal A4 report viewer */
+.formalReportPage {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.formalReportFrameWrap {
+  flex: 1;
+  min-height: 70vh;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #e8eef2;
+}
+
+.formalReportFrame {
+  width: 100%;
+  height: min(85vh, 1200px);
+  border: 0;
+  background: #e8eef2;
+}
+
+@media print {
+  .formalReportPage .pageHeader,
+  .formalReportPage .mb-3,
+  .app-sidebar,
+  .sidebar {
+    display: none !important;
+  }
+}
 .settingsSectionHead {
   display: flex;
   align-items: baseline;

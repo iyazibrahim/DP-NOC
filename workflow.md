@@ -163,6 +163,8 @@ Collector box → Alloy → Prometheus (central)
   - **Retention 30d + monthly report + SNMP util (2026-07-23)**
     - Prometheus default retention **30d**; Settings/docs/flags updated (apply + restart Prom on VPS)
     - Monthly/weekly exports include incident timeline + SNMP util avg/peak
+    - Formal A4 HTML report (`report.html`) is the primary deliverable — Settings → View A4 / PDF (`/reports/:id`), browser Print → Save as PDF; JSON retained for API/in-app summary; CSV no longer generated on new runs (legacy JSON can regenerate HTML via `/view`)
+    - Hetrix history gap-fill for website detail when blackbox empty
     - Settings → Reports shows in-app monthly summary (uptime, incidents, util)
     - Traffic charts show Kbps/Mbps only; presets `if_util_in_pct` / `if_util_out_pct`
 
