@@ -243,7 +243,7 @@ export function AlertsPage() {
                     <td>
                       {siteId ? <Link to={`/sites/${siteId}`}>{siteId}</Link> : "—"}
                     </td>
-                    <td>{a.status}</td>
+                    <td>{typeof a.status === "string" ? a.status : "firing"}</td>
                     <td>{a.annotations?.summary ?? "—"}</td>
                   </tr>
                 );

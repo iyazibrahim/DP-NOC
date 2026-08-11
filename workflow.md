@@ -133,6 +133,13 @@ Collector box → Alloy → Prometheus (central)
     - Optional `HETRIXTOOLS_API_TOKEN` — status overlay prefers Hetrix up/down + uptime %
     - Add/remove/edit website creates/deletes Hetrix monitors (locations default sgp,ams,nyc)
     - Stores `hetrixMonitorId` on site/global website records
+  - **Alerts page React crash (2026-08-11)**
+    - Alertmanager `/api/v2/alerts` returns `status` as object `{state,inhibited,…}` — UI rendered object → React #31
+    - Normalize to `firing`/`resolved` in `alertmanager.ts`
+  - **Alloy remote_write out-of-order → local SNMP DOWN (2026-08-11)**
+    - Alloy logged `400 out of order sample` to metrics.iyazbrhm.cloud — samples dropped → devices DOWN
+    - Central Prometheus: `--storage.tsdb.out_of_order_time_window=30m`
+    - Site-box: remote_write `external_labels` + queue_config; persist Alloy WAL volume `noc_alloy_wal`
   - **Temporary SNMP status bridge (2026-07-22)**
     - While `site_snmp_if_mib` / `snmp_up` empty, NOC Local devices use `up{job=~"integrations/snmp/.*"}`
   - **Dashboard layout null coerce + compact density (2026-07-22)**
@@ -209,6 +216,7 @@ Collector box → Alloy → Prometheus (central)
 ## Dokploy notes
 - Publish `noc-app:8080` and optionally `grafana:3000`
 - Keep Prometheus on `127.0.0.1:9090`; expose only via Cloudflare Tunnel `metrics.` + Access Service Token
+- Prometheus accepts out-of-order remote_write for **30m** (`--storage.tsdb.out_of_order_time_window`) so site Alloy clock skew / recreate does not drop SNMP
 - Optional: `PROMETHEUS_APPLY_CMD=docker restart noc_prometheus` on noc-app (Docker socket required)
 - Volumes: `noc_runtime` (sites + retention flags), `noc_exports`, `prometheus_data`
 - Site-box: secrets in Dokploy **Environment** only; do not patch live `config.alloy` when Console sync is used

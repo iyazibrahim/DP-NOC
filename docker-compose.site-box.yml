@@ -76,6 +76,8 @@ services:
     volumes:
       # Same volume Console writes — blackbox.yml, snmp.yml, config.alloy
       - noc_sitebox_data:/etc/alloy:ro
+      # Persist WAL so restarts don't thrash remote_write; keep NUC clock on NTP
+      - noc_alloy_wal:/var/lib/alloy/data
       - /:/rootfs:ro
       - noc_speedtest_textfile:/var/lib/node_exporter/textfile
     working_dir: /etc/alloy
@@ -105,4 +107,5 @@ services:
 volumes:
   noc_sitebox_state:
   noc_sitebox_data:
+  noc_alloy_wal:
   noc_speedtest_textfile:

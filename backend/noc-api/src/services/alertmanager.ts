@@ -8,14 +8,58 @@ export type Alert = {
   endsAt?: string;
 };
 
-function normalizeAlerts(data: unknown): Alert[] {
-  if (Array.isArray(data)) return data as Alert[];
-  if (data && typeof data === "object") {
-    const obj = data as Record<string, unknown>;
-    if (Array.isArray(obj.alerts)) return obj.alerts as Alert[];
-    if (Array.isArray(obj.data)) return obj.data as Alert[];
+/**
+ * Alertmanager /api/v2/alerts returns status as an object:
+ * `{ state, silencedBy?, inhibitedBy?, mutedBy? }` (or inhibited/muted/silenced).
+ * Webhook payloads use a plain string `"firing"|"resolved"`.
+ */
+function normalizeAlertStatus(raw: unknown): "firing" | "resolved" {
+  if (raw === "firing" || raw === "resolved") return raw;
+  if (typeof raw === "string") {
+    const s = raw.toLowerCase();
+    if (s === "resolved" || s === "inactive") return "resolved";
+    if (s === "firing" || s === "active" || s === "suppressed" || s === "unprocessed") {
+      return "firing";
+    }
   }
-  return [];
+  if (raw && typeof raw === "object") {
+    const state = String((raw as { state?: unknown }).state ?? "").toLowerCase();
+    if (state === "resolved" || state === "inactive") return "resolved";
+    // active / suppressed / unprocessed → treat as firing for NOC tables
+    if (state) return "firing";
+  }
+  return "firing";
+}
+
+function normalizeOneAlert(item: unknown): Alert | null {
+  if (!item || typeof item !== "object") return null;
+  const a = item as Record<string, unknown>;
+  const labels =
+    a.labels && typeof a.labels === "object"
+      ? (a.labels as Record<string, string>)
+      : {};
+  const annotations =
+    a.annotations && typeof a.annotations === "object"
+      ? (a.annotations as Record<string, string>)
+      : undefined;
+  return {
+    status: normalizeAlertStatus(a.status),
+    labels,
+    annotations,
+    startsAt: typeof a.startsAt === "string" ? a.startsAt : undefined,
+    endsAt: typeof a.endsAt === "string" ? a.endsAt : undefined
+  };
+}
+
+function normalizeAlerts(data: unknown): Alert[] {
+  let list: unknown[] = [];
+  if (Array.isArray(data)) list = data;
+  else if (data && typeof data === "object") {
+    const obj = data as Record<string, unknown>;
+    if (Array.isArray(obj.alerts)) list = obj.alerts;
+    else if (Array.isArray(obj.data)) list = obj.data;
+  }
+  return list.map(normalizeOneAlert).filter((a): a is Alert => a != null);
 }
 
 /** Never throws — empty list if Alertmanager is down or unreachable. */

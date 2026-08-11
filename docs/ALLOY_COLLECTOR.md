@@ -243,8 +243,14 @@ Optional: if you set `NOC_API_URL` (and optionally `NOC_OPERATOR_TOKEN` or `NOC_
 
 ```bash
 docker logs -f noc_site_alloy
-# Look for remote_write errors (403 = bad/missing Access token; 502 = metrics origin)
+# Look for remote_write errors:
+#   403 = bad/missing Access token
+#   502 = metrics origin down
+#   400 "out of order sample" = NUC clock skew / duplicate Alloy / Prometheus needs
+#        --storage.tsdb.out_of_order_time_window (central stack enables 30m)
 ```
+
+Keep the NUC on NTP (`timedatectl status`). After Alloy recreate, Force apply SNMP so `config.alloy` includes the hardened `remote_write` queue.
 
 ### Three-query SNMP prove (Grafana Explore or Prometheus)
 

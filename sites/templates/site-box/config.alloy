@@ -5,12 +5,29 @@
 //   SITE_NAME, PING_TARGET_1, PING_TARGET_2, HOST_DEVICE_ID
 
 prometheus.remote_write "central" {
+  // Distinguishes series if multiple collectors ever share labels; helps ops debug.
+  external_labels = {
+    noc_site = sys.env("SITE_NAME"),
+  }
+
   endpoint {
     url = sys.env("CENTRAL_REMOTE_WRITE_URL")
+    remote_timeout = "30s"
 
     headers = {
       "CF-Access-Client-Id"     = sys.env("CF_ACCESS_CLIENT_ID"),
       "CF-Access-Client-Secret" = sys.env("CF_ACCESS_CLIENT_SECRET"),
+    }
+
+    // Smaller shards reduce duplicate-writer OOO storms after Alloy recreate.
+    queue_config {
+      capacity             = 10000
+      max_shards           = 2
+      min_shards           = 1
+      max_samples_per_send = 1000
+      batch_send_deadline  = "5s"
+      min_backoff          = "100ms"
+      max_backoff          = "5s"
     }
   }
 }

@@ -78,6 +78,7 @@ services:
       - ./blackbox.yml:/etc/alloy/blackbox.yml:ro
       - ./snmp.yml:/etc/alloy/snmp.yml:ro
       - /:/rootfs:ro
+      - noc_alloy_wal:/var/lib/alloy/data
       - noc_speedtest_textfile:/var/lib/node_exporter/textfile
     working_dir: /etc/alloy
     command:
@@ -105,4 +106,5 @@ services:
 
 volumes:
   noc_sitebox_state:
+  noc_alloy_wal:
   noc_speedtest_textfile:
