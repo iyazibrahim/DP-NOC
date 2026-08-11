@@ -89,10 +89,10 @@ services:
       - PROMETHEUS_BASE_URL=http://prometheus:9090
       - ALERTMANAGER_BASE_URL=http://alertmanager:9093
       - GRAFANA_PUBLIC_URL=http://localhost:3001
-      # Optional: HetrixTools website status overlay + create/delete sync
-      # - HETRIXTOOLS_API_TOKEN=
-      # - HETRIXTOOLS_LOCATIONS=sgp,ams,nyc
-      # - HETRIXTOOLS_CONTACT_LIST=
+      # HetrixTools: set values in Dokploy Environment (or .env); empty = disabled
+      - HETRIXTOOLS_API_TOKEN=${HETRIXTOOLS_API_TOKEN:-}
+      - HETRIXTOOLS_LOCATIONS=${HETRIXTOOLS_LOCATIONS:-sgp,ams,nyc}
+      - HETRIXTOOLS_CONTACT_LIST=${HETRIXTOOLS_CONTACT_LIST:-}
       # Optional: docker restart noc_prometheus (requires Docker socket mount on VPS)
       # - PROMETHEUS_APPLY_CMD=docker restart noc_prometheus
       # - ALERTMANAGER_APPLY_CMD=docker restart noc_alertmanager
