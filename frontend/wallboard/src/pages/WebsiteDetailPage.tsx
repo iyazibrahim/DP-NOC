@@ -327,6 +327,14 @@ export function WebsiteDetailPage() {
       ) : null}
       {msg ? <p className="mb-3 text-sm text-muted-foreground">{msg}</p> : null}
 
+      {detail?.metricsSource === "hetrix" || detail?.metricsSource === "mixed" ? (
+        <p className="mb-3 text-xs text-muted-foreground">
+          {detail.metricsSource === "hetrix"
+            ? "History from HetrixTools (local blackbox probe empty)."
+            : "Mixed history — some metrics from HetrixTools where local probe data was missing."}
+        </p>
+      ) : null}
+
       <KpiStrip>
         <KpiChip
           label="State"
@@ -351,6 +359,12 @@ export function WebsiteDetailPage() {
         />
         <KpiChip label="Last check" value={formatAge(detail?.lastCheckAt ?? null)} />
         <KpiChip label="Outages" value={detail?.outages.length ?? 0} />
+        {detail?.metricsSource === "hetrix" || detail?.metricsSource === "mixed" ? (
+          <KpiChip
+            label="Source"
+            value={detail.metricsSource === "hetrix" ? "HetrixTools" : "Mixed"}
+          />
+        ) : null}
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Range</span>
           <RangeToggle value={range} onChange={(v) => setRange(v as DetailRange)} />

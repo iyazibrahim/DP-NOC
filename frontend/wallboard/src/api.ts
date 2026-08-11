@@ -428,6 +428,7 @@ export type WebsiteDetail = {
   weeklyTrend: Array<{ label: string; start: number; end: number; uptimePct: number | null }>;
   monthlyTrend: Array<{ label: string; start: number; end: number; uptimePct: number | null }>;
   lastCheckAt: number | null;
+  metricsSource?: "prometheus" | "hetrix" | "mixed";
 };
 
 export async function getWebsiteDetail(
