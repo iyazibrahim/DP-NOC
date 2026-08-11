@@ -3,7 +3,7 @@ import express from "express";
 import { requireJwt, type AuthenticatedRequest } from "../middleware/auth";
 import { getActiveAlerts } from "../services/alertmanager";
 import { computeAllSitesStatus } from "../services/status";
-import { listSyncedIncidents } from "../services/incidents";
+import { listSyncedIncidents, suppressIncidentUntilRecovered } from "../services/incidents";
 import { acknowledgeIncident } from "../data/incidents";
 
 export const alertsRouter = express.Router();
@@ -38,6 +38,10 @@ alertsRouter.post(
     const by = req.auth?.sub ?? "operator";
     const row = acknowledgeIncident(id, by);
     if (!row) return res.status(404).json({ error: "Incident not found" });
+    // Ack while still firing: suppress reopen until this condition recovers.
+    if (!row.resolvedAt) {
+      suppressIncidentUntilRecovered(row.key);
+    }
     return res.json({ incident: row });
   }
 );

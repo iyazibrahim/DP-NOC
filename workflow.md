@@ -217,6 +217,10 @@ Collector box → Alloy → Prometheus (central)
     - Website charts: dark tooltips + 1-decimal % / integer ms formatters
     - Backend event-level website outages: fine-grained probe series (`15s` / `1m` / `5m`), down if `value < 1`, separate from smoothed chart series
     - Outage table pagination (10/25/50/All); StatusBadge contrast fix for UNKNOWN/Ended on dark UI
+  - **Ack reopen fix (2026-08-11)**
+    - Root cause: acknowledging an still-firing incident left the sustain timer armed, so the next status poll immediately `upsertOpenIncident`’d a new open row (History spam every few seconds, Resolved = —)
+    - Fix: ack of unresolved incidents suppresses that key until the condition recovers; then a later outage must sustain ~90s again before reopening
+    - Alerts copy clarified: Ack clears the list, does not change site health
 
 ## HetrixTools
 - Env on **noc-app** (Dokploy Environment, then redeploy): `HETRIXTOOLS_API_TOKEN`, optional `HETRIXTOOLS_LOCATIONS=sgp,ams,nyc`, `HETRIXTOOLS_CONTACT_LIST`

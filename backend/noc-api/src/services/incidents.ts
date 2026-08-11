@@ -18,12 +18,32 @@ function siteName(siteId: string): string {
 const criticalSinceByKey = new Map<string, number>();
 
 /**
+ * Keys acked while still firing. Stay suppressed until the condition recovers;
+ * otherwise every status poll would reopen a new open incident immediately.
+ */
+const suppressedUntilRecovered = new Set<string>();
+
+/**
+ * After operator ack of an active (unresolved) incident, do not reopen until
+ * this key has left critical and a later outage sustains again.
+ */
+export function suppressIncidentUntilRecovered(key: string): void {
+  suppressedUntilRecovered.add(key);
+  criticalSinceByKey.delete(key);
+}
+
+/**
  * Returns true only after the condition has been continuously critical for INCIDENT_SUSTAIN_MS.
  * Clears the timer when not critical so brief blips do not accumulate.
+ * Honors ack-suppression until recovery.
  */
 function sustainedCritical(key: string, isCritical: boolean): boolean {
   if (!isCritical) {
     criticalSinceByKey.delete(key);
+    suppressedUntilRecovered.delete(key);
+    return false;
+  }
+  if (suppressedUntilRecovered.has(key)) {
     return false;
   }
   const now = Date.now();

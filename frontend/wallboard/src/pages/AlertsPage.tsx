@@ -84,7 +84,7 @@ export function AlertsPage() {
     <div className="page">
       <PageHeader
         title="Alerts"
-        subtitle="Incidents stay until you acknowledge them — even after the site recovers"
+        subtitle="Acknowledge clears open incidents — it does not change site health"
       />
 
       {error ? (
@@ -111,7 +111,9 @@ export function AlertsPage() {
       <div className="tableCard" style={{ marginBottom: 14 }}>
         <div className="tableTitle">Open incidents</div>
         <p className="muted" style={{ marginBottom: 10 }}>
-          Acknowledge to clear from this list. Recovered incidents stay here until you ack them.
+          Acknowledge clears this list (does not fix the site). If still down, it stays cleared until
+          the site recovers — then a new outage can open again. Recovered incidents also stay here
+          until you ack them.
         </p>
         <table className="dataTable">
           <thead>
