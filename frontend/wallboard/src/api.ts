@@ -594,5 +594,19 @@ export async function getStatusTiming(token: string) {
   });
 }
 
+export type HetrixSettingsStatus = {
+  configured: boolean;
+  locations: string;
+  monitorCount: number | null;
+  ok: boolean;
+  message: string;
+};
+
+export async function getHetrixSettings(token: string) {
+  return fetchJson<HetrixSettingsStatus>("/api/settings/hetrix", {
+    headers: authHeaders(token)
+  });
+}
+
 /** Dashboard status poll interval (ms) — keep in sync with backend STATUS_DASHBOARD_REFRESH_SEC */
 export const STATUS_POLL_MS = 5_000;

@@ -216,6 +216,12 @@ Collector box → Alloy → Prometheus (central)
     - Backend event-level website outages: fine-grained probe series (`15s` / `1m` / `5m`), down if `value < 1`, separate from smoothed chart series
     - Outage table pagination (10/25/50/All); StatusBadge contrast fix for UNKNOWN/Ended on dark UI
 
+## HetrixTools
+- Env on **noc-app** (Dokploy Environment, then redeploy): `HETRIXTOOLS_API_TOKEN`, optional `HETRIXTOOLS_LOCATIONS=sgp,ams,nyc`, `HETRIXTOOLS_CONTACT_LIST`
+- Without token, create/delete/status overlay are no-ops (silent)
+- Check: Settings → HetrixTools card, or `sudo docker exec noc_app printenv HETRIXTOOLS_API_TOKEN`
+- VPS docker needs `sudo` (or add user to `docker` group) — plain `docker` gets permission denied on `/var/run/docker.sock`
+
 ## Dokploy notes
 - Publish `noc-app:8080` and optionally `grafana:3000`
 - Keep Prometheus on `127.0.0.1:9090`; expose only via Cloudflare Tunnel `metrics.` + Access Service Token

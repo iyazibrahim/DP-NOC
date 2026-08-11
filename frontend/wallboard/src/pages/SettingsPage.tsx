@@ -9,6 +9,7 @@ import {
   getRetentionSettings,
   getSettings,
   getStatusTiming,
+  getHetrixSettings,
   listExports,
   resetDashboardLayout,
   resetSitesFromSeed,
@@ -60,6 +61,13 @@ export function SettingsPage() {
   const [monthlyReport, setMonthlyReport] = useState<MonthlyReportPayload | null>(null);
   const [notifications, setNotifications] = useState<NotificationsConfig | null>(null);
   const [statusTiming, setStatusTiming] = useState<StatusTimingInfo | null>(null);
+  const [hetrix, setHetrix] = useState<{
+    configured: boolean;
+    locations: string;
+    monitorCount: number | null;
+    ok: boolean;
+    message: string;
+  } | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,13 +75,14 @@ export function SettingsPage() {
 
   async function reload() {
     if (!token) return;
-    const [settings, ret, ex, notif, timing, monthly] = await Promise.all([
+    const [settings, ret, ex, notif, timing, monthly, hx] = await Promise.all([
       getSettings(),
       getRetentionSettings(token),
       listExports(token),
       getNotificationsSettings(token),
       getStatusTiming(token),
-      getLatestMonthlyReport(token)
+      getLatestMonthlyReport(token),
+      getHetrixSettings(token).catch(() => null)
     ]);
     setGrafanaUrl(settings.grafanaPublicUrl);
     setRetention(ret.config);
@@ -82,6 +91,7 @@ export function SettingsPage() {
     setNotifications(notif.config);
     setStatusTiming(timing);
     setMonthlyReport(monthly.report);
+    setHetrix(hx);
   }
 
   useEffect(() => {
@@ -233,6 +243,29 @@ export function SettingsPage() {
               <li>Refresh every {statusTiming.dashboardRefreshSec}s</li>
               <li>Down after {statusTiming.metricFreshWindowSec}s silence</li>
               <li>Typical detection ~{statusTiming.typicalDetectionSec}s</li>
+            </ul>
+          ) : (
+            <p className="muted">Loading…</p>
+          )}
+        </section>
+
+        <section className="settingsBentoCard">
+          <div className="settingsBentoEyebrow">Websites</div>
+          <h2 className="settingsBentoTitle">HetrixTools</h2>
+          <p className="muted settingsBentoBlurb">
+            Multi-location uptime overlay. Token is set in Dokploy env (not in this UI).
+          </p>
+          {hetrix ? (
+            <ul className="settingsBentoList">
+              <li>{hetrix.configured ? (hetrix.ok ? "Connected" : "Token set — API error") : "Not configured"}</li>
+              <li>Locations: {hetrix.locations || "—"}</li>
+              <li>
+                Monitors:{" "}
+                {hetrix.monitorCount != null ? hetrix.monitorCount : "—"}
+              </li>
+              <li className="muted" style={{ fontSize: 12 }}>
+                {hetrix.message}
+              </li>
             </ul>
           ) : (
             <p className="muted">Loading…</p>

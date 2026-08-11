@@ -74,6 +74,40 @@ settingsRouter.get("/status-timing", requireJwt(["operator", "wallboard"]), (_re
   });
 });
 
+/** HetrixTools integration status (token never returned). */
+settingsRouter.get("/hetrix", requireJwt(["operator", "wallboard"]), async (_req, res) => {
+  const { hetrixEnabled, listHetrixMonitors } = await import("../services/hetrixtools");
+  const configured = hetrixEnabled();
+  if (!configured) {
+    return res.json({
+      configured: false,
+      locations: env.HETRIXTOOLS_LOCATIONS,
+      monitorCount: null,
+      ok: false,
+      message:
+        "HETRIXTOOLS_API_TOKEN is not set on noc-app. Add it in Dokploy → Environment, then redeploy."
+    });
+  }
+  try {
+    const monitors = await listHetrixMonitors(true);
+    return res.json({
+      configured: true,
+      locations: env.HETRIXTOOLS_LOCATIONS,
+      monitorCount: monitors.length,
+      ok: true,
+      message: `Connected — ${monitors.length} website monitor(s) visible to API`
+    });
+  } catch (e) {
+    return res.json({
+      configured: true,
+      locations: env.HETRIXTOOLS_LOCATIONS,
+      monitorCount: null,
+      ok: false,
+      message: e instanceof Error ? e.message : String(e)
+    });
+  }
+});
+
 settingsRouter.get("/notifications", requireJwt(["operator"]), (_req, res) => {
   const config = loadNotificationsConfig();
   return res.json({
