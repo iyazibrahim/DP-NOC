@@ -31,7 +31,14 @@ const envSchema = z.object({
 
   // Auto-register devices/collector hosts discovered in Prometheus `up` series.
   AUTO_SYNC_DEVICES: z.coerce.boolean().default(true),
-  AUTO_SYNC_NETWORK_DEVICES: z.coerce.boolean().default(false)
+  AUTO_SYNC_NETWORK_DEVICES: z.coerce.boolean().default(false),
+
+  /** Optional HetrixTools API key — overlays website status + sync create/delete monitors. */
+  HETRIXTOOLS_API_TOKEN: z.string().default(""),
+  /** Comma-separated location codes: nyc,sfo,dal,ams,lon,fra,sgp,syd,sao,tok,mba,waw */
+  HETRIXTOOLS_LOCATIONS: z.string().default("sgp,ams,nyc"),
+  /** Optional Hetrix contact list ID for alerts (empty = none). */
+  HETRIXTOOLS_CONTACT_LIST: z.string().default("")
 });
 
 export const env = envSchema.parse(process.env);

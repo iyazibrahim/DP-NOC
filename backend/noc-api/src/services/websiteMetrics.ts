@@ -219,6 +219,9 @@ export async function getWebsiteProbeMetrics(
     const durationSec = parseFirstVectorValue(
       await promQuery(`last_over_time(probe_duration_seconds{${sel}}[${METRIC_FRESH_WINDOW}])`)
     );
+    const httpStatus = parseFirstVectorValue(
+      await promQuery(`last_over_time(probe_http_status_code{${sel}}[${METRIC_FRESH_WINDOW}])`)
+    );
     const uptime = parseFirstVectorValue(
       await promQuery(`avg_over_time(probe_success{${sel}}[24h])`)
     );
@@ -250,16 +253,50 @@ export async function getWebsiteProbeMetrics(
       state = "healthy";
     } else {
       state = "critical";
-      notes = "Website probe failed";
+      if (httpStatus != null && Number.isFinite(httpStatus) && httpStatus > 0) {
+        notes = `Blackbox probe failed (HTTP ${Math.round(httpStatus)}) — site may block datacenter IPs or return a non-success status to the probe`;
+      } else {
+        notes =
+          "Blackbox probe failed (no HTTP status — TLS/DNS/connect error, often broken IPv6). Check VPS: curl -4 -I <url>";
+      }
+    }
+
+    let latencyMs =
+      durationSec != null && Number.isFinite(durationSec)
+        ? Math.round(durationSec * 1000)
+        : null;
+    let uptime24h =
+      uptime != null && Number.isFinite(uptime) ? Math.round(uptime * 1000) / 10 : null;
+
+    // HetrixTools overlay — prefer multi-location status when a monitor matches this URL
+    try {
+      const { getHetrixStatusForUrl, hetrixEnabled } = await import("./hetrixtools");
+      if (hetrixEnabled()) {
+        const hx = await getHetrixStatusForUrl(url);
+        if (hx) {
+          void persistHetrixId(siteId, url, hx.id);
+          if (hx.uptimePct != null) uptime24h = hx.uptimePct;
+          if (hx.latencyMs != null) latencyMs = hx.latencyMs;
+          if (hx.uptimeStatus === "up") {
+            if (state === "critical" || state === "unknown") {
+              notes = `HetrixTools: up${notes ? ` (${notes})` : " (local probe disagreed)"}`;
+            } else {
+              notes = notes || "HetrixTools: up";
+            }
+            state = "healthy";
+          } else if (hx.uptimeStatus === "down") {
+            state = "critical";
+            notes = "HetrixTools: down";
+          }
+        }
+      }
+    } catch {
+      /* overlay is best-effort */
     }
 
     return {
-      latencyMs:
-        durationSec != null && Number.isFinite(durationSec)
-          ? Math.round(durationSec * 1000)
-          : null,
-      uptime24h:
-        uptime != null && Number.isFinite(uptime) ? Math.round(uptime * 1000) / 10 : null,
+      latencyMs,
+      uptime24h,
       sparkline,
       state,
       notes
@@ -272,6 +309,26 @@ export async function getWebsiteProbeMetrics(
       state: "unknown",
       notes: "Could not read probe metrics"
     };
+  }
+}
+
+async function persistHetrixId(siteId: string, url: string, monitorId: string): Promise<void> {
+  try {
+    if (siteId === "global") {
+      const { findGlobalWebsite, setGlobalWebsiteHetrixId } = await import("../data/globalWebsites");
+      const cur = findGlobalWebsite(url);
+      if (cur && cur.hetrixMonitorId !== monitorId) {
+        setGlobalWebsiteHetrixId(url, monitorId);
+      }
+      return;
+    }
+    const { findWebsite, setWebsiteHetrixId } = await import("../data/sites");
+    const cur = findWebsite(siteId, url);
+    if (cur && cur.hetrixMonitorId !== monitorId) {
+      setWebsiteHetrixId(siteId, url, monitorId);
+    }
+  } catch {
+    /* ignore */
   }
 }
 

@@ -125,6 +125,14 @@ Collector box → Alloy → Prometheus (central)
   - **Website probes duplicate job_name (2026-08-07)**
     - `syncWebsiteProbes` emitted one `job_name: blackbox-website` per URL → Prometheus refused reload
     - Fixed: single scrape job with multiple `static_configs` targets
+  - **Website false DOWN / blackbox (2026-08-11)**
+    - Eventree showed DOWN with ~23ms latency while browser OK — probe_success=0 from central blackbox
+    - Blackbox: disable IPv6 fallback, browser-like UA; UI notes include probe HTTP status code
+    - Root cause: Cloudflare Bot Fight 403 to VPS IP (HetrixTools multi-location still OK)
+  - **HetrixTools website overlay + sync (2026-08-11)**
+    - Optional `HETRIXTOOLS_API_TOKEN` — status overlay prefers Hetrix up/down + uptime %
+    - Add/remove/edit website creates/deletes Hetrix monitors (locations default sgp,ams,nyc)
+    - Stores `hetrixMonitorId` on site/global website records
   - **Temporary SNMP status bridge (2026-07-22)**
     - While `site_snmp_if_mib` / `snmp_up` empty, NOC Local devices use `up{job=~"integrations/snmp/.*"}`
   - **Dashboard layout null coerce + compact density (2026-07-22)**

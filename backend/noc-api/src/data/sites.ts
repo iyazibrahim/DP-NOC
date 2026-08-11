@@ -27,7 +27,7 @@ export type Site = {
   address?: string;
   notes?: string;
   createdAt?: string;
-  websiteTargets: Array<{ name: string; url: string }>;
+  websiteTargets: Array<{ name: string; url: string; hetrixMonitorId?: string }>;
   wan: {
     dnsTarget: string;
     vpsTarget: string;
@@ -472,7 +472,7 @@ export function exportNetworkDevicesJson(siteId: string): Array<{
 
 export function addWebsite(
   siteId: string,
-  target: { name: string; url: string }
+  target: { name: string; url: string; hetrixMonitorId?: string }
 ): Site | null {
   const site = getSiteById(siteId);
   if (!site) return null;
@@ -484,7 +484,11 @@ export function addWebsite(
   if (site.websiteTargets.some((w) => w.url === url)) {
     throw new Error("Website URL already exists on this site");
   }
-  site.websiteTargets.push({ name, url });
+  site.websiteTargets.push({
+    name,
+    url,
+    ...(target.hetrixMonitorId ? { hetrixMonitorId: target.hetrixMonitorId } : {})
+  });
   persist();
   return site;
 }
@@ -492,7 +496,7 @@ export function addWebsite(
 export function updateWebsite(
   siteId: string,
   url: string,
-  patch: { name?: string; url?: string }
+  patch: { name?: string; url?: string; hetrixMonitorId?: string | null }
 ): Site | null {
   const site = getSiteById(siteId);
   if (!site) return null;
@@ -506,12 +510,37 @@ export function updateWebsite(
   if (patch.url && nextUrl !== url && site.websiteTargets.some((w) => w.url === nextUrl)) {
     throw new Error("Website URL already exists on this site");
   }
-  site.websiteTargets[idx] = {
+  const next: { name: string; url: string; hetrixMonitorId?: string } = {
     name: patch.name?.trim() || current.name,
     url: nextUrl
   };
+  if (patch.hetrixMonitorId === null) {
+    // cleared
+  } else if (typeof patch.hetrixMonitorId === "string" && patch.hetrixMonitorId) {
+    next.hetrixMonitorId = patch.hetrixMonitorId;
+  } else if (current.hetrixMonitorId && nextUrl === url) {
+    next.hetrixMonitorId = current.hetrixMonitorId;
+  }
+  site.websiteTargets[idx] = next;
   persist();
   return site;
+}
+
+export function setWebsiteHetrixId(
+  siteId: string,
+  url: string,
+  hetrixMonitorId: string | null
+): Site | null {
+  return updateWebsite(siteId, url, { hetrixMonitorId });
+}
+
+export function findWebsite(
+  siteId: string,
+  url: string
+): { name: string; url: string; hetrixMonitorId?: string } | null {
+  const site = getSiteById(siteId);
+  if (!site) return null;
+  return (site.websiteTargets ?? []).find((w) => w.url === url) ?? null;
 }
 
 export function removeWebsite(siteId: string, url: string): Site | null {

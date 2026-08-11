@@ -4,6 +4,8 @@ import path from "path";
 export type GlobalWebsiteTarget = {
   name: string;
   url: string;
+  /** HetrixTools uptime monitor ID when synced */
+  hetrixMonitorId?: string;
 };
 
 function resolveRuntimeDir(): string {
@@ -36,6 +38,14 @@ function readJsonFile<T>(file: string, fallback: T): T {
 function persist(targets: GlobalWebsiteTarget[]) {
   const file = globalFilePath();
   fs.writeFileSync(file, JSON.stringify(targets, null, 2) + "\n", "utf8");
+  try {
+    // Lazy require avoids cycle with websiteProbes → getGlobalWebsites
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { syncWebsiteProbes } = require("../services/websiteProbes") as typeof import("../services/websiteProbes");
+    syncWebsiteProbes();
+  } catch {
+    /* probe sync is best-effort */
+  }
 }
 
 export function getGlobalWebsites(): GlobalWebsiteTarget[] {
@@ -43,7 +53,11 @@ export function getGlobalWebsites(): GlobalWebsiteTarget[] {
   return readJsonFile<GlobalWebsiteTarget[]>(file, []);
 }
 
-export function addGlobalWebsite(target: { name: string; url: string }): GlobalWebsiteTarget[] {
+export function addGlobalWebsite(target: {
+  name: string;
+  url: string;
+  hetrixMonitorId?: string;
+}): GlobalWebsiteTarget[] {
   const url = target.url.trim();
   const name = target.name.trim() || url;
   if (!url) throw new Error("url is required");
@@ -54,14 +68,21 @@ export function addGlobalWebsite(target: { name: string; url: string }): GlobalW
     throw new Error("Website URL already exists");
   }
 
-  const next = [...current, { name, url }];
+  const next = [
+    ...current,
+    {
+      name,
+      url,
+      ...(target.hetrixMonitorId ? { hetrixMonitorId: target.hetrixMonitorId } : {})
+    }
+  ];
   persist(next);
   return next;
 }
 
 export function updateGlobalWebsite(
   url: string,
-  patch: { name?: string; newUrl?: string }
+  patch: { name?: string; newUrl?: string; hetrixMonitorId?: string | null }
 ): GlobalWebsiteTarget[] {
   const current = getGlobalWebsites();
   const idx = current.findIndex((w) => w.url === url);
@@ -76,9 +97,25 @@ export function updateGlobalWebsite(
   }
 
   const next = current.slice();
-  next[idx] = { name: nextName, url: nextUrl };
+  const prev = current[idx];
+  const updated: GlobalWebsiteTarget = {
+    name: nextName,
+    url: nextUrl
+  };
+  if (patch.hetrixMonitorId === null) {
+    // clear
+  } else if (typeof patch.hetrixMonitorId === "string" && patch.hetrixMonitorId) {
+    updated.hetrixMonitorId = patch.hetrixMonitorId;
+  } else if (prev.hetrixMonitorId && nextUrl === url) {
+    updated.hetrixMonitorId = prev.hetrixMonitorId;
+  }
+  next[idx] = updated;
   persist(next);
   return next;
+}
+
+export function setGlobalWebsiteHetrixId(url: string, hetrixMonitorId: string | null): void {
+  updateGlobalWebsite(url, { hetrixMonitorId });
 }
 
 export function removeGlobalWebsite(url: string): GlobalWebsiteTarget[] {
@@ -88,3 +125,6 @@ export function removeGlobalWebsite(url: string): GlobalWebsiteTarget[] {
   return next;
 }
 
+export function findGlobalWebsite(url: string): GlobalWebsiteTarget | undefined {
+  return getGlobalWebsites().find((w) => w.url === url);
+}

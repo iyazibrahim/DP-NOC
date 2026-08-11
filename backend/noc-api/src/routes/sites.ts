@@ -229,7 +229,7 @@ sitesRouter.post("/:id/websites/apply-probes", requireJwt(["operator"]), async (
   return res.json(result);
 });
 
-sitesRouter.post("/:id/websites", requireJwt(["operator"]), (req, res) => {
+sitesRouter.post("/:id/websites", requireJwt(["operator"]), async (req, res) => {
   const siteId = req.params.id;
   if (siteId !== "global" && !getSiteById(siteId)) {
     return res.status(404).json({ error: "Site not found" });
@@ -238,18 +238,32 @@ sitesRouter.post("/:id/websites", requireJwt(["operator"]), (req, res) => {
   const name = typeof body.name === "string" ? body.name : "";
   const url = typeof body.url === "string" ? body.url : "";
   try {
+    const {
+      ensureHetrixWebsiteMonitor
+    } = await import("../services/hetrixtools");
+    const hetrix = await ensureHetrixWebsiteMonitor(name || url, url);
+    const hetrixMonitorId = hetrix.monitorId || undefined;
+
     if (siteId === "global") {
-      addGlobalWebsite({ name, url });
-      return res.status(201).json({ site: asGlobalSite("global") });
+      addGlobalWebsite({ name, url, hetrixMonitorId });
+      await applyWebsiteProbes();
+      return res.status(201).json({
+        site: asGlobalSite("global"),
+        hetrix: { ok: hetrix.ok, message: hetrix.message, created: hetrix.created }
+      });
     }
-    const site = addWebsite(siteId, { name, url });
-    return res.status(201).json({ site: site ? toPublicSite(site) : null });
+    const site = addWebsite(siteId, { name, url, hetrixMonitorId });
+    await applyWebsiteProbes();
+    return res.status(201).json({
+      site: site ? toPublicSite(site) : null,
+      hetrix: { ok: hetrix.ok, message: hetrix.message, created: hetrix.created }
+    });
   } catch (e) {
     return res.status(400).json({ error: e instanceof Error ? e.message : "Add failed" });
   }
 });
 
-sitesRouter.patch("/:id/websites", requireJwt(["operator"]), (req, res) => {
+sitesRouter.patch("/:id/websites", requireJwt(["operator"]), async (req, res) => {
   const siteId = req.params.id;
   if (siteId !== "global" && !getSiteById(siteId)) {
     return res.status(404).json({ error: "Site not found" });
@@ -258,38 +272,101 @@ sitesRouter.patch("/:id/websites", requireJwt(["operator"]), (req, res) => {
   const currentUrl = typeof body.url === "string" ? body.url : "";
   if (!currentUrl) return res.status(400).json({ error: "url (current) is required" });
   try {
+    const newUrl = typeof body.newUrl === "string" ? body.newUrl : undefined;
+    const newName = typeof body.name === "string" ? body.name : undefined;
+    const {
+      deleteHetrixWebsiteMonitor,
+      ensureHetrixWebsiteMonitor,
+      findHetrixMonitorByUrl
+    } = await import("../services/hetrixtools");
+    const {
+      findGlobalWebsite
+    } = await import("../data/globalWebsites");
+    const { findWebsite } = await import("../data/sites");
+
+    const existing =
+      siteId === "global" ? findGlobalWebsite(currentUrl) : findWebsite(siteId, currentUrl);
+    const urlChanged = Boolean(newUrl && newUrl.trim() && newUrl.trim() !== currentUrl);
+
+    if (urlChanged) {
+      await deleteHetrixWebsiteMonitor({
+        monitorId: existing?.hetrixMonitorId,
+        url: currentUrl
+      });
+    }
+
+    let hetrixMonitorId: string | null | undefined = existing?.hetrixMonitorId;
+    if (urlChanged || !hetrixMonitorId) {
+      const targetUrl = (newUrl || currentUrl).trim();
+      const targetName = (newName || existing?.name || targetUrl).trim();
+      const hetrix = await ensureHetrixWebsiteMonitor(targetName, targetUrl);
+      hetrixMonitorId = hetrix.monitorId;
+    } else {
+      const matched = await findHetrixMonitorByUrl(currentUrl);
+      if (matched) hetrixMonitorId = matched.id;
+    }
+
     if (siteId === "global") {
       updateGlobalWebsite(currentUrl, {
-        name: typeof body.name === "string" ? body.name : undefined,
-        newUrl: typeof body.newUrl === "string" ? body.newUrl : undefined
+        name: newName,
+        newUrl,
+        hetrixMonitorId: hetrixMonitorId ?? null
       });
+      await applyWebsiteProbes();
       return res.json({ site: asGlobalSite("global") });
     }
     const site = updateWebsite(siteId, currentUrl, {
-      name: typeof body.name === "string" ? body.name : undefined,
-      url: typeof body.newUrl === "string" ? body.newUrl : undefined
+      name: newName,
+      url: newUrl,
+      hetrixMonitorId: hetrixMonitorId ?? null
     });
     if (!site) return res.status(404).json({ error: "Website not found" });
+    await applyWebsiteProbes();
     return res.json({ site: toPublicSite(site) });
   } catch (e) {
     return res.status(400).json({ error: e instanceof Error ? e.message : "Update failed" });
   }
 });
 
-sitesRouter.delete("/:id/websites", requireJwt(["operator"]), (req, res) => {
+sitesRouter.delete("/:id/websites", requireJwt(["operator"]), async (req, res) => {
   const siteId = req.params.id;
   if (siteId !== "global" && !getSiteById(siteId)) {
     return res.status(404).json({ error: "Site not found" });
   }
-  const url = typeof req.body?.url === "string" ? req.body.url : typeof req.query.url === "string" ? req.query.url : "";
+  const url =
+    typeof req.body?.url === "string"
+      ? req.body.url
+      : typeof req.query.url === "string"
+        ? req.query.url
+        : "";
   if (!url) return res.status(400).json({ error: "url is required" });
+
+  const { deleteHetrixWebsiteMonitor } = await import("../services/hetrixtools");
+  const { findGlobalWebsite } = await import("../data/globalWebsites");
+  const { findWebsite } = await import("../data/sites");
+  const existing =
+    siteId === "global" ? findGlobalWebsite(url) : findWebsite(siteId, url);
+
+  const hetrix = await deleteHetrixWebsiteMonitor({
+    monitorId: existing?.hetrixMonitorId,
+    url
+  });
+
   if (siteId === "global") {
     removeGlobalWebsite(url);
-    return res.json({ site: asGlobalSite("global") });
+    await applyWebsiteProbes();
+    return res.json({
+      site: asGlobalSite("global"),
+      hetrix: { ok: hetrix.ok, message: hetrix.message }
+    });
   }
   const site = removeWebsite(siteId, url);
   if (!site) return res.status(404).json({ error: "Website not found" });
-  return res.json({ site: toPublicSite(site) });
+  await applyWebsiteProbes();
+  return res.json({
+    site: toPublicSite(site),
+    hetrix: { ok: hetrix.ok, message: hetrix.message }
+  });
 });
 
 sitesRouter.patch("/:id", requireJwt(["operator"]), async (req: Request, res: Response) => {

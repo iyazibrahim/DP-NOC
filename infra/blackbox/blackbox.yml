@@ -5,6 +5,15 @@ modules:
     http:
       method: GET
       preferred_ip_protocol: "ip4"
-      valid_status_codes: [200, 301, 302, 403]
+      # Prefer IPv4 only — some CF hosts resolve AAAA but blackhole IPv6
+      ip_protocol_fallback: false
+      follow_redirects: true
+      # 403 kept for WAF challenge pages; prefer allowlisting the VPS IP in Cloudflare
+      # so probes get the same 200 users see (otherwise DOWN is correct: probe is blocked).
+      valid_status_codes: [200, 201, 204, 301, 302, 303, 307, 308, 401, 403]
       fail_if_ssl: false
+      headers:
+        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+        Accept-Language: "en-US,en;q=0.9"
 

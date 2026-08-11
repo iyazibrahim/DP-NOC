@@ -69,7 +69,7 @@ export type Site = {
   address?: string;
   notes?: string;
   createdAt?: string;
-  websiteTargets: Array<{ name: string; url: string }>;
+  websiteTargets: Array<{ name: string; url: string; hetrixMonitorId?: string }>;
   wan: { dnsTarget: string; vpsTarget: string };
   wanUplink?: { deviceId: string; ifName: string };
   devices: SiteDevice[];
