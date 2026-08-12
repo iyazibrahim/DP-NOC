@@ -158,17 +158,57 @@ function normalizeUptimePct(raw: number | null): number | null {
   return Math.round(pct * 10) / 10;
 }
 
+/** Floor unix seconds to UTC midnight. */
+function utcMidnight(sec: number): number {
+  const daySec = 24 * 3600;
+  return Math.floor(sec / daySec) * daySec;
+}
+
+function dayStartFromDateKey(key: string): number | null {
+  // YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS
+  const m = key.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const ms = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+}
+
+function parseHistoryObject(history: Record<string, unknown>, days: number): HetrixDailyUptime[] {
+  const out: HetrixDailyUptime[] = [];
+  const keys = Object.keys(history).sort();
+  for (const k of keys.slice(-days)) {
+    const v = history[k];
+    const row = asRecord(v);
+    const pct = normalizeUptimePct(
+      numOrNull(
+        row
+          ? row.uptime ?? row.percentage ?? row.uptime_percentage ?? row.value
+          : typeof v === "number"
+            ? v
+            : null
+      )
+    );
+    const dayStart = dayStartFromDateKey(k);
+    out.push({
+      dayStart,
+      label: k.length >= 10 ? k.slice(5, 10) : k,
+      uptimePct: pct
+    });
+  }
+  return out;
+}
+
 function parseDailyFromReport(data: Record<string, unknown>, days: number): HetrixDailyUptime[] {
   const candidates: unknown[] = [];
-  for (const key of ["daily", "days", "day_stats", "stats"]) {
+  for (const key of ["daily", "days", "day_stats", "stats", "daily_stats"]) {
     const v = data[key];
     if (Array.isArray(v)) candidates.push(...v);
   }
-  // Some payloads nest under data.uptime.daily
-  const uptime = asRecord(data.uptime);
-  if (uptime) {
-    for (const key of ["daily", "days", "history"]) {
-      const v = uptime[key];
+  // Some payloads nest under data.uptime.daily / data.report.daily
+  for (const nestKey of ["uptime", "report", "data"]) {
+    const nested = asRecord(data[nestKey]);
+    if (!nested) continue;
+    for (const key of ["daily", "days", "history", "day_stats", "stats"]) {
+      const v = nested[key];
       if (Array.isArray(v)) candidates.push(...v);
     }
   }
@@ -178,8 +218,9 @@ function parseDailyFromReport(data: Record<string, unknown>, days: number): Hetr
     const row = asRecord(item);
     if (!row) continue;
     const pct =
-      normalizeUptimePct(numOrNull(row.uptime ?? row.percentage ?? row.uptime_percentage ?? row.value)) ??
-      null;
+      normalizeUptimePct(
+        numOrNull(row.uptime ?? row.percentage ?? row.uptime_percentage ?? row.value)
+      ) ?? null;
     const ts =
       numOrNull(row.timestamp ?? row.ts ?? row.start ?? row.day ?? row.date_ts) ?? null;
     let label =
@@ -192,10 +233,13 @@ function parseDailyFromReport(data: Record<string, unknown>, days: number): Hetr
             : "";
     let dayStart: number | null = null;
     if (ts != null) {
-      dayStart = ts > 1e12 ? Math.floor(ts / 1000) : Math.floor(ts);
+      const sec = ts > 1e12 ? Math.floor(ts / 1000) : Math.floor(ts);
+      dayStart = utcMidnight(sec);
       if (!label) {
         label = new Date(dayStart * 1000).toISOString().slice(5, 10);
       }
+    } else if (typeof row.date === "string") {
+      dayStart = dayStartFromDateKey(row.date);
     }
     if (!label && pct == null) continue;
     out.push({ dayStart, label: label || "—", uptimePct: pct });
@@ -203,18 +247,15 @@ function parseDailyFromReport(data: Record<string, unknown>, days: number): Hetr
 
   if (out.length > 0) return out.slice(-days);
 
-  // Fallback: history object keyed by YYYY-MM-DD or YYYY-MM
-  const history = asRecord(data.history);
-  if (history) {
-    const keys = Object.keys(history).sort();
-    for (const k of keys.slice(-days)) {
-      const v = history[k];
-      const row = asRecord(v);
-      const pct = normalizeUptimePct(
-        numOrNull(row ? row.uptime ?? row.percentage ?? row.value : typeof v === "number" ? v : null)
-      );
-      out.push({ dayStart: null, label: k.length >= 10 ? k.slice(5, 10) : k, uptimePct: pct });
-    }
+  // Fallback: history object keyed by YYYY-MM-DD (on data or nested)
+  for (const src of [
+    asRecord(data.history),
+    asRecord(asRecord(data.uptime)?.history),
+    asRecord(asRecord(data.data)?.history)
+  ]) {
+    if (!src) continue;
+    const hist = parseHistoryObject(src, days);
+    if (hist.length > 0) return hist;
   }
   return out;
 }
@@ -334,8 +375,11 @@ export async function getHetrixUptimeReport(
           root.uptime
       )
     );
-    // Some plans return only daily points — average them for the window summary
-    const daily = parseDailyFromReport(data, days);
+    // Prefer nested data; also try root when daily/history lives outside data
+    let daily = parseDailyFromReport(data, days);
+    if (daily.length === 0 && data !== root) {
+      daily = parseDailyFromReport(root, days);
+    }
     if (uptimePct == null && daily.length > 0) {
       const nums = daily.map((d) => d.uptimePct).filter((n): n is number => n != null);
       if (nums.length > 0) {

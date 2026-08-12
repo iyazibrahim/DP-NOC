@@ -366,7 +366,10 @@ function dailyBarsFromHetrix(
   if (daily.length > 0 && daily.some((d) => d.dayStart != null)) {
     const byStart = new Map<number, number | null>();
     for (const d of daily) {
-      if (d.dayStart != null) byStart.set(d.dayStart, d.uptimePct);
+      if (d.dayStart == null) continue;
+      // Normalize to UTC midnight in case report timestamps are mid-day
+      const key = Math.floor(d.dayStart / daySec) * daySec;
+      byStart.set(key, d.uptimePct);
     }
     const bars: WebsiteTrendBar[] = [];
     for (let i = days - 1; i >= 0; i--) {
@@ -397,6 +400,79 @@ function dailyBarsFromHetrix(
     });
   }
   return bars;
+}
+
+/** Flat daily bars from a single window uptime % (when Hetrix daily array is missing). */
+function synthesizeFlatDailyBars(
+  days: number,
+  endSec: number,
+  uptimePct: number
+): WebsiteTrendBar[] {
+  const daySec = 24 * 3600;
+  const endDay = Math.floor(endSec / daySec) * daySec;
+  const bars: WebsiteTrendBar[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const start = endDay - i * daySec;
+    const end = start + daySec;
+    bars.push({
+      label: new Date(start * 1000).toISOString().slice(5, 10),
+      start,
+      end: Math.min(end, endSec),
+      uptimePct
+    });
+  }
+  return bars;
+}
+
+/** Daily uptime from downtime intervals (100% minus down fraction per UTC day). */
+function dailyBarsFromDowntimes(
+  downtimes: Array<{ start: number; end: number; maintenance?: boolean }>,
+  days: number,
+  endSec: number
+): WebsiteTrendBar[] {
+  const daySec = 24 * 3600;
+  const endDay = Math.floor(endSec / daySec) * daySec;
+  const bars: WebsiteTrendBar[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const start = endDay - i * daySec;
+    const end = Math.min(start + daySec, endSec);
+    const span = Math.max(1, end - start);
+    let downSec = 0;
+    for (const d of downtimes) {
+      if (d.maintenance) continue;
+      const a = Math.max(start, d.start);
+      const b = Math.min(end, d.end > 0 ? d.end : endSec);
+      if (b > a) downSec += b - a;
+    }
+    const uptimePct = Math.round(Math.max(0, Math.min(100, (1 - downSec / span) * 100)) * 10) / 10;
+    bars.push({
+      label: new Date(start * 1000).toISOString().slice(5, 10),
+      start,
+      end,
+      uptimePct
+    });
+  }
+  return bars;
+}
+
+function pickTrendBars(opts: {
+  daily: Array<{ dayStart: number | null; label: string; uptimePct: number | null }>;
+  days: number;
+  endSec: number;
+  uptimePct: number | null;
+  downtimes: Array<{ start: number; end: number; maintenance?: boolean }>;
+}): WebsiteTrendBar[] {
+  const fromDaily = dailyBarsFromHetrix(opts.daily, opts.days, opts.endSec);
+  if (!trendAllMissing(fromDaily) && fromDaily.some((b) => b.uptimePct != null)) {
+    return fromDaily;
+  }
+  if (opts.downtimes.length > 0) {
+    return dailyBarsFromDowntimes(opts.downtimes, opts.days, opts.endSec);
+  }
+  if (opts.uptimePct != null && Number.isFinite(opts.uptimePct)) {
+    return synthesizeFlatDailyBars(opts.days, opts.endSec, opts.uptimePct);
+  }
+  return fromDaily;
 }
 
 async function lookupStoredHetrixId(siteId: string, url: string): Promise<string | null> {
@@ -557,7 +633,7 @@ export async function getWebsiteDetailMetrics(
                   hourlyStats: needSeries
                 })
               : Promise.resolve(null),
-            needOutages || needSeries
+            needOutages || needSeries || needTrends
               ? listHetrixDowntimes(monitorId, { startAfter: start, startBefore: end })
               : Promise.resolve([]),
             replaceUptime && uptimeUnusable(base.uptime24h)
@@ -632,15 +708,27 @@ export async function getWebsiteDetailMetrics(
           }
 
           const trendSource = report30?.daily?.length ? report30 : report7;
-          if ((trendUnusable(weeklyTrend) || preferHetrixHistory) && trendSource) {
-            const bars = dailyBarsFromHetrix(trendSource.daily, 7, end);
+          if ((trendUnusable(weeklyTrend) || preferHetrixHistory) && (trendSource || report7)) {
+            const bars = pickTrendBars({
+              daily: trendSource?.daily ?? report7?.daily ?? [],
+              days: 7,
+              endSec: end,
+              uptimePct: report7?.uptimePct ?? report30?.uptimePct ?? null,
+              downtimes
+            });
             if (!trendAllMissing(bars) || bars.some((b) => b.uptimePct != null)) {
               weeklyTrend = bars;
               usedHetrixHistory = true;
             }
           }
-          if ((trendUnusable(monthlyTrend) || preferHetrixHistory) && report30) {
-            const bars = dailyBarsFromHetrix(report30.daily, 30, end);
+          if ((trendUnusable(monthlyTrend) || preferHetrixHistory) && (report30 || report7)) {
+            const bars = pickTrendBars({
+              daily: report30?.daily ?? report7?.daily ?? [],
+              days: 30,
+              endSec: end,
+              uptimePct: report30?.uptimePct ?? report7?.uptimePct ?? null,
+              downtimes
+            });
             if (!trendAllMissing(bars) || bars.some((b) => b.uptimePct != null)) {
               monthlyTrend = bars;
               usedHetrixHistory = true;

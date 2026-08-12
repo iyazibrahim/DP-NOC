@@ -13,6 +13,13 @@ export type SiteStatus = {
   wan: DomainStatus;
   uplink?: DomainStatus;
   websites: DomainStatus;
+  /** Per-URL website check status (after Hetrix failover) */
+  websiteStates?: Array<{
+    name: string;
+    url: string;
+    state: DomainState;
+    notes?: string;
+  }>;
   /** @deprecated prefer localDevices */
   lan: DomainStatus;
   localDevices?: DomainStatus;

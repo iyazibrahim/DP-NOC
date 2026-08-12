@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 
-export type IncidentKind = "collector" | "uplink" | "overall" | string;
+export type IncidentKind = "collector" | "uplink" | "overall" | "website" | "location" | string;
 
 export type Incident = {
   id: string;

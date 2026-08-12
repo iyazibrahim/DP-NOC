@@ -115,40 +115,69 @@ export function DashboardPage() {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const presets = useMetricPresets();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const prevStatusRef = useRef<Record<string, { uplink: DomainState; overall: DomainState }> | null>(
-    null
-  );
+  const prevStatusRef = useRef<Record<
+    string,
+    { uplink: DomainState; overall: DomainState; websites: DomainState }
+  > | null>(null);
 
-  // Toast when a site uplink / overall flips to critical (skip first poll baseline).
+  // Toast when uplink / website / location health flips to critical (skip first poll baseline).
   useEffect(() => {
     const prev = prevStatusRef.current;
-    const next: Record<string, { uplink: DomainState; overall: DomainState }> = {};
+    const next: Record<
+      string,
+      { uplink: DomainState; overall: DomainState; websites: DomainState }
+    > = {};
     for (const st of statuses) {
       const uplink = uplinkOf(st).state;
-      next[st.siteId] = { uplink, overall: st.overall };
+      next[st.siteId] = { uplink, overall: st.overall, websites: st.websites.state };
       if (!prev) continue;
       const before = prev[st.siteId];
       if (!before) continue;
-      const siteName = sites.find((s) => s.id === st.siteId)?.name ?? st.siteId;
+      const siteName =
+        st.siteId === "global"
+          ? "Global / Central"
+          : (sites.find((s) => s.id === st.siteId)?.name ?? st.siteId);
       if (uplink === "critical" && before.uplink !== "critical") {
         setToasts((t) =>
           pushToast(t, {
             id: `uplink-down-${st.siteId}-${Date.now()}`,
-            title: `${siteName} — Internet DOWN`,
+            title: `Internet DOWN — ${siteName}`,
             detail: "Uplink / internet check went critical",
+            tone: "critical"
+          })
+        );
+      } else if (
+        st.websites.state === "critical" &&
+        before.websites !== "critical" &&
+        uplink !== "critical"
+      ) {
+        const downSites = (st.websiteStates ?? []).filter((w) => w.state === "critical");
+        const detail =
+          downSites.length > 0
+            ? downSites.map((w) => w.name).join(", ")
+            : "Website check(s) went critical";
+        setToasts((t) =>
+          pushToast(t, {
+            id: `website-down-${st.siteId}-${Date.now()}`,
+            title:
+              downSites.length === 1
+                ? `Website DOWN — ${downSites[0].name}`
+                : `Website DOWN — ${siteName}`,
+            detail,
             tone: "critical"
           })
         );
       } else if (
         st.overall === "critical" &&
         before.overall !== "critical" &&
-        uplink !== "critical"
+        uplink !== "critical" &&
+        st.websites.state !== "critical"
       ) {
         setToasts((t) =>
           pushToast(t, {
-            id: `site-down-${st.siteId}-${Date.now()}`,
-            title: `${siteName} — Site DOWN`,
-            detail: "Overall site health went critical",
+            id: `location-down-${st.siteId}-${Date.now()}`,
+            title: `Location health critical — ${siteName}`,
+            detail: "Location health went critical (not uplink / website)",
             tone: "critical"
           })
         );

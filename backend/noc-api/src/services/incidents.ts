@@ -55,6 +55,17 @@ function sustainedCritical(key: string, isCritical: boolean): boolean {
   return now - since >= env.INCIDENT_SUSTAIN_MS;
 }
 
+/** Website-only critical (no local-device / residual location issue). */
+function isWebsitesOnlyCritical(st: SiteStatus): boolean {
+  if (st.websites.state !== "critical") return false;
+  const ld = st.localDevices?.state ?? st.lan?.state;
+  return ld !== "critical";
+}
+
+function websiteIncidentKey(siteId: string, url: string): string {
+  return `website:${siteId}:${url}`;
+}
+
 /** Open/resolve status-derived incidents from current site statuses. */
 export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
   open: Incident[];
@@ -75,8 +86,8 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
         siteId: st.siteId,
         siteName: name,
         kind: "uplink",
-        title: "Internet / uplink DOWN",
-        detail: up.notes ?? "Uplink critical"
+        title: `Internet DOWN — ${name}`,
+        detail: up.notes ?? "Uplink / internet check critical"
       });
     }
 
@@ -88,25 +99,55 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
         siteId: st.siteId,
         siteName: name,
         kind: "collector",
-        title: "Collector offline",
-        detail: col.notes ?? "Collector critical"
+        title: `Collector offline — ${name}`,
+        detail: col.notes ?? "Collector not responding"
       });
     }
 
-    const overallKey = `overall:${st.siteId}`;
-    const overallCritical =
+    for (const w of st.websiteStates ?? []) {
+      const wKey = websiteIncidentKey(st.siteId, w.url);
+      if (sustainedCritical(wKey, w.state === "critical")) {
+        activeKeys.add(wKey);
+        upsertOpenIncident({
+          key: wKey,
+          siteId: st.siteId,
+          siteName: name,
+          kind: "website",
+          title: `Website DOWN — ${w.name}`,
+          detail: `${w.url} · site: ${name}${w.notes ? ` · ${w.notes}` : ""}`
+        });
+      }
+    }
+
+    // Location residual: overall critical for non-uplink/non-collector reasons that are
+    // not covered solely by per-URL website incidents (e.g. local devices).
+    const locationKey = `overall:${st.siteId}`;
+    const locationCritical =
       st.overall === "critical" &&
       up?.state !== "critical" &&
-      col?.state !== "critical";
-    if (sustainedCritical(overallKey, overallCritical)) {
-      activeKeys.add(overallKey);
+      col?.state !== "critical" &&
+      !isWebsitesOnlyCritical(st);
+
+    if (sustainedCritical(locationKey, locationCritical)) {
+      activeKeys.add(locationKey);
+      const causes: string[] = [];
+      const ld = st.localDevices ?? st.lan;
+      if (ld?.state === "critical") {
+        causes.push(ld.notes ?? "Local devices critical");
+      }
+      if (st.websites.state === "critical") {
+        causes.push(st.websites.notes ?? "Website checks critical");
+      }
+      if (st.alerts?.firing > 0) {
+        causes.push(`${st.alerts.firing} alert(s) firing`);
+      }
       upsertOpenIncident({
-        key: overallKey,
+        key: locationKey,
         siteId: st.siteId,
         siteName: name,
-        kind: "overall",
-        title: "Site DOWN",
-        detail: "Overall site health critical"
+        kind: "location",
+        title: `Location health critical — ${name}`,
+        detail: causes.join("; ") || "Overall location health critical"
       });
     }
   }
@@ -120,6 +161,18 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
   candidates.add("uplink:global");
   candidates.add("collector:global");
   candidates.add("overall:global");
+
+  for (const st of statuses) {
+    for (const w of st.websiteStates ?? []) {
+      candidates.add(websiteIncidentKey(st.siteId, w.url));
+    }
+  }
+  // Resolve open website incidents whose URL was removed from config
+  for (const i of getOpenIncidents()) {
+    if (i.kind === "website" || i.key.startsWith("website:")) {
+      candidates.add(i.key);
+    }
+  }
 
   for (const key of candidates) {
     if (!activeKeys.has(key)) markResolvedIfOpen(key);

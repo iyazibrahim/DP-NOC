@@ -130,7 +130,8 @@ websitesRouter.get(
     const relatedIncidents = [...getOpenIncidents(), ...getHistoryIncidents()]
       .filter((i) => {
         if (i.siteId !== siteId) return false;
-        const hay = `${i.title} ${i.detail}`.toLowerCase();
+        if (i.kind === "website" && (i.detail.includes(url) || i.key.includes(url))) return true;
+        const hay = `${i.title} ${i.detail} ${i.kind}`.toLowerCase();
         return (
           hay.includes("website") ||
           hay.includes("sitewebsitedown") ||

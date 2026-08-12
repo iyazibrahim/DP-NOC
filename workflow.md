@@ -9,7 +9,19 @@ Multisite NOC for **collectors**, **uplink / internet**, **local devices**, and 
 | Collector | Box running Alloy (NUC, Pi, mini-PC, server) |
 | Uplink / Internet | Collector can reach the internet / central server |
 | Local devices | Switches/routers/etc. polled via SNMP from the collector |
-| Website checks | Public URL checks from the central server |
+| Website checks | Public URL checks from the central server (Blackbox + Hetrix failover) |
+| Location | Physical site (Digital Penang, libraries, etc.) — not a public website |
+| Global / Central | Synthetic site id `global` for central website probes only |
+
+### Incident titles
+| Title | Means |
+|---|---|
+| `Internet DOWN — {location}` | Uplink / WAN at that location |
+| `Collector offline — {location}` | Collector box not reporting |
+| `Website DOWN — {name}` | Public URL down (after Hetrix failover) |
+| `Location health critical — {location}` | Location residual (e.g. local devices) — **not** a website-only issue |
+
+Do **not** use generic “Site DOWN” — it conflates locations and websites.
 
 ## Architecture
 ```text
@@ -227,12 +239,18 @@ Collector box → Alloy → Prometheus (central)
     - Fix: most-recent authority via `config-authority.json` — Setup Save stamps + updates live env; Environment fingerprint change on boot wins; same env restart keeps Setup
     - Alloy force-recreates on site/CF/remote_write changes; Setup hints work on Pi without Dokploy
 
+  - **Clearer alerts + Hetrix failover (2026-08-12)**
+    - Root cause: Global/Central “Site DOWN” used Blackbox-only overall while Eventree UI showed HEALTHY via Hetrix (CF Bot Fight false alarms)
+    - Status: per-URL website evaluation with Hetrix overlay — critical only if Blackbox down **and** Hetrix not up; website domain recovery hysteresis
+    - Incidents: `Internet DOWN — {site}`, `Collector offline — {site}`, `Website DOWN — {name}`, `Location health critical — {site}` (no generic Site DOWN); per-URL website keys
+    - Website detail: harden Hetrix daily parse + UTC midnight align; synthesize weekly/monthly bars from summary/downtimes when daily array missing
+
 ## HetrixTools
 - Env on **noc-app** (Dokploy Environment, then redeploy): `HETRIXTOOLS_API_TOKEN`, optional `HETRIXTOOLS_LOCATIONS=sgp,ams,nyc`, `HETRIXTOOLS_CONTACT_LIST`
 - Compose must pass them through: `HETRIXTOOLS_API_TOKEN=${HETRIXTOOLS_API_TOKEN:-}` (commented lines never reach the container even if Dokploy has the var)
 - Without token, create/delete/status overlay are no-ops (silent)
-- Live overlay: list/detail prefer Hetrix up/down + uptime % when a monitor matches the URL
-- **History fallback:** website detail fills empty Prom uptime / availability / outages / daily trends from Hetrix `report` + `downtimes` APIs. Also **replaces** Prom history when blackbox is all-failures (`probe_success=0`, e.g. CF/WAF) while Hetrix says up (Eventree case). UI shows Source chip when `metricsSource` is `hetrix` or `mixed`. History responses cached ~3 min.
+- Live overlay: list/detail **and site overall / incidents** prefer Hetrix up when Blackbox disagrees (CF/WAF)
+- **History fallback:** website detail fills empty Prom uptime / availability / outages / daily trends from Hetrix `report` + `downtimes` APIs. Also **replaces** Prom history when blackbox is all-failures (`probe_success=0`, e.g. CF/WAF) while Hetrix says up (Eventree case). If daily points missing, synthesize flat weekly/monthly bars from report uptime % or downtime buckets. UI shows Source chip when `metricsSource` is `hetrix` or `mixed`. History responses cached ~3 min.
 - Check: Settings → Status strip (Hetrix pill), or `sudo docker exec noc_app printenv HETRIXTOOLS_API_TOKEN`
 - VPS docker needs `sudo` (or add user to `docker` group) — plain `docker` gets permission denied on `/var/run/docker.sock`
 

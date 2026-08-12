@@ -18,6 +18,13 @@ export type DomainStatus = {
   notes?: string;
 };
 
+export type WebsiteTargetState = {
+  name: string;
+  url: string;
+  state: DomainState;
+  notes?: string;
+};
+
 export type SiteStatus = {
   siteId: string;
   /** @deprecated use uplink — kept for API compatibility */
@@ -25,6 +32,8 @@ export type SiteStatus = {
   /** Alias of wan (Uplink / Internet) */
   uplink: DomainStatus;
   websites: DomainStatus;
+  /** Per-URL website check status (after Hetrix failover) */
+  websiteStates: WebsiteTargetState[];
   /** @deprecated use localDevices — kept for API compatibility */
   lan: DomainStatus;
   /** Alias of lan (Local devices) */
@@ -207,13 +216,6 @@ function aggregateUplinkQuorum(wanDns: DomainStatus, wanVps: DomainStatus): Doma
   return { state: "healthy" };
 }
 
-function stateFromBooleanSeries(values: number[]): DomainState {
-  if (values.length === 0) return "unknown";
-  if (values.some((v) => v === 0)) return "critical";
-  if (values.some((v) => !Number.isFinite(v))) return "warning";
-  return "healthy";
-}
-
 /**
  * Fresh sample required. Missing samples after we once had data = DOWN (silence).
  * Never seen = unknown.
@@ -257,6 +259,119 @@ async function queryProbeSuccessVector(siteId: string, labelKey: string, labelVa
   const data = await promQuery(freshQ);
   const values = parseVectorToNumericValues(data);
   return { data, values };
+}
+
+function escapePromLabel(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+/**
+ * Blackbox probe for one URL, with Hetrix multi-location failover:
+ * critical only if Blackbox says down AND Hetrix does not say up.
+ */
+async function evaluateWebsiteTarget(
+  siteId: string,
+  target: { name: string; url: string }
+): Promise<WebsiteTargetState> {
+  const sel = `site="${escapePromLabel(siteId)}",check="website",instance="${escapePromLabel(target.url)}"`;
+  let state: DomainState = "unknown";
+  let notes: string | undefined;
+
+  try {
+    const successFresh = parseFirstVectorValue(
+      await promQuery(`last_over_time(probe_success{${sel}}[${METRIC_FRESH_WINDOW}])`)
+    );
+    const httpStatus = parseFirstVectorValue(
+      await promQuery(`last_over_time(probe_http_status_code{${sel}}[${METRIC_FRESH_WINDOW}])`)
+    );
+
+    if (successFresh === null) {
+      const hist = parseFirstVectorValue(
+        await promQuery(`last_over_time(probe_success{${sel}}[${METRIC_HISTORY_WINDOW}])`)
+      );
+      if (hist !== null) {
+        state = "critical";
+        notes = `Probe silent for ${METRIC_FRESH_WINDOW}`;
+      } else {
+        state = "unknown";
+        notes = "No probe data yet";
+      }
+    } else if (successFresh >= 1) {
+      state = "healthy";
+    } else {
+      state = "critical";
+      if (httpStatus != null && Number.isFinite(httpStatus) && httpStatus > 0) {
+        notes = `Blackbox probe failed (HTTP ${Math.round(httpStatus)})`;
+      } else {
+        notes = "Blackbox probe failed";
+      }
+    }
+  } catch {
+    state = "unknown";
+    notes = "Could not read probe metrics";
+  }
+
+  try {
+    const { getHetrixStatusForUrl, hetrixEnabled } = await import("./hetrixtools");
+    if (hetrixEnabled()) {
+      const hx = await getHetrixStatusForUrl(target.url);
+      if (hx) {
+        if (hx.uptimeStatus === "up") {
+          if (state === "critical" || state === "unknown") {
+            notes = `HetrixTools: up${notes ? ` (${notes})` : " (local probe disagreed)"}`;
+          }
+          state = "healthy";
+        } else if (hx.uptimeStatus === "down") {
+          state = "critical";
+          notes = "HetrixTools: down";
+        }
+      }
+    }
+  } catch {
+    /* overlay is best-effort — keep Blackbox result */
+  }
+
+  return { name: target.name, url: target.url, state, notes };
+}
+
+async function computeWebsitesDomain(
+  siteId: string,
+  targets: Array<{ name: string; url: string }>
+): Promise<{ websites: DomainStatus; websiteStates: WebsiteTargetState[] }> {
+  if (targets.length === 0) {
+    return {
+      websites: { state: "unknown", notes: "No website checks configured" },
+      websiteStates: []
+    };
+  }
+
+  const websiteStates: WebsiteTargetState[] = [];
+  for (const t of targets) {
+    websiteStates.push(await evaluateWebsiteTarget(siteId, t));
+  }
+
+  let websites = aggregateProbeStatuses(
+    websiteStates.map((w) => ({ state: w.state, notes: w.notes }))
+  );
+
+  // If every target is still unknown, distinguish "configured but no results" vs silence.
+  if (websites.state === "unknown" && websiteStates.every((w) => w.state === "unknown")) {
+    const websiteVector = await queryProbeSuccessVector(siteId, "check", "website");
+    if (websiteVector.values.length === 0) {
+      websites = {
+        state: "unknown",
+        notes: "Website checks are configured but no results yet"
+      };
+    }
+  }
+
+  websites = applyRecoveryHysteresis(`websites:${siteId}`, websites);
+  return { websites, websiteStates };
+}
+
+function isWebsiteAlert(alert: Alert): boolean {
+  const name = String(alert.labels?.alertname ?? alert.labels?.alertName ?? "").toLowerCase();
+  return name.includes("website") || name === "sitewebsitedown";
 }
 
 async function collectorIdStatus(siteId: string, metricId: string): Promise<DomainStatus> {
@@ -382,23 +497,20 @@ export async function computeSiteStatus(
 ): Promise<SiteStatus> {
   if (siteId === "global") {
     const globalTargets = getGlobalWebsites();
-    const websiteVector = await queryProbeSuccessVector(siteId, "check", "website");
-    let websites: DomainStatus = { state: stateFromBooleanSeries(websiteVector.values) };
-
-    if (websiteVector.values.length === 0) {
-      websites =
-        globalTargets.length > 0
-          ? {
-              state: "unknown",
-              notes: "Website checks are configured but no results yet"
-            }
-          : { state: "unknown", notes: "No website checks configured" };
-    }
+    const { websites, websiteStates } = await computeWebsitesDomain(siteId, globalTargets);
 
     const alerts = activeAlerts ?? (await getActiveAlerts());
     const relevant = alerts.filter((a) => (a.labels?.site ?? "") === siteId);
     const firing = relevant.filter((a) => a.status === "firing").length;
     const resolved = relevant.filter((a) => a.status === "resolved").length;
+
+    // Global is website-only — overall follows website domain (Hetrix failover applied).
+    // Do not force critical from Blackbox-only SiteWebsiteDown AM alerts.
+    let overall: DomainState = websites.state;
+    const nonWebsiteFiring = relevant.filter(
+      (a) => a.status === "firing" && !isWebsiteAlert(a)
+    ).length;
+    if (nonWebsiteFiring > 0) overall = "critical";
 
     const na = { state: "unknown" as const, notes: "Not applicable" };
     return {
@@ -406,6 +518,7 @@ export async function computeSiteStatus(
       wan: na,
       uplink: na,
       websites,
+      websiteStates,
       lan: na,
       localDevices: na,
       localDeviceStates: [],
@@ -413,7 +526,7 @@ export async function computeSiteStatus(
       collectorDeviceStates: [],
       alerts: { firing, resolved },
       websiteTargetCount: globalTargets.length,
-      overall: websites.state
+      overall
     };
   }
 
@@ -456,19 +569,10 @@ export async function computeSiteStatus(
     uplink.notes = undefined;
   }
 
-  const websiteVector = await queryProbeSuccessVector(siteId, "check", "website");
-  let websites: DomainStatus = { state: stateFromBooleanSeries(websiteVector.values) };
-  if (websiteVector.values.length === 0) {
-    const histQ = `last_over_time(probe_success{site="${siteId}",check="website"}[${METRIC_HISTORY_WINDOW}])`;
-    const hadWebsites = parseFirstVectorValue(await promQuery(histQ));
-    websites =
-      hadWebsites !== null
-        ? {
-            state: "critical",
-            notes: `Website checks silent for ${METRIC_FRESH_WINDOW}`
-          }
-        : { state: "unknown", notes: "No website checks configured" };
-  }
+  const { websites, websiteStates } = await computeWebsitesDomain(
+    siteId,
+    site.websiteTargets ?? []
+  );
 
   const { aggregate: collectorRaw, devices: collectorDeviceStates } =
     await computeCollectorStatus(siteId);
@@ -561,13 +665,19 @@ export async function computeSiteStatus(
     overall = worst(overall, websites.state);
     overall = worst(overall, localDevices.state);
   }
-  if (firing > 0) overall = "critical";
+  // Website AM alerts are reflected via websites domain (Hetrix failover); do not
+  // force overall critical from Blackbox-only SiteWebsiteDown pages.
+  const nonWebsiteFiring = relevant.filter(
+    (a) => a.status === "firing" && !isWebsiteAlert(a)
+  ).length;
+  if (nonWebsiteFiring > 0) overall = "critical";
 
   return {
     siteId,
     wan: uplink,
     uplink,
     websites,
+    websiteStates,
     lan: localDevices,
     localDevices,
     localDeviceStates,
