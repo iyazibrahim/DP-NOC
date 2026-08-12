@@ -157,7 +157,7 @@ app.get("/api/status", async (_req, res) => {
   const warnings: string[] = [];
   if (!metricsConfigured) {
     warnings.push(
-      "Alloy missing CF Access / remote_write env — NOC will show Collector/Uplink DOWN (No recent samples). Set vars in Dokploy Environment."
+      "Alloy missing CF Access / remote_write env — NOC will show Collector/Uplink DOWN (No recent samples). Set them in Setup (or Environment on redeploy), then Save."
     );
   }
   if (cfgHealth.configUnsafe) {
@@ -245,8 +245,16 @@ app.post("/api/config", async (req, res) => {
     let regenMsg = "";
     if (needsAlloyReload) {
       try {
+        // Recreate so Alloy picks up SITE_NAME / CF / remote_write from mirrored .env
         const envChanged = Boolean(
-          patch.centralRemoteWriteUrl || patch.cfAccessClientId || patch.cfAccessClientSecret
+          patch.centralRemoteWriteUrl ||
+            patch.cfAccessClientId ||
+            patch.cfAccessClientSecret ||
+            patch.siteName ||
+            patch.hostDeviceId ||
+            patch.pingTarget1 ||
+            patch.pingTarget2 ||
+            patch.scrapeIntervalSec
         );
         regenMsg = await regenerateAlloyConfig();
         regenMsg += " | " + (await reloadAlloy({ forceRecreate: envChanged }));
@@ -339,7 +347,7 @@ app.get("/api/diagnostics", async (_req, res) => {
   let hint: string;
   if (!metricsOk) {
     hint =
-      "NOC shows DOWN because Alloy cannot remote_write metrics. Set CENTRAL_REMOTE_WRITE_URL + CF_ACCESS_CLIENT_ID + CF_ACCESS_CLIENT_SECRET in Dokploy → Environment, then redeploy/restart noc_site_alloy.";
+      "NOC shows DOWN because Alloy cannot remote_write metrics. In Setup set CENTRAL remote write URL + CF Access Client ID/Secret, Save, and confirm Alloy recreates — or set the same vars in Environment before redeploy.";
   } else if (cfgHealth.configUnsafe || crashHints.length > 0) {
     hint = [cfgHealth.configUnsafeReason, ...crashHints]
       .filter(Boolean)

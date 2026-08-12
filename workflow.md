@@ -222,6 +222,11 @@ Collector box → Alloy → Prometheus (central)
     - Fix: ack of unresolved incidents suppresses that key until the condition recovers; then a later outage must sustain ~90s again before reopening
     - Alerts copy clarified: Ack clears the list, does not change site health
 
+  - **Collector Console Setup wins site/CF (2026-08-12)**
+    - Root cause: `readConfig()` always preferred compose/Dokploy `process.env` (`SITE_NAME` default `site-1`), so Setup site-4 never stuck; CF hints said Dokploy-only
+    - Fix: most-recent authority via `config-authority.json` — Setup Save stamps + updates live env; Environment fingerprint change on boot wins; same env restart keeps Setup
+    - Alloy force-recreates on site/CF/remote_write changes; Setup hints work on Pi without Dokploy
+
 ## HetrixTools
 - Env on **noc-app** (Dokploy Environment, then redeploy): `HETRIXTOOLS_API_TOKEN`, optional `HETRIXTOOLS_LOCATIONS=sgp,ams,nyc`, `HETRIXTOOLS_CONTACT_LIST`
 - Compose must pass them through: `HETRIXTOOLS_API_TOKEN=${HETRIXTOOLS_API_TOKEN:-}` (commented lines never reach the container even if Dokploy has the var)

@@ -221,21 +221,90 @@ function writeEnvMaps(map: Record<string, string>): void {
   }
 }
 
+type ConfigAuthority = {
+  setupSavedAt?: number;
+  lastProcessFingerprint?: string;
+};
+
+function authorityPath(): string {
+  return path.join(stateDir(), "config-authority.json");
+}
+
+function readAuthority(): ConfigAuthority {
+  const file = authorityPath();
+  if (!fs.existsSync(file)) return {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as ConfigAuthority;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeAuthority(next: ConfigAuthority): void {
+  fs.writeFileSync(authorityPath(), `${JSON.stringify(next, null, 2)}\n`, "utf8");
+}
+
+/** Stable hash of Environment/compose-injected overlay (boot values only). */
+export function processEnvFingerprint(overlay: Record<string, string>): string {
+  const keys = Object.keys(overlay).sort();
+  return keys.map((k) => `${k}=${overlay[k]}`).join("\n");
+}
+
+function applyEnvToProcess(map: Record<string, string>): void {
+  for (const key of PROCESS_ENV_KEYS) {
+    if (map[key] !== undefined && map[key] !== "") {
+      process.env[key] = map[key];
+    }
+  }
+}
+
 /**
- * On boot: merge Dokploy process env + persisted /state/.env so Setup is pre-filled
- * and secrets survive redeploy without re-typing.
+ * Most recent wins:
+ * - Setup Save stamps setupSavedAt → file wins at runtime until next boot.
+ * - At boot, if Environment/compose fingerprint changed → process wins.
+ * - At boot, same fingerprint + setupSavedAt → Setup file still wins (Pi restart).
+ */
+export function resolveConfigAuthority(
+  fromProcess: Record<string, string>,
+  authority: ConfigAuthority = readAuthority(),
+  opts?: { atBoot?: boolean }
+): "setup" | "process" {
+  if (opts?.atBoot) {
+    const fp = processEnvFingerprint(fromProcess);
+    if (
+      authority.lastProcessFingerprint &&
+      authority.lastProcessFingerprint !== fp
+    ) {
+      return "process";
+    }
+  }
+  if (authority.setupSavedAt) return "setup";
+  return "process";
+}
+
+/**
+ * On boot: merge Environment/compose process env + persisted /state/.env.
+ * Most recent authority wins (Setup Save vs Environment redeploy).
  */
 export function bootstrapPersistentEnv(): { keys: string[]; source: string } {
   const fromState = parseEnvFile(envPath());
   const fromData = parseEnvFile(dataEnvPath());
   const fromProcess = readProcessEnvOverlay();
+  const authority = readAuthority();
+  const fp = processEnvFingerprint(fromProcess);
+  const mode = resolveConfigAuthority(fromProcess, authority, { atBoot: true });
 
-  // Priority: process (Dokploy Environment) > state volume > project .env
-  const merged: Record<string, string> = {
-    ...fromData,
-    ...fromState,
-    ...fromProcess
-  };
+  // Base layers then authority winner on top
+  const merged: Record<string, string> =
+    mode === "setup"
+      ? { ...fromData, ...fromProcess, ...fromState }
+      : { ...fromData, ...fromState, ...fromProcess };
+
+  writeAuthority({
+    setupSavedAt: mode === "setup" ? authority.setupSavedAt : undefined,
+    lastProcessFingerprint: fp
+  });
 
   // Sync devices.json: prefer state, copy to data for generate-config.sh
   const stateDevices = path.join(stateDir(), "devices.json");
@@ -254,13 +323,17 @@ export function bootstrapPersistentEnv(): { keys: string[]; source: string } {
   }
 
   writeEnvMaps(merged);
+  applyEnvToProcess(merged);
   return {
     keys: Object.keys(merged),
-    source: Object.keys(fromProcess).length
-      ? "dokploy-env+state"
-      : Object.keys(fromState).length
-        ? "state-volume"
-        : "empty"
+    source:
+      mode === "setup"
+        ? "setup-ui+state"
+        : Object.keys(fromProcess).length
+          ? "process-env+state"
+          : Object.keys(fromState).length
+            ? "state-volume"
+            : "empty"
   };
 }
 
@@ -283,8 +356,13 @@ export function readSnmpCommunity(): string {
 }
 
 export function readConfig(): CollectorConfig {
-  // Live merge so Dokploy Environment always wins without re-setup
-  const env = { ...readEnvFile(), ...readProcessEnvOverlay() };
+  const fromFile = readEnvFile();
+  const fromProcess = readProcessEnvOverlay();
+  // Most recent wins: Setup Save (file) vs Environment/compose (process)
+  const env =
+    resolveConfigAuthority(fromProcess) === "setup"
+      ? { ...fromProcess, ...fromFile }
+      : { ...fromFile, ...fromProcess };
   const siteName = env.SITE_NAME || "";
   return {
     centralRemoteWriteUrl: env.CENTRAL_REMOTE_WRITE_URL || "",
@@ -315,11 +393,17 @@ export function maskConfig(config: CollectorConfig): CollectorConfig & { configu
 }
 
 export function writeConfig(input: Partial<CollectorConfig>): CollectorConfig {
-  const existing = { ...readEnvFile(), ...readProcessEnvOverlay() };
+  // Setup Save is authority: start from file, then overlay current process gaps
+  const existing = { ...readProcessEnvOverlay(), ...readEnvFile() };
   const current = readConfig();
 
   if (input.hostDeviceId === undefined && input.siteName) {
-    input = { ...input, hostDeviceId: `${input.siteName}-nuc` };
+    const prevDefault = current.siteName ? `${current.siteName}-nuc` : "";
+    const hostLooksDefault =
+      !current.hostDeviceId || current.hostDeviceId === prevDefault;
+    if (hostLooksDefault) {
+      input = { ...input, hostDeviceId: `${input.siteName}-nuc` };
+    }
   }
 
   const next: Record<string, string> = { ...existing };
@@ -349,6 +433,14 @@ export function writeConfig(input: Partial<CollectorConfig>): CollectorConfig {
   }
 
   writeEnvMaps(next);
+  applyEnvToProcess(next);
+
+  const authority = readAuthority();
+  writeAuthority({
+    ...authority,
+    setupSavedAt: Date.now()
+    // Keep lastProcessFingerprint from boot — do not refresh here
+  });
 
   if (input.snmpCommunity !== undefined && input.snmpCommunity.trim()) {
     writeSnmpCommunity(input.snmpCommunity.trim());
