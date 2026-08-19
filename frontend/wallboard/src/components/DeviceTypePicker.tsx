@@ -12,6 +12,7 @@ export type DeviceTypeOption = {
 const VENDOR_PRESETS = [
   "generic",
   "fortinet",
+  "synology",
   "maipu",
   "cambium",
   "omada",

@@ -215,6 +215,68 @@ export const METRIC_PRESETS: MetricPreset[] = [
     query: `OMADA_CLIENTS_PLACEHOLDER`
   },
   {
+    id: "nas_cpu_pct",
+    label: "NAS CPU %",
+    kind: "network",
+    unit: "%",
+    deviceTypes: ["nas"],
+    vendors: ["synology", "syno"],
+    query: `NAS_CPU_PLACEHOLDER`
+  },
+  {
+    id: "nas_mem_pct",
+    label: "NAS memory %",
+    kind: "network",
+    unit: "%",
+    deviceTypes: ["nas"],
+    vendors: ["synology", "syno"],
+    query: `NAS_MEM_PLACEHOLDER`
+  },
+  {
+    id: "nas_vol_free_pct",
+    label: "NAS volume free",
+    kind: "network",
+    unit: "%",
+    deviceTypes: ["nas"],
+    vendors: ["synology", "syno"],
+    query: `NAS_VOL_PLACEHOLDER`
+  },
+  {
+    id: "nas_temp_c",
+    label: "NAS temperature",
+    kind: "network",
+    unit: "C",
+    deviceTypes: ["nas"],
+    vendors: ["synology", "syno"],
+    query: `NAS_TEMP_PLACEHOLDER`
+  },
+  {
+    id: "nas_disk_temp_max_c",
+    label: "NAS hottest disk",
+    kind: "network",
+    unit: "C",
+    deviceTypes: ["nas"],
+    vendors: ["synology", "syno"],
+    query: `NAS_DISK_TEMP_PLACEHOLDER`
+  },
+  {
+    id: "nas_raid_ok",
+    label: "NAS RAID",
+    kind: "network",
+    deviceTypes: ["nas"],
+    vendors: ["synology", "syno"],
+    query: `NAS_RAID_PLACEHOLDER`
+  },
+  {
+    id: "nas_disk_failed",
+    label: "NAS disks failed",
+    kind: "network",
+    unit: "count",
+    deviceTypes: ["nas"],
+    vendors: ["synology", "syno"],
+    query: `NAS_DISK_FAIL_PLACEHOLDER`
+  },
+  {
     id: "wan_dns",
     label: "Uplink (DNS)",
     kind: "any",
@@ -321,6 +383,37 @@ or
 ) * 100`;
 }
 
+function nasSel(siteId: string, deviceId: string): string {
+  return `site="${siteId}",device="${deviceId}"`;
+}
+
+function buildNasCpuQuery(siteId: string, deviceId: string): string {
+  return `avg(hrProcessorLoad{${nasSel(siteId, deviceId)}})`;
+}
+
+function buildNasMemQuery(siteId: string, deviceId: string): string {
+  return `(
+  (memTotalReal{${nasSel(siteId, deviceId)}} - memAvailReal{${nasSel(siteId, deviceId)}})
+  /
+  clamp_min(memTotalReal{${nasSel(siteId, deviceId)}}, 1)
+) * 100`;
+}
+
+function buildNasVolFreeQuery(siteId: string, deviceId: string): string {
+  return `(
+  sum(synoRaidFreeSize{${nasSel(siteId, deviceId)}})
+  /
+  clamp_min(sum(synoRaidTotalSize{${nasSel(siteId, deviceId)}}), 1)
+) * 100`;
+}
+
+function buildNasRaidOkQuery(siteId: string, deviceId: string): string {
+  // 1 when RAID series exist and none are degrade(11) or crashed(12); else empty (gauge = DOWN).
+  return `(count(synoRaidStatus{${nasSel(siteId, deviceId)}}) > 0)
+unless
+(count(synoRaidStatus{${nasSel(siteId, deviceId)}} == 11 or synoRaidStatus{${nasSel(siteId, deviceId)}} == 12) > 0)`;
+}
+
 export function buildQuery(presetId: string, siteId: string, deviceId: string): string | null {
   const preset = METRIC_PRESETS.find((p) => p.id === presetId);
   if (!preset) return null;
@@ -380,6 +473,20 @@ export function buildQuery(presetId: string, siteId: string, deviceId: string): 
       return `sum(cambiumAPTotalClients{site="${siteId}",device="${deviceId}"})`;
     case "ap_clients_omada":
       return `omadaClientCount{site="${siteId}",device="${deviceId}"}`;
+    case "nas_cpu_pct":
+      return buildNasCpuQuery(siteId, deviceId);
+    case "nas_mem_pct":
+      return buildNasMemQuery(siteId, deviceId);
+    case "nas_vol_free_pct":
+      return buildNasVolFreeQuery(siteId, deviceId);
+    case "nas_temp_c":
+      return `synoTemperature{site="${siteId}",device="${deviceId}"}`;
+    case "nas_disk_temp_max_c":
+      return `max(synoDiskTemperature{site="${siteId}",device="${deviceId}"})`;
+    case "nas_raid_ok":
+      return buildNasRaidOkQuery(siteId, deviceId);
+    case "nas_disk_failed":
+      return `count(synoDiskStatus{site="${siteId}",device="${deviceId}"} >= 4) or vector(0)`;
     default:
       return preset.query.replace(/\{\{site\}\}/g, siteId).replace(/\{\{device\}\}/g, deviceId);
   }
@@ -464,6 +571,20 @@ export function listPresetsForApi(): MetricPreset[] {
       return {
         ...p,
         query: "Omada/TP-Link EAP client count (verify OID on model/firmware)"
+      };
+    }
+    if (
+      p.id === "nas_cpu_pct" ||
+      p.id === "nas_mem_pct" ||
+      p.id === "nas_vol_free_pct" ||
+      p.id === "nas_temp_c" ||
+      p.id === "nas_disk_temp_max_c" ||
+      p.id === "nas_raid_ok" ||
+      p.id === "nas_disk_failed"
+    ) {
+      return {
+        ...p,
+        query: "Synology syno* / hrProcessorLoad / mem* (synology_health module)"
       };
     }
     return p;

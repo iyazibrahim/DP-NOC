@@ -207,3 +207,98 @@ modules:
         oid: 1.3.6.1.4.1.11863.10.1.1.1
         type: gauge
         help: Omada/TP-Link EAP client count (verify OID on model/firmware)
+
+  # Synology DSM (SYNOLOGY-SYSTEM/DISK/RAID-MIB + HOST-RESOURCES CPU + UCD memory).
+  # Type nas + vendor synology (or empty/generic). RAID sizes are MIB Counter64 but treated
+  # as gauges so PromQL can use current free/total without rate().
+  synology_health:
+    walk:
+      - 1.3.6.1.4.1.6574.1.1.0     # synoSystemStatus
+      - 1.3.6.1.4.1.6574.1.2.0     # synoTemperature
+      - 1.3.6.1.4.1.6574.2.1.1.5   # synoDiskStatus
+      - 1.3.6.1.4.1.6574.2.1.1.6   # synoDiskTemperature
+      - 1.3.6.1.4.1.6574.3.1.1.3   # synoRaidStatus
+      - 1.3.6.1.4.1.6574.3.1.1.4   # synoRaidFreeSize
+      - 1.3.6.1.4.1.6574.3.1.1.5   # synoRaidTotalSize
+      - 1.3.6.1.2.1.25.3.3.1.2     # hrProcessorLoad
+      - 1.3.6.1.4.1.2021.4.5.0     # memTotalReal (kB)
+      - 1.3.6.1.4.1.2021.4.6.0     # memAvailReal (kB)
+    metrics:
+      - name: synoSystemStatus
+        oid: 1.3.6.1.4.1.6574.1.1.0
+        type: gauge
+        help: Synology system status (1=Normal, 2=Failed)
+      - name: synoTemperature
+        oid: 1.3.6.1.4.1.6574.1.2.0
+        type: gauge
+        help: Synology system temperature Celsius
+      - name: synoDiskStatus
+        oid: 1.3.6.1.4.1.6574.2.1.1.5
+        type: gauge
+        help: Synology disk status (1=Normal, 4=SystemPartitionFailed, 5=Crashed)
+        indexes:
+          - labelname: synoDiskIndex
+            type: gauge
+        enum_values:
+          1: normal
+          2: initialized
+          3: notInitialized
+          4: systemPartitionFailed
+          5: crashed
+      - name: synoDiskTemperature
+        oid: 1.3.6.1.4.1.6574.2.1.1.6
+        type: gauge
+        help: Synology disk temperature Celsius
+        indexes:
+          - labelname: synoDiskIndex
+            type: gauge
+      - name: synoRaidStatus
+        oid: 1.3.6.1.4.1.6574.3.1.1.3
+        type: gauge
+        help: Synology RAID status (1=Normal, 11=Degrade, 12=Crashed)
+        indexes:
+          - labelname: synoRaidIndex
+            type: gauge
+        enum_values:
+          1: normal
+          2: repairing
+          3: migrating
+          4: expanding
+          5: deleting
+          6: creating
+          7: raidSyncing
+          8: raidParityChecking
+          9: raidAssembling
+          10: canceling
+          11: degrade
+          12: crashed
+          13: dataScrubbing
+      - name: synoRaidFreeSize
+        oid: 1.3.6.1.4.1.6574.3.1.1.4
+        type: gauge
+        help: Synology RAID free size (bytes)
+        indexes:
+          - labelname: synoRaidIndex
+            type: gauge
+      - name: synoRaidTotalSize
+        oid: 1.3.6.1.4.1.6574.3.1.1.5
+        type: gauge
+        help: Synology RAID total size (bytes)
+        indexes:
+          - labelname: synoRaidIndex
+            type: gauge
+      - name: hrProcessorLoad
+        oid: 1.3.6.1.2.1.25.3.3.1.2
+        type: gauge
+        help: The average percentage of CPU load
+        indexes:
+          - labelname: hrDeviceIndex
+            type: gauge
+      - name: memTotalReal
+        oid: 1.3.6.1.4.1.2021.4.5.0
+        type: gauge
+        help: Total real memory kB (UCD-SNMP-MIB)
+      - name: memAvailReal
+        oid: 1.3.6.1.4.1.2021.4.6.0
+        type: gauge
+        help: Available real memory kB (UCD-SNMP-MIB)

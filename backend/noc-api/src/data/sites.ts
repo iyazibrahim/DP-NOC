@@ -94,7 +94,9 @@ function loadSeed(): Site[] {
 }
 
 function normalizeDevice(d: SiteDevice): SiteDevice {
-  const kind: DeviceKind = d.kind ?? (d.hostMetricId ? "server" : "network");
+  const typeId = (d.type || "").toLowerCase();
+  let kind: DeviceKind = d.kind ?? (d.hostMetricId ? "server" : "network");
+  if (typeId === "nas") kind = "network";
   const community =
     kind === "network" && typeof d.snmpCommunity === "string" && d.snmpCommunity.trim()
       ? d.snmpCommunity.trim()

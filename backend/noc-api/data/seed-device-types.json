@@ -6,7 +6,7 @@
   { "id": "switch", "label": "Switch", "kind": "network", "icon": "🔗" },
   { "id": "ap", "label": "Access Point", "kind": "network", "icon": "📡" },
   { "id": "firewall", "label": "Firewall", "kind": "network", "icon": "🛡️" },
-  { "id": "nas", "label": "NAS / Storage", "kind": "server", "icon": "💾" },
+  { "id": "nas", "label": "NAS / Storage", "kind": "network", "icon": "💾" },
   { "id": "printer", "label": "Printer", "kind": "network", "icon": "🖨️" },
   { "id": "camera", "label": "IP Camera", "kind": "network", "icon": "📷" }
 ]

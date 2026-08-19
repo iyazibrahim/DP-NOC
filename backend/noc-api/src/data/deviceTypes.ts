@@ -17,7 +17,7 @@ const SEED_TYPES: DeviceTypeDef[] = [
   { id: "switch", label: "Switch", kind: "network", icon: "🔗" },
   { id: "ap", label: "Access Point", kind: "network", icon: "📡" },
   { id: "firewall", label: "Firewall", kind: "network", icon: "🛡️" },
-  { id: "nas", label: "NAS / Storage", kind: "server", icon: "💾" },
+  { id: "nas", label: "NAS / Storage", kind: "network", icon: "💾" },
   { id: "printer", label: "Printer", kind: "network", icon: "🖨️" },
   { id: "camera", label: "IP Camera", kind: "network", icon: "📷" }
 ];
@@ -58,8 +58,27 @@ function ensureFile(): string {
   return file;
 }
 
+function migrateNasToNetwork(list: DeviceTypeDef[]): { list: DeviceTypeDef[]; changed: boolean } {
+  let changed = false;
+  const next = list.map((t) => {
+    if (t.id === "nas" && t.kind !== "network") {
+      changed = true;
+      return { ...t, kind: "network" as DeviceKind };
+    }
+    return t;
+  });
+  return { list: next, changed };
+}
+
 let typesFile = ensureFile();
 let deviceTypes: DeviceTypeDef[] = JSON.parse(fs.readFileSync(typesFile, "utf8")) as DeviceTypeDef[];
+{
+  const migrated = migrateNasToNetwork(deviceTypes);
+  if (migrated.changed) {
+    deviceTypes = migrated.list;
+    persist();
+  }
+}
 
 function persist() {
   typesFile = runtimePath();
@@ -99,7 +118,5 @@ export function addDeviceType(input: { id?: string; label: string; kind: DeviceK
 export function inferKindFromType(typeId: string): DeviceKind {
   const found = getDeviceType(typeId);
   if (found) return found.kind;
-  return typeId === "server" || typeId === "nuc" || typeId === "pc" || typeId === "nas"
-    ? "server"
-    : "network";
+  return typeId === "server" || typeId === "nuc" || typeId === "pc" ? "server" : "network";
 }

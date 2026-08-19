@@ -181,6 +181,13 @@ Collector box → Alloy → Prometheus (central)
     - Traffic charts show Kbps/Mbps only; presets `if_util_in_pct` / `if_util_out_pct`
 
 
+- [x] **Synology NAS SNMP wallboard pack (2026-08-19)**
+  - Type `nas` is SNMP (`kind: network`), not a collector host
+  - `synology_health` module + generate-config extra target (vendor synology / empty)
+  - Presets reuse Gauge (volume pie, RAID UP/DOWN, CPU/mem/temp), Line chart (LAN), Device stack for several NAS
+  - Collector Console type NAS; vendor chip `synology`
+  - See `docs/SNMP_VENDOR_HEALTH.md` and `docs/superpowers/specs/2026-08-19-synology-nas-wallboard-design.md`
+
 ## Local Validation
 1. `docker compose up -d --build`
 2. Open `http://localhost:8080` — login `admin` / `admin`

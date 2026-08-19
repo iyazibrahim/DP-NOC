@@ -348,6 +348,8 @@ export function SiteDetailPage() {
       type: type.id,
       kind: type.kind,
       id: suggestedId,
+      vendor:
+        type.id === "nas" && (f.vendor === "generic" || !f.vendor.trim()) ? "synology" : f.vendor,
       hostMetricId: type.kind === "server" ? suggestedId : f.hostMetricId
     }));
   }

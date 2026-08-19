@@ -83,6 +83,7 @@ function formatMetricValue(value: number, unit?: string): string {
     return `${text} ${unitLabel}`;
   }
   if (unit === "%") return `${value.toFixed(1)}%`;
+  if (unit === "C") return `${Math.round(value)}°C`;
   if (unit === "count") return `${Math.round(value)}`;
   return `${value.toFixed(2)}${unit ?? ""}`;
 }
@@ -90,6 +91,7 @@ function formatMetricValue(value: number, unit?: string): string {
 /** Y-axis: numbers only (no unit suffix). */
 function formatYAxisTick(value: number, unit?: string, bitrateScale?: "Gbps" | "Mbps" | "Kbps") {
   if (unit === "%") return `${Math.round(value)}`;
+  if (unit === "C") return `${Math.round(value)}`;
   if (unit === "bps" && bitrateScale) {
     const scaled = toScaledBitrate(value, bitrateScale);
     return bitrateScale === "Kbps" ? scaled.toFixed(0) : scaled.toFixed(1);
@@ -132,6 +134,7 @@ function ChartTooltip({
 function chartUnitBadge(unit: string | undefined, bitrateScale?: "Gbps" | "Mbps" | "Kbps") {
   if (unit === "bps") return bitrateScale ?? "Mbps";
   if (unit === "%") return "%";
+  if (unit === "C") return "°C";
   if (unit === "count") return "count";
   return unit || "";
 }
@@ -366,7 +369,7 @@ export function DeviceMetricBar({
   );
 }
 
-const BOOLEAN_METRICS = new Set(["host_up", "snmp_up", "wan_dns", "wan_vps"]);
+const BOOLEAN_METRICS = new Set(["host_up", "snmp_up", "wan_dns", "wan_vps", "nas_raid_ok"]);
 
 export function DeviceStatGauge({
   siteId,

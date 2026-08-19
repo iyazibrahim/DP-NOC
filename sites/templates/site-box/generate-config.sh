@@ -5,7 +5,7 @@
 # - Never emit config_merge_strategy (unsupported on 1.5.1)
 # - Always emit numeric scrape_interval (e.g. "15s"), never ${SCRAPE_INTERVAL_SEC}
 # - SNMP uses full snmp.yml (auths + if_mib + vendor health modules) beside config.alloy
-# - Each device: if_mib always; optional second target for fortigate/maipu/cambium/omada
+# - Each device: if_mib always; optional second target for fortigate/maipu/cambium/omada/synology
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -332,6 +332,8 @@ def vendor_module(dtype, vendor):
     v = norm(vendor)
     if t == "firewall" and (v in ("fortinet", "fortigate") or v == ""):
         return "fortigate_health"
+    if t in ("nas", "storage") and (v in ("synology", "syno") or v in ("", "generic")):
+        return "synology_health"
     if t == "switch" and v == "maipu":
         return "maipu_health"
     # Portable HOST-RESOURCES for any switch when vendor unset — keep Maipu-only per plan

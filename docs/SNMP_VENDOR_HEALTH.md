@@ -5,9 +5,12 @@ Each network device always scrapes **`if_mib`**. `generate-config.sh` adds **one
 | Device type | Vendor (normalized) | Extra module | Metrics |
 |---|---|---|---|
 | `firewall` | `fortinet` / `fortigate` / empty | `fortigate_health` | `fgSysCpuUsage`, `fgSysMemUsage`, `fgSysSesCount` |
+| `nas` | `synology` / `syno` / empty / `generic` | `synology_health` | `synoTemperature`, `synoDisk*`, `synoRaid*`, `hrProcessorLoad`, `memTotalReal` / `memAvailReal` |
 | `switch` | `maipu` | `maipu_health` | HOST-RESOURCES `hrProcessorLoad`, `hrStorage*` |
 | `ap` | `cambium` | `cambium_ap_health` | `cambiumAPCPUUtilization`, `cambiumAPTotalClients` |
 | `ap` | `omada` / `tp-link` / `tplink` | `omada_ap_health` | `omadaClientCount` |
+
+**NAS wallboard:** Type `nas` is an SNMP device (`kind: network`). Dashboard uses the same Gauge / Line chart / Bar / SNMP device / Device stack widgets as firewalls and APs. Volume free % uses the existing gauge pie (teal = used). RAID uses the UP/DOWN gauge. LAN traffic is IF-MIB `if_in_bps` / `if_out_bps`.
 
 **Network tab clients:** Site → Network shows AP client bars/pies from these series. Inventory must use `type=ap` and the matching vendor; Force-apply so Alloy scrapes the vendor module. Omada OID is fragile — empty series means walk the AP and update `omada_ap_health` if needed.
 
@@ -40,6 +43,21 @@ Collector Console historically stored type as `access-point`; Alloy only attache
 ### Omada / TP-Link EAP
 
 - Clients: `1.3.6.1.4.1.11863.10.1.1.1` — **model/firmware dependent**. Empty series = unsupported; UI shows unknown (does not crash).
+
+### Synology NAS (verified DSM SNMP OIDs)
+
+Enable **SNMP service** on the NAS (Control Panel → Terminal & SNMP). Community must match the collector default or the per-device field.
+
+- System status: `1.3.6.1.4.1.6574.1.1` (`synoSystemStatus` — 1 Normal, 2 Failed)
+- Temperature °C: `1.3.6.1.4.1.6574.1.2` (`synoTemperature`)
+- Disk status: `1.3.6.1.4.1.6574.2.1.1.5` (`synoDiskStatus` — 4/5 = failed)
+- Disk temperature: `1.3.6.1.4.1.6574.2.1.1.6` (`synoDiskTemperature`)
+- RAID status: `1.3.6.1.4.1.6574.3.1.1.3` (`synoRaidStatus` — 11 Degrade, 12 Crashed)
+- RAID free/total: `1.3.6.1.4.1.6574.3.1.1.4` / `.5` (`synoRaidFreeSize` / `synoRaidTotalSize`)
+- CPU: HOST-RESOURCES `hrProcessorLoad`
+- Memory: UCD `memTotalReal` / `memAvailReal` (`1.3.6.1.4.1.2021.4.5` / `.6`)
+
+Wallboard presets: `nas_vol_free_pct`, `nas_raid_ok`, `nas_cpu_pct`, `nas_mem_pct`, `nas_temp_c`, `nas_disk_temp_max_c`, `nas_disk_failed`, plus IF-MIB traffic.
 
 ### Maipu switch
 

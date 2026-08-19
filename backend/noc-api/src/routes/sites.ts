@@ -53,7 +53,8 @@ function parseDeviceBody(body: unknown): SiteDevice | { error: string } {
   const id = typeof b.id === "string" ? b.id.trim() : "";
   const name = typeof b.name === "string" ? b.name.trim() : "";
   const type = typeof b.type === "string" ? b.type.trim() : "switch";
-  const kind = (b.kind === "server" || b.kind === "network" ? b.kind : "network") as DeviceKind;
+  let kind = (b.kind === "server" || b.kind === "network" ? b.kind : "network") as DeviceKind;
+  if (type.toLowerCase() === "nas") kind = "network";
   const snmpIp = typeof b.snmpIp === "string" ? b.snmpIp.trim() : "";
   const hostMetricId = typeof b.hostMetricId === "string" ? b.hostMetricId.trim() : "";
   const vendor = typeof b.vendor === "string" ? b.vendor.trim() : "generic";

@@ -280,7 +280,15 @@ export function WidgetConfigEditor({
         p.deviceTypes?.includes("firewall") &&
         (v === "" || v === "generic") &&
         p.vendors.some((x) => ["fortinet", "fortigate"].includes(normalizeVendor(x)));
-      if (!allowEmptyFw && !p.vendors.some((x) => normalizeVendor(x) === v || v.includes(normalizeVendor(x)))) {
+      const allowEmptyNas =
+        p.deviceTypes?.includes("nas") &&
+        (v === "" || v === "generic") &&
+        p.vendors.some((x) => ["synology", "syno"].includes(normalizeVendor(x)));
+      if (
+        !allowEmptyFw &&
+        !allowEmptyNas &&
+        !p.vendors.some((x) => normalizeVendor(x) === v || v.includes(normalizeVendor(x)))
+      ) {
         return false;
       }
     }
@@ -355,9 +363,9 @@ export function WidgetConfigEditor({
             ))}
           </select>
           <p className="muted fieldHint">
-            SNMP: traffic, bandwidth utilization, capacity, errors. Firewall / switch / AP health
-            presets appear when device type and vendor match (Fortinet, Maipu, Cambium, Omada).
-            Collectors use CPU / memory / disk.
+            SNMP: traffic, bandwidth utilization, capacity, errors. Firewall / switch / AP / NAS
+            health presets appear when device type and vendor match (Fortinet, Maipu, Cambium,
+            Omada, Synology). Collectors use CPU / memory / disk.
           </p>
         </>
       ) : null}

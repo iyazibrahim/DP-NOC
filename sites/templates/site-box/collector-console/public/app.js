@@ -209,6 +209,14 @@ document.getElementById("btn-diag").addEventListener("click", async () => {
   }
 });
 
+document.getElementById("dev-type").addEventListener("change", (e) => {
+  const type = e.target.value;
+  const vendor = document.getElementById("dev-vendor");
+  if (type === "nas" && (!vendor.value || vendor.value === "generic")) {
+    vendor.value = "synology";
+  }
+});
+
 document.getElementById("add-device-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const msg = document.getElementById("add-device-msg");
