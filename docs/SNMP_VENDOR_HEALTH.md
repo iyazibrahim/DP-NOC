@@ -57,7 +57,9 @@ Enable **SNMP service** on the NAS (Control Panel → Terminal & SNMP). Communit
 - CPU: HOST-RESOURCES `hrProcessorLoad`
 - Memory: UCD `memTotalReal` / `memAvailReal` (`1.3.6.1.4.1.2021.4.5` / `.6`)
 
-Wallboard presets: `nas_vol_free_pct`, `nas_raid_ok`, `nas_cpu_pct`, `nas_mem_pct`, `nas_temp_c`, `nas_disk_temp_max_c`, `nas_disk_failed`, plus IF-MIB traffic.
+Wallboard presets: `nas_vol_free_pct` (HOST-RESOURCES `/volume*` free %, RAID size fallback), `nas_raid_ok`, `nas_cpu_pct`, `nas_mem_pct`, `nas_temp_c`, `nas_disk_temp_max_c`, `nas_disk_failed`, plus IF-MIB traffic.
+
+**Stale collector `snmp.yml`:** named volume keeps old modules. Rebuild **collector-console**, then Force apply (or restart Console). generate-config pulls `synology_health` from the image `/opt/sitebox/snmp.yml` when the live file is missing it.
 
 ### Maipu switch
 

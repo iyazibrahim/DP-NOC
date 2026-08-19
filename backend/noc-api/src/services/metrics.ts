@@ -400,11 +400,24 @@ function buildNasMemQuery(siteId: string, deviceId: string): string {
 }
 
 function buildNasVolFreeQuery(siteId: string, deviceId: string): string {
-  return `(
-  sum(synoRaidFreeSize{${nasSel(siteId, deviceId)}})
+  const sel = nasSel(siteId, deviceId);
+  // Prefer HOST-RESOURCES /volume* (filesystem free). RAID leftover space is often ~0
+  // on a fully allocated pool, so it is only a fallback.
+  const vol = `(
+  (
+    clamp_min(sum(hrStorageSize{${sel},hrStorageDescr=~"/volume.*"}), 1)
+    -
+    sum(hrStorageUsed{${sel},hrStorageDescr=~"/volume.*"})
+  )
   /
-  clamp_min(sum(synoRaidTotalSize{${nasSel(siteId, deviceId)}}), 1)
+  clamp_min(sum(hrStorageSize{${sel},hrStorageDescr=~"/volume.*"}), 1)
 ) * 100`;
+  const raid = `(
+  sum(synoRaidFreeSize{${sel}})
+  /
+  clamp_min(sum(synoRaidTotalSize{${sel}}), 1)
+) * 100`;
+  return `(${vol})\nor\n(${raid})`;
 }
 
 function buildNasRaidOkQuery(siteId: string, deviceId: string): string {

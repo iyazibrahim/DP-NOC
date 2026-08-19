@@ -6,6 +6,7 @@
 # - Always emit numeric scrape_interval (e.g. "15s"), never ${SCRAPE_INTERVAL_SEC}
 # - SNMP uses full snmp.yml (auths + if_mib + vendor health modules) beside config.alloy
 # - Each device: if_mib always; optional second target for fortigate/maipu/cambium/omada/synology
+# - Live snmp.yml modules are kept unless the image template has a newer vendor pack (e.g. synology_health)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -217,17 +218,39 @@ if not default:
 if not re.fullmatch(r"[0-9]+", scrape_sec or ""):
     scrape_sec = "15"
 
-# Preserve modules: from existing snmp.yml after "modules:"
-modules_block = ""
-if os.path.isfile(snmp_path):
-    text = open(snmp_path, encoding="utf-8").read()
+# Prefer image/template modules (vendor packs) when the live volume snmp.yml is stale.
+# Otherwise keep live modules so local OID tweaks survive auth rewrites.
+def extract_modules(path):
+    if not path or not os.path.isfile(path):
+        return ""
+    text = open(path, encoding="utf-8").read()
     idx = text.find("\nmodules:")
     if idx == -1:
         idx = text.find("modules:")
-    if idx != -1:
-        modules_block = text[idx:].lstrip("\n")
-        if not modules_block.startswith("modules:"):
-            modules_block = "modules:" + modules_block.split("modules:", 1)[-1]
+    if idx == -1:
+        return ""
+    block = text[idx:].lstrip("\n")
+    if not block.startswith("modules:"):
+        block = "modules:" + block.split("modules:", 1)[-1]
+    return block
+
+template = (os.environ.get("SNMP_MODULES_FILE") or "").strip()
+if not template or not os.path.isfile(template):
+    if os.path.isfile("/opt/sitebox/snmp.yml"):
+        template = "/opt/sitebox/snmp.yml"
+    else:
+        template = ""
+
+live = extract_modules(snmp_path)
+tmpl = extract_modules(template)
+if "synology_health" in tmpl and "synology_health" not in live:
+    modules_block = tmpl
+elif live.strip():
+    modules_block = live
+elif tmpl.strip():
+    modules_block = tmpl
+else:
+    modules_block = ""
 
 if not modules_block.strip():
     modules_block = """modules:

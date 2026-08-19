@@ -184,7 +184,8 @@ Collector box → Alloy → Prometheus (central)
 - [x] **Synology NAS SNMP wallboard pack (2026-08-19)**
   - Type `nas` is SNMP (`kind: network`), not a collector host
   - `synology_health` module + generate-config extra target (vendor synology / empty)
-  - Presets reuse Gauge (volume pie, RAID UP/DOWN, CPU/mem/temp), Line chart (LAN), Device stack for several NAS
+  - Presets reuse Gauge (volume pie from `/volume*` HOST-RESOURCES, RAID UP/DOWN, CPU/mem/temp), Line chart (LAN), Device stack for several NAS
+  - Volume query uses filesystem `/volume*` (not RAID leftover space). Stale collector `snmp.yml` is refreshed from the console image on generate.
   - Collector Console type NAS; vendor chip `synology`
   - See `docs/SNMP_VENDOR_HEALTH.md` and `docs/superpowers/specs/2026-08-19-synology-nas-wallboard-design.md`
 

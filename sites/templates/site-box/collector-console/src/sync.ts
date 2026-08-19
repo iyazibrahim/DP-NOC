@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { dataDir, readConfig, stateDir, writeDevicesJson } from "./config";
+import { dataDir, readConfig, stateDir, writeDevicesJson, bundledToolkitDir } from "./config";
 import { regenerateAlloyConfig, reloadAlloy } from "./alloy";
 
 export type SyncResult = {
@@ -32,7 +32,7 @@ function configAlloyPath(): string {
   return path.join(dataDir(), "config.alloy");
 }
 
-function readLocalDevices(): Array<{ id?: string; snmpIp?: string }> {
+function readLocalDevices(): Array<{ id?: string; snmpIp?: string; type?: string; vendor?: string }> {
   const file = devicesPath();
   const fallback = path.join(dataDir(), "devices.json");
   const use = fs.existsSync(file) ? file : fallback;
@@ -57,6 +57,19 @@ export function alloySnmpConfigStale(_dataDir?: string): boolean {
   for (const d of devices) {
     if (!alloy.includes(`device = "${d.id}"`)) return true;
   }
+  const liveSnmp = path.join(dataDir(), "snmp.yml");
+  const bundledSnmp = path.join(bundledToolkitDir(), "snmp.yml");
+  if (fs.existsSync(bundledSnmp) && fs.existsSync(liveSnmp)) {
+    const bundled = fs.readFileSync(bundledSnmp, "utf8");
+    const live = fs.readFileSync(liveSnmp, "utf8");
+    if (bundled.includes("synology_health") && !live.includes("synology_health")) return true;
+  }
+  const needsSynology = devices.some((d) => {
+    const t = (d.type || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const v = (d.vendor || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    return t === "nas" || t === "storage" || v === "synology" || v === "syno";
+  });
+  if (needsSynology && !alloy.includes("synology_health")) return true;
   return false;
 }
 

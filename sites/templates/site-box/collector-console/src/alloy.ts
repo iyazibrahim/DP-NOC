@@ -152,7 +152,10 @@ export async function regenerateAlloyConfig(): Promise<string> {
     cwd: scriptDir,
     env: {
       SCRAPE_INTERVAL_SEC: safeInterval,
-      SNMP_DEFAULT_COMMUNITY: defaultCommunity
+      SNMP_DEFAULT_COMMUNITY: defaultCommunity,
+      SNMP_MODULES_FILE: fs.existsSync("/opt/sitebox/snmp.yml")
+        ? "/opt/sitebox/snmp.yml"
+        : ""
     }
   });
 

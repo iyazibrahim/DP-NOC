@@ -36,6 +36,10 @@ const PROCESS_ENV_KEYS = [...Object.values(CONFIG_TO_ENV), "SNMP_DEFAULT_COMMUNI
 
 const BUNDLED_TOOLKIT = process.env.SITEBOX_TOOLKIT_DIR || "/opt/sitebox";
 
+export function bundledToolkitDir(): string {
+  return BUNDLED_TOOLKIT;
+}
+
 let resolvedDataDir: string | null = null;
 
 /**
