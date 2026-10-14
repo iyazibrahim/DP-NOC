@@ -180,14 +180,13 @@ modules:
           - labelname: hrStorageIndex
             type: gauge
 
-  # Cambium cnPilot E-series (standalone AP).
-  # AP scalars use .0 (E410); client table is Integer32-indexed (cambiumClientTable).
-  # After updating: redeploy site-box snmp.yml + Force-apply collectors.
+  # Cambium cnPilot E-series — LIGHT health only (must finish inside ~15s scrape).
+  # Do NOT put cambiumClientTable here; a full station walk timed out Alloy and
+  # cascaded SNMP failures across firewall/switch/NAS. Station list = cambium_clients.
   cambium_ap_health:
     walk:
       - 1.3.6.1.4.1.17713.22.1.1.1.6.0   # cambiumAPCPUUtilization.0
       - 1.3.6.1.4.1.17713.22.1.1.1.14.0  # cambiumAPTotalClients.0
-      - 1.3.6.1.4.1.17713.22.1.3.1       # cambiumClientEntry (station table)
     metrics:
       - name: cambiumAPCPUUtilization
         oid: 1.3.6.1.4.1.17713.22.1.1.1.6.0
@@ -197,7 +196,24 @@ modules:
         oid: 1.3.6.1.4.1.17713.22.1.1.1.14.0
         type: gauge
         help: Cambium AP total associated clients (E-series scalar .0)
-      # Presence + identity labels for Clients tab (join key: device + clientIndex).
+
+  # Cambium station table — scraped on a SLOW separate job (60s), not the health path.
+  cambium_clients:
+    walk:
+      - 1.3.6.1.4.1.17713.22.1.3.1.1   # index
+      - 1.3.6.1.4.1.17713.22.1.3.1.2   # MAC
+      - 1.3.6.1.4.1.17713.22.1.3.1.3   # IP
+      - 1.3.6.1.4.1.17713.22.1.3.1.4   # name
+      - 1.3.6.1.4.1.17713.22.1.3.1.5   # SSID
+      - 1.3.6.1.4.1.17713.22.1.3.1.6   # OS / vendor name
+      - 1.3.6.1.4.1.17713.22.1.3.1.7   # hw mode
+      - 1.3.6.1.4.1.17713.22.1.3.1.11  # SNR
+      - 1.3.6.1.4.1.17713.22.1.3.1.12  # tx rate
+      - 1.3.6.1.4.1.17713.22.1.3.1.14  # tx bytes
+      - 1.3.6.1.4.1.17713.22.1.3.1.16  # rx bytes
+    max_repetitions: 10
+    timeout: 25s
+    metrics:
       - name: cambiumClientInfo
         oid: 1.3.6.1.4.1.17713.22.1.3.1.1
         type: gauge
@@ -271,17 +287,24 @@ modules:
             oid: 1.3.6.1.4.1.17713.22.1.3.1.2
             type: PhysAddress
 
-  # Omada / TP-Link EAP — client count + MAC table (model/firmware dependent).
-  # Public MIB documents MAC only; per-client bandwidth/SNR not available via SNMP.
+  # Omada / TP-Link EAP — LIGHT client count only (15s path).
   omada_ap_health:
     walk:
-      - 1.3.6.1.4.1.11863.10.1.1.1     # clientCount (prefer .0 on some firmware)
-      - 1.3.6.1.4.1.11863.10.1.1.2.1   # clientEntry (MAC table)
+      - 1.3.6.1.4.1.11863.10.1.1.1  # client count (verify on device)
     metrics:
       - name: omadaClientCount
-        oid: 1.3.6.1.4.1.11863.10.1.1.1.0
+        oid: 1.3.6.1.4.1.11863.10.1.1.1
         type: gauge
-        help: Omada/TP-Link EAP client count (scalar .0; verify on model/firmware)
+        help: Omada/TP-Link EAP client count (verify OID on model/firmware)
+
+  # Omada MAC table — slow job only (optional / firmware dependent).
+  omada_clients:
+    walk:
+      - 1.3.6.1.4.1.11863.10.1.1.2.1.1
+      - 1.3.6.1.4.1.11863.10.1.1.2.1.2
+    max_repetitions: 10
+    timeout: 25s
+    metrics:
       - name: omadaClientInfo
         oid: 1.3.6.1.4.1.11863.10.1.1.2.1.1
         type: gauge

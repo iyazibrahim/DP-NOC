@@ -224,6 +224,8 @@ if not re.fullmatch(r"[0-9]+", scrape_sec or ""):
 # Markers must stay in sync with collector-console alloySnmpConfigStale().
 MODULE_MARKERS = (
     "synology_health",
+    "cambium_clients",
+    "omada_clients",
     "cambiumClientInfo",
     "cambiumClientSNR",
     "cambiumClientTxDataBytes",
@@ -367,8 +369,8 @@ def is_ap_type(t):
     # Wallboard uses type id "ap"; Collector Console historically used "access-point".
     return t in ("ap", "accesspoint", "wifi", "wireless")
 
-def vendor_module(dtype, vendor):
-    """Extra SNMP module from device type + vendor (if_mib is always scraped)."""
+def vendor_health_module(dtype, vendor):
+    """Fast vendor health module (same ~15s scrape as if_mib)."""
     t = norm(dtype)
     v = norm(vendor)
     if t == "firewall" and (v in ("fortinet", "fortigate") or v == ""):
@@ -379,12 +381,23 @@ def vendor_module(dtype, vendor):
         return "synology_health"
     if t == "switch" and v == "maipu":
         return "maipu_health"
-    # Portable HOST-RESOURCES for any switch when vendor unset — keep Maipu-only per plan
     if is_ap_type(t) and v == "cambium":
         return "cambium_ap_health"
     if is_ap_type(t) and v in ("omada", "tplink"):
         return "omada_ap_health"
     return None
+
+def vendor_clients_module(dtype, vendor):
+    """Heavy station-table module — separate 60s scrape so it cannot starve health."""
+    t = norm(dtype)
+    v = norm(vendor)
+    if is_ap_type(t) and v == "cambium":
+        return "cambium_clients"
+    if is_ap_type(t) and v in ("omada", "tplink"):
+        return "omada_clients"
+    return None
+
+client_devices = []
 
 for d in devices:
     tid = safe(d["id"])
@@ -404,7 +417,7 @@ for d in devices:
     print(f'    }}')
     print(f'  }}')
     print()
-    extra = vendor_module(dtype, vendor_raw)
+    extra = vendor_health_module(dtype, vendor_raw)
     if extra:
         print(f'  target "{tid}_{extra}" {{')
         print(f'    address = "{ip}"')
@@ -417,9 +430,33 @@ for d in devices:
         print(f'    }}')
         print(f'  }}')
         print()
+    clients = vendor_clients_module(dtype, vendor_raw)
+    if clients:
+        client_devices.append((tid, ip, did, vendor, clients))
 
 print("}")
 print()
+
+# Slow station-table exporter (optional). Failures here must NOT share the health scrape.
+if client_devices:
+    print('prometheus.exporter.snmp "site_clients" {')
+    print('  config_file = "snmp.yml"')
+    print()
+    for tid, ip, did, vendor, mod in client_devices:
+        print(f'  target "{tid}_{mod}" {{')
+        print(f'    address = "{ip}"')
+        print(f'    module  = "{mod}"')
+        print(f'    auth    = "auth_{tid}"')
+        print(f'    labels  = {{')
+        print(f'      site   = sys.env("SITE_NAME"),')
+        print(f'      device = "{did}",')
+        print(f'      vendor = "{vendor}",')
+        print(f'    }}')
+        print(f'  }}')
+        print()
+    print("}")
+    print()
+
 # Alloy prometheus.exporter.snmp sets job = "integrations/snmp" + "/" + target_name
 # (Agent-compatible). scrape job_name is ignored when job is already set — without
 # relabel, Prometheus never sees job=site_snmp_if_mib and NOC looks "broken".
@@ -448,6 +485,35 @@ print('    target_label = "job"')
 print('    replacement  = "site_snmp_if_mib"')
 print("  }")
 print("}")
+
+if client_devices:
+    print()
+    print('discovery.relabel "snmp_clients_job" {')
+    print("  targets = prometheus.exporter.snmp.site_clients.targets")
+    print()
+    print("  rule {")
+    print('    target_label = "job"')
+    print('    replacement  = "site_snmp_clients"')
+    print("  }")
+    print("}")
+    print()
+    print('prometheus.scrape "snmp_clients_scrape" {')
+    print("  targets         = discovery.relabel.snmp_clients_job.output")
+    print("  forward_to      = [prometheus.relabel.snmp_clients_canonical.receiver]")
+    print('  job_name        = "site_snmp_clients"')
+    print('  scrape_interval = "60s"')
+    print('  scrape_timeout  = "45s"')
+    print("}")
+    print()
+    print('prometheus.relabel "snmp_clients_canonical" {')
+    print("  forward_to = [prometheus.remote_write.central.receiver]")
+    print()
+    print("  rule {")
+    print('    action       = "replace"')
+    print('    target_label = "job"')
+    print('    replacement  = "site_snmp_clients"')
+    print("  }")
+    print("}")
 PY
 
 validate_out

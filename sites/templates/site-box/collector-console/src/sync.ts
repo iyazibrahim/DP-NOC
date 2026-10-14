@@ -51,6 +51,8 @@ function readLocalDevices(): Array<{ id?: string; snmpIp?: string; type?: string
  */
 export const SNMP_MODULE_MARKERS = [
   "synology_health",
+  "cambium_clients",
+  "omada_clients",
   "cambiumClientInfo",
   "cambiumClientSNR",
   "cambiumClientTxDataBytes",

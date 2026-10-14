@@ -272,6 +272,9 @@ Collector box → Alloy → Prometheus (central)
   - **AP false-DOWN + Collector Console UX (2026-10-14)**
     - Root cause: multi-target SNMP (`if_mib` + vendor pack) — `parseFirstVectorValue` picked a timed-out target while IF-MIB/ping still OK; status now uses `max(up)`
     - Console: Dashboard connection card, per-device Up/Down from NOC, human SNMP polling copy, closable Diagnostics / Add / Edit modals
+  - **SNMP cascade after client-table pack (2026-10-14)**
+    - Root cause: Cambium station walk on the 15s `cambium_ap_health` scrape timed out Alloy and starved if_mib for firewall/switch/NAS (no device reconfig)
+    - Fix: restore light health modules; station tables on separate `site_snmp_clients` scrape (60s / 45s timeout)
 
 ## Auth (operator login)
 - Wallboard login uses `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` on **noc-app**
