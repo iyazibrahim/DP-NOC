@@ -77,9 +77,10 @@ function formatMac(raw: string): string | null {
 
 async function snmpWalk(ip: string, community: string, oid: string): Promise<string> {
   try {
+    // -OQne: numeric OIDs, quiet, enums as numbers — easier to parse STRING/Counter values
     const { stdout } = await execFileAsync(
       "snmpwalk",
-      ["-v2c", "-c", community, "-t", "3", "-r", "1", "-On", ip, oid],
+      ["-v2c", "-c", community, "-t", "3", "-r", "1", "-OQne", ip, oid],
       { timeout: 45000, maxBuffer: 4 * 1024 * 1024 }
     );
     return stdout || "";
@@ -89,22 +90,33 @@ async function snmpWalk(ip: string, community: string, oid: string): Promise<str
   }
 }
 
-/** Parse Cambium cambiumClientTable walk into rows keyed by client index. */
-function parseCambiumWalk(text: string): Map<string, Record<string, string>> {
+function cleanSnmpValue(raw: string): string {
+  let val = (raw || "").trim();
+  if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
+  // Hex-STRING / binary MAC: AA BB CC DD EE FF
+  if (/^[0-9A-Fa-f]{2}( [0-9A-Fa-f]{2})+$/.test(val)) {
+    val = val.replace(/\s+/g, "");
+  }
+  return val.trim();
+}
+
+/** Parse OID table rows: ...1.<col>.<idx> = value  (Cambium / Omada style). */
+function parseIndexedTable(
+  text: string,
+  prefix: string
+): Map<string, Record<string, string>> {
   const byIdx = new Map<string, Record<string, string>>();
-  // .1.3.6.1.4.1.17713.22.1.3.1.<col>.<idx> = TYPE: value
-  const re =
-    /^\.1\.3\.6\.1\.4\.1\.17713\.22\.1\.3\.1\.(\d+)\.(\d+)\s*=\s*([A-Z0-9\-]+):\s*(.*)$/gm;
+  const esc = prefix.replace(/\./g, "\\.");
+  // With or without leading dot; TYPE optional ( -OQne often omits TYPE )
+  const re = new RegExp(
+    `^\\.?${esc}\\.(\\d+)\\.(\\d+)\\s*=\\s*(?:[A-Za-z][A-Za-z0-9\\-]*:\\s*)?(.*)$`,
+    "gm"
+  );
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     const col = m[1];
     const idx = m[2];
-    let val = (m[4] || "").trim();
-    if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
-    // Hex-STRING: AA BB CC …
-    if (/^[0-9A-Fa-f]{2}( [0-9A-Fa-f]{2})+$/.test(val)) {
-      val = val.replace(/\s+/g, "");
-    }
+    const val = cleanSnmpValue(m[3] || "");
     let row = byIdx.get(idx);
     if (!row) {
       row = {};
@@ -115,42 +127,92 @@ function parseCambiumWalk(text: string): Map<string, Record<string, string>> {
   return byIdx;
 }
 
-function parseOmadaWalk(text: string): Map<string, Record<string, string>> {
-  const byIdx = new Map<string, Record<string, string>>();
-  const re =
-    /^\.1\.3\.6\.1\.4\.1\.11863\.10\.1\.1\.2\.1\.(\d+)\.(\d+)\s*=\s*([A-Z0-9\-]+):\s*(.*)$/gm;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text))) {
-    const col = m[1];
-    const idx = m[2];
-    let val = (m[4] || "").trim();
-    if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
-    if (/^[0-9A-Fa-f]{2}( [0-9A-Fa-f]{2})+$/.test(val)) {
-      val = val.replace(/\s+/g, "");
-    }
-    let row = byIdx.get(idx);
-    if (!row) {
-      row = {};
-      byIdx.set(idx, row);
-    }
-    row[col] = val;
-  }
-  return byIdx;
+function formatLinkRate(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const t = raw.trim();
+  if (!t || t === "-" || t === "0") return null;
+  if (/mbps|kbps|gbps/i.test(t)) return t;
+  const n = Number(t.replace(/[^\d.]/g, ""));
+  if (Number.isFinite(n) && n > 0) return `${n} Mbps`;
+  return t;
 }
 
-async function scanDevice(d: LocalDevice, defaultCommunity: string): Promise<ScannedStation[]> {
+type ByteCounters = { tx: number; rx: number };
+type CounterSnap = { atMs: number; counters: Record<string, ByteCounters> };
+
+function countersPath(): string {
+  return path.join(stateDir(), ".client-byte-counters.json");
+}
+
+function loadCounterSnap(): CounterSnap | null {
+  const file = countersPath();
+  if (!fs.existsSync(file)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8")) as CounterSnap;
+  } catch {
+    return null;
+  }
+}
+
+function saveCounterSnap(snap: CounterSnap): void {
+  try {
+    fs.writeFileSync(countersPath(), JSON.stringify(snap) + "\n", "utf8");
+  } catch {
+    /* ignore */
+  }
+}
+
+function stationCounterKey(deviceId: string, mac: string | null, idx: string): string {
+  return mac ? `${deviceId}|${mac}` : `${deviceId}|idx:${idx}`;
+}
+
+function applyByteRates(
+  stations: Array<ScannedStation & { _txBytes?: number; _rxBytes?: number; _idx?: string }>
+): ScannedStation[] {
+  const now = Date.now();
+  const prev = loadCounterSnap();
+  const next: CounterSnap = { atMs: now, counters: {} };
+  const dtSec = prev?.atMs ? Math.max(1, (now - prev.atMs) / 1000) : 0;
+
+  for (const st of stations) {
+    const key = stationCounterKey(st.deviceId, st.mac, st._idx || "");
+    const tx = st._txBytes ?? 0;
+    const rx = st._rxBytes ?? 0;
+    next.counters[key] = { tx, rx };
+    if (prev?.counters[key] && dtSec > 0) {
+      const p = prev.counters[key];
+      // Rx bytes at AP = download to client → In; Tx bytes = upload from client → Out
+      const dRx = rx >= p.rx ? rx - p.rx : rx;
+      const dTx = tx >= p.tx ? tx - p.tx : tx;
+      st.inBps = (dRx * 8) / dtSec;
+      st.outBps = (dTx * 8) / dtSec;
+    }
+    delete st._txBytes;
+    delete st._rxBytes;
+    delete st._idx;
+  }
+  saveCounterSnap(next);
+  return stations;
+}
+
+async function scanDevice(
+  d: LocalDevice,
+  defaultCommunity: string
+): Promise<Array<ScannedStation & { _txBytes?: number; _rxBytes?: number; _idx?: string }>> {
   if (!d.id || !d.snmpIp) return [];
   const community = (d.snmpCommunity || defaultCommunity || "public").trim() || "public";
   const apLabel = (d.name || d.id).trim();
   const vendor = d.vendor || "generic";
-  const out: ScannedStation[] = [];
+  const out: Array<ScannedStation & { _txBytes?: number; _rxBytes?: number; _idx?: string }> = [];
 
   if (isCambium(d)) {
     const text = await snmpWalk(d.snmpIp, community, "1.3.6.1.4.1.17713.22.1.3.1");
-    const rows = parseCambiumWalk(text);
-    for (const [, cols] of rows) {
+    const rows = parseIndexedTable(text, "1.3.6.1.4.1.17713.22.1.3.1");
+    for (const [idx, cols] of rows) {
       const snrRaw = cols["11"];
       const snr = snrRaw != null && Number.isFinite(Number(snrRaw)) ? Math.round(Number(snrRaw)) : null;
+      const txBytes = Number(cols["14"]);
+      const rxBytes = Number(cols["16"]);
       out.push({
         deviceId: d.id,
         apLabel,
@@ -160,17 +222,20 @@ async function scanDevice(d: LocalDevice, defaultCommunity: string): Promise<Sca
         ip: cols["3"]?.trim() || null,
         ssid: cols["5"]?.trim() || null,
         snr,
-        txRate: cols["12"]?.trim() || null,
+        txRate: formatLinkRate(cols["12"]),
         inBps: null,
         outBps: null,
         clientOs: cols["6"]?.trim() || null,
-        hwMode: cols["7"]?.trim() || null
+        hwMode: cols["7"]?.trim() || null,
+        _txBytes: Number.isFinite(txBytes) ? txBytes : undefined,
+        _rxBytes: Number.isFinite(rxBytes) ? rxBytes : undefined,
+        _idx: idx
       });
     }
   } else if (isOmada(d)) {
     const text = await snmpWalk(d.snmpIp, community, "1.3.6.1.4.1.11863.10.1.1.2.1");
-    const rows = parseOmadaWalk(text);
-    for (const [, cols] of rows) {
+    const rows = parseIndexedTable(text, "1.3.6.1.4.1.11863.10.1.1.2.1");
+    for (const [idx, cols] of rows) {
       out.push({
         deviceId: d.id,
         apLabel,
@@ -184,7 +249,8 @@ async function scanDevice(d: LocalDevice, defaultCommunity: string): Promise<Sca
         inBps: null,
         outBps: null,
         clientOs: null,
-        hwMode: null
+        hwMode: null,
+        _idx: idx
       });
     }
   }
@@ -200,18 +266,19 @@ export async function scanAllStations(): Promise<{
 }> {
   const devices = readLocalDevices().filter((d) => d.id && d.snmpIp && isAp(d));
   const defaultCommunity = readSnmpCommunity();
-  const stations: ScannedStation[] = [];
+  const raw: Array<ScannedStation & { _txBytes?: number; _rxBytes?: number; _idx?: string }> = [];
   let scanned = 0;
   for (const d of devices) {
     if (!isCambium(d) && !isOmada(d)) continue;
     scanned += 1;
     try {
       const rows = await scanDevice(d, defaultCommunity);
-      stations.push(...rows);
+      raw.push(...rows);
     } catch {
       /* continue other APs */
     }
   }
+  const stations = applyByteRates(raw);
   return {
     ok: true,
     stations,
@@ -272,5 +339,6 @@ export function startClientsScanLoop(): void {
   };
   // After boot + sync settle
   setTimeout(tick, 20000);
-  setInterval(tick, 120000);
+  // ~90s so In/Out rates have a prior counter sample after the first scan
+  setInterval(tick, 90000);
 }

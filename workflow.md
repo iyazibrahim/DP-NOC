@@ -279,6 +279,10 @@ Collector box → Alloy → Prometheus (central)
   - **Client list via collector snmpwalk (2026-10-14)**
     - Prom station scrapes stayed empty while scalar totals worked — collector now walks Cambium/Omada tables on the LAN and POSTs `/api/collector/:site/stations`; Clients tab falls back to that cache
     - Console: SNMP polling card opens details modal; edit preserves `access-point` (no forced rewrite to `ap`)
+- [x] **Connected clients pagination + Link rate / In / Out (2026-10-14)**
+  - Clients tab: `TablePagination` (20/page); resets on AP filter / search
+  - Collector `scanClients`: parse Cambium link rate (col 12); byte counters → In/Out bps after 2nd scan (~90s)
+  - noc-api: overlay Prom rx/tx rates onto stored stations by MAC when Prom has series
 
 ## Auth (operator login)
 - Wallboard login uses `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` on **noc-app**

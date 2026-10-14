@@ -5,6 +5,7 @@ import type { Site } from "@/types";
 import { StatusPill } from "@/components/StatusPill";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TablePagination, paginateItems } from "@/components/TableControls";
 
 type Props = {
   token: string;
@@ -35,6 +36,7 @@ export function SiteClientsPanel({ token, site }: Props) {
   const [loading, setLoading] = useState(true);
   const [apFilter, setApFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,6 +59,10 @@ export function SiteClientsPanel({ token, site }: Props) {
       clearInterval(t);
     };
   }, [token, site.id]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [apFilter, search, site.id]);
 
   const aps = useMemo(() => {
     const rows = network?.aps?.length
@@ -92,6 +98,8 @@ export function SiteClientsPanel({ token, site }: Props) {
       return hay.includes(q);
     });
   }, [stations, apFilter, search]);
+
+  const pager = useMemo(() => paginateItems(filteredStations, page, 20), [filteredStations, page]);
 
   if (loading && !network) {
     return (
@@ -179,7 +187,7 @@ export function SiteClientsPanel({ token, site }: Props) {
             </tr>
           </thead>
           <tbody>
-            {filteredStations.length === 0 ? (
+            {pager.slice.length === 0 ? (
               <tr>
                 <td colSpan={9} className="muted">
                   {stations.length === 0
@@ -188,7 +196,7 @@ export function SiteClientsPanel({ token, site }: Props) {
                 </td>
               </tr>
             ) : (
-              filteredStations.map((st, i) => (
+              pager.slice.map((st, i) => (
                 <tr key={`${st.deviceId}-${st.mac ?? st.hostname ?? i}`}>
                   <td>
                     {dash(st.hostname)}
@@ -209,6 +217,14 @@ export function SiteClientsPanel({ token, site }: Props) {
             )}
           </tbody>
         </table>
+        <TablePagination
+          page={pager.page}
+          totalPages={pager.totalPages}
+          total={pager.total}
+          start={pager.start}
+          end={pager.end}
+          onPageChange={setPage}
+        />
       </div>
 
       <div className="tableCard">

@@ -773,21 +773,41 @@ async function collectStations(siteId: string, site: Site): Promise<SiteNetworkS
   if (stations.length === 0) {
     const stored = loadSiteStations(siteId);
     if (stored?.stations?.length) {
-      stations = stored.stations.map((st) => ({
-        deviceId: st.deviceId,
-        apLabel: st.apLabel || apLabelById.get(st.deviceId)?.label || st.deviceId,
-        vendor: st.vendor || apLabelById.get(st.deviceId)?.vendor || "generic",
-        mac: st.mac,
-        hostname: st.hostname,
-        ip: st.ip,
-        ssid: st.ssid,
-        snr: st.snr,
-        txRate: st.txRate,
-        inBps: st.inBps,
-        outBps: st.outBps,
-        clientOs: st.clientOs,
-        hwMode: st.hwMode
-      }));
+      // Overlay live Prom rates by MAC when available.
+      const rateByMac = new Map<string, { inBps: number | null; outBps: number | null }>();
+      for (const row of rxBpsRows) {
+        const mac = formatMacLabel(row.metric.mac);
+        if (!mac) continue;
+        const cur = rateByMac.get(mac) ?? { inBps: null, outBps: null };
+        cur.inBps = Number.isFinite(row.value) ? row.value : cur.inBps;
+        rateByMac.set(mac, cur);
+      }
+      for (const row of txBpsRows) {
+        const mac = formatMacLabel(row.metric.mac);
+        if (!mac) continue;
+        const cur = rateByMac.get(mac) ?? { inBps: null, outBps: null };
+        cur.outBps = Number.isFinite(row.value) ? row.value : cur.outBps;
+        rateByMac.set(mac, cur);
+      }
+
+      stations = stored.stations.map((st) => {
+        const rates = st.mac ? rateByMac.get(st.mac.toLowerCase()) : undefined;
+        return {
+          deviceId: st.deviceId,
+          apLabel: st.apLabel || apLabelById.get(st.deviceId)?.label || st.deviceId,
+          vendor: st.vendor || apLabelById.get(st.deviceId)?.vendor || "generic",
+          mac: st.mac,
+          hostname: st.hostname,
+          ip: st.ip,
+          ssid: st.ssid,
+          snr: st.snr,
+          txRate: st.txRate,
+          inBps: rates?.inBps ?? st.inBps,
+          outBps: rates?.outBps ?? st.outBps,
+          clientOs: st.clientOs,
+          hwMode: st.hwMode
+        };
+      });
     }
   }
 
