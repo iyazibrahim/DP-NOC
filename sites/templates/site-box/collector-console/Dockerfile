@@ -16,7 +16,7 @@ RUN npm run build
 FROM ${NODE_IMAGE}
 # docker CLI for socket access (restart/logs). Compose binary optional — we prefer `docker restart`.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash python3 ca-certificates docker.io \
+  && apt-get install -y --no-install-recommends bash python3 ca-certificates docker.io snmp \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY collector-console/package.json collector-console/package-lock.json* ./

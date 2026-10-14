@@ -152,7 +152,7 @@
               <option value="nas">NAS / Storage</option>
               <option value="switch">Switch</option>
               <option value="router">Router</option>
-              <option value="ap">Access point</option>
+              <option value="access-point">Access point</option>
               <option value="other">Other</option>
             </select>
           </div>
@@ -191,6 +191,23 @@
       <div class="modal-actions">
         <button type="button" class="secondary" data-close="diag">Close</button>
       </div>
+    </div>
+  </div>
+
+  <!-- SNMP polling details modal -->
+  <div id="modal-snmp" class="modal" hidden aria-hidden="true">
+    <div class="modal-backdrop" data-close="snmp"></div>
+    <div class="modal-card" role="dialog" aria-labelledby="snmp-modal-title">
+      <div class="modal-head">
+        <h2 id="snmp-modal-title">SNMP polling</h2>
+        <button type="button" class="modal-close" data-close="snmp" aria-label="Close">&times;</button>
+      </div>
+      <div id="snmp-modal-body" class="modal-body"></div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" id="btn-scan-clients">Scan Wi‑Fi clients now</button>
+        <button type="button" class="secondary" data-close="snmp">Close</button>
+      </div>
+      <div id="snmp-modal-msg"></div>
     </div>
   </div>
 

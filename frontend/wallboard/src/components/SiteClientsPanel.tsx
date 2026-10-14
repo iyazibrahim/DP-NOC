@@ -140,7 +140,7 @@ export function SiteClientsPanel({ token, site }: Props) {
           </div>
           <div className="siteClientsFilters">
             <label className="siteClientsFilter">
-              <span className="muted text-sm">AP</span>
+              <span className="muted text-sm">Access point</span>
               <select
                 value={apFilter}
                 onChange={(e) => setApFilter(e.target.value)}

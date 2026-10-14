@@ -32,6 +32,7 @@ import {
   syncDevices
 } from "./sync";
 import { pushDeviceToNoc } from "./pushDevice";
+import { scanAndPushStations, startClientsScanLoop } from "./scanClients";
 
 const PORT = Number(process.env.PORT || "8090");
 
@@ -314,6 +315,19 @@ app.get("/api/devices", (_req, res) => {
   res.json(readDevicesJson());
 });
 
+/** Walk AP client tables on the LAN and push rows to NOC (fills Clients tab). */
+app.post("/api/scan-clients", async (_req, res) => {
+  try {
+    const result = await scanAndPushStations();
+    res.status(result.ok ? 200 : 502).json(result);
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      message: err instanceof Error ? err.message : String(err)
+    });
+  }
+});
+
 /** Live per-device SNMP status from the NOC dashboard (same source as wallboard). */
 app.get("/api/device-status", async (_req, res) => {
   const config = readConfig();
@@ -513,6 +527,7 @@ async function boot(): Promise<void> {
       `collector-console listening on :${PORT} (data=${dir} state=${process.env.STATE_DIR || dir} boot=${bootEnv.source} keys=${bootEnv.keys.length} alloyReady=${alloyConfigReady()})`
     );
     startSyncLoop(dir);
+    startClientsScanLoop();
   });
 }
 

@@ -5,6 +5,7 @@ import {
   type PromQueryResult
 } from "./prometheus";
 import { getSiteById, type Site } from "../data/sites";
+import { loadSiteStations } from "../data/siteStations";
 import { dualSnmpUpFresh, probeSuccessFresh, METRIC_FRESH_WINDOW } from "./promLabels";
 
 function escapePromLabel(value: string): string {
@@ -766,9 +767,29 @@ async function collectStations(siteId: string, site: Site): Promise<SiteNetworkS
     if (normalizeVendorKey(st.vendor) === "generic") st.vendor = "omada";
   }
 
-  const stations: SiteNetworkStation[] = [...byKey.values()].map(
-    ({ clientIndex: _ci, ...rest }) => rest
-  );
+  let stations: SiteNetworkStation[] = [...byKey.values()].map(({ clientIndex: _ci, ...rest }) => rest);
+
+  // Fallback: collector-console snmpwalk push (Prom station series often empty on E-series).
+  if (stations.length === 0) {
+    const stored = loadSiteStations(siteId);
+    if (stored?.stations?.length) {
+      stations = stored.stations.map((st) => ({
+        deviceId: st.deviceId,
+        apLabel: st.apLabel || apLabelById.get(st.deviceId)?.label || st.deviceId,
+        vendor: st.vendor || apLabelById.get(st.deviceId)?.vendor || "generic",
+        mac: st.mac,
+        hostname: st.hostname,
+        ip: st.ip,
+        ssid: st.ssid,
+        snr: st.snr,
+        txRate: st.txRate,
+        inBps: st.inBps,
+        outBps: st.outBps,
+        clientOs: st.clientOs,
+        hwMode: st.hwMode
+      }));
+    }
+  }
 
   stations.sort((a, b) => {
     const ta = (a.inBps ?? 0) + (a.outBps ?? 0);

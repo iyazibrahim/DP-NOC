@@ -217,7 +217,7 @@ modules:
           - labels: [clientIndex]
             labelname: mac
             oid: 1.3.6.1.4.1.17713.22.1.3.1.2
-            type: PhysAddress
+            type: OctetString
           - labels: [clientIndex]
             labelname: client_ip
             oid: 1.3.6.1.4.1.17713.22.1.3.1.3
@@ -253,7 +253,7 @@ modules:
           - labels: [clientIndex]
             labelname: mac
             oid: 1.3.6.1.4.1.17713.22.1.3.1.2
-            type: PhysAddress
+            type: OctetString
       - name: cambiumClientTxDataBytes
         oid: 1.3.6.1.4.1.17713.22.1.3.1.14
         type: counter
@@ -265,7 +265,7 @@ modules:
           - labels: [clientIndex]
             labelname: mac
             oid: 1.3.6.1.4.1.17713.22.1.3.1.2
-            type: PhysAddress
+            type: OctetString
       - name: cambiumClientRxDataBytes
         oid: 1.3.6.1.4.1.17713.22.1.3.1.16
         type: counter
@@ -277,7 +277,7 @@ modules:
           - labels: [clientIndex]
             labelname: mac
             oid: 1.3.6.1.4.1.17713.22.1.3.1.2
-            type: PhysAddress
+            type: OctetString
 
   # Omada / TP-Link EAP — LIGHT client count only (15s path).
   omada_ap_health:
@@ -308,7 +308,7 @@ modules:
           - labels: [clientIndex]
             labelname: mac
             oid: 1.3.6.1.4.1.11863.10.1.1.2.1.2
-            type: PhysAddress
+            type: OctetString
 
   # Synology DSM (SYNOLOGY-SYSTEM/DISK/RAID-MIB + HOST-RESOURCES CPU + UCD memory).
   # Type nas + vendor synology (or empty/generic). RAID sizes are MIB Counter64 but treated

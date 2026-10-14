@@ -276,6 +276,9 @@ Collector box → Alloy → Prometheus (central)
     - Root cause: Cambium station walk on the 15s `cambium_ap_health` scrape timed out Alloy and starved if_mib for firewall/switch/NAS (no device reconfig)
     - Fix: restore light health modules; station tables on separate `site_snmp_clients` scrape (60s / 45s timeout)
     - Follow-up: stale check requires `site_snmp_clients` when APs present; Clients tab layout (AP + search row); remove Force-apply nag banner
+  - **Client list via collector snmpwalk (2026-10-14)**
+    - Prom station scrapes stayed empty while scalar totals worked — collector now walks Cambium/Omada tables on the LAN and POSTs `/api/collector/:site/stations`; Clients tab falls back to that cache
+    - Console: SNMP polling card opens details modal; edit preserves `access-point` (no forced rewrite to `ap`)
 
 ## Auth (operator login)
 - Wallboard login uses `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` on **noc-app**

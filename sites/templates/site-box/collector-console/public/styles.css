@@ -90,6 +90,27 @@ h1 {
   margin-top: 4px;
 }
 
+.card--clickable {
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.card--clickable:hover,
+.card--clickable:focus {
+  border-color: #3d8bfd;
+  background: #121a24;
+  outline: none;
+}
+
+.modal-body {
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.modal-body p {
+  margin: 0 0 8px;
+}
+
 .ok { color: #3dd68c; }
 .bad { color: #ff6b6b; }
 .warn { color: #f0c14a; }

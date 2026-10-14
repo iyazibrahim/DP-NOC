@@ -9,6 +9,7 @@ import {
   verifyCollectorToken
 } from "../data/sites";
 import { computeSiteStatus } from "../services/status";
+import { saveSiteStations, type StoredStation } from "../data/siteStations";
 
 export const collectorRouter = express.Router();
 
@@ -85,6 +86,50 @@ collectorRouter.get("/:siteId/device-status", async (req, res) => {
       dashboard: { connected: false, notes: "Could not read live status from NOC" }
     });
   }
+});
+
+/**
+ * Collector Console → push Wi‑Fi station rows (from local snmpwalk).
+ * Body: { stations: StoredStation[], at?: iso }
+ */
+collectorRouter.post("/:siteId/stations", (req, res) => {
+  const siteId = req.params.siteId;
+  if (!requireCollectorAuth(req, res, siteId)) return;
+
+  const body = (req.body ?? {}) as { stations?: unknown; at?: unknown };
+  if (!Array.isArray(body.stations)) {
+    return res.status(400).json({ error: "stations array required" });
+  }
+
+  const stations: StoredStation[] = [];
+  for (const raw of body.stations) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as Record<string, unknown>;
+    const deviceId = typeof r.deviceId === "string" ? r.deviceId.trim() : "";
+    if (!deviceId) continue;
+    const numOrNull = (v: unknown) =>
+      typeof v === "number" && Number.isFinite(v) ? v : v == null ? null : Number(v);
+    const strOrNull = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+    stations.push({
+      deviceId,
+      apLabel: strOrNull(r.apLabel) || deviceId,
+      vendor: strOrNull(r.vendor) || "generic",
+      mac: strOrNull(r.mac),
+      hostname: strOrNull(r.hostname),
+      ip: strOrNull(r.ip),
+      ssid: strOrNull(r.ssid),
+      snr: numOrNull(r.snr),
+      txRate: strOrNull(r.txRate),
+      inBps: numOrNull(r.inBps),
+      outBps: numOrNull(r.outBps),
+      clientOs: strOrNull(r.clientOs),
+      hwMode: strOrNull(r.hwMode)
+    });
+  }
+
+  const at = typeof body.at === "string" ? body.at : undefined;
+  const saved = saveSiteStations(siteId, stations, at);
+  return res.json({ ok: true, count: saved.stations.length, at: saved.at });
 });
 
 /**

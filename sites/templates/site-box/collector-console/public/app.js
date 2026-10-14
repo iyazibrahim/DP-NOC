@@ -130,11 +130,14 @@ function renderStatus(status) {
           ? '<span class="ok">Ready</span>'
           : "—"
     }</div></div>
-    <div class="card"><div class="label">SNMP polling</div><div class="value">${
-      status.snmpPollingLabel === "Active"
-        ? `<span class="ok">Active</span><div class="hint" style="margin-top:6px">${escapeHtml(status.snmpScrapeHint || "")}</div>`
-        : `<span class="warn">Idle</span><div class="hint" style="margin-top:6px">${escapeHtml(status.snmpScrapeHint || "")}</div>`
-    }</div></div>
+    <div class="card card--clickable" id="card-snmp-polling" role="button" tabindex="0" title="Click for details">
+      <div class="label">SNMP polling</div>
+      <div class="value">${
+        status.snmpPollingLabel === "Active"
+          ? '<span class="ok">Active</span>'
+          : '<span class="warn">Idle</span>'
+      }</div>
+    </div>
     <div class="card"><div class="label">Last sync</div><div class="value" style="font-size:0.9rem">${fmtTime(sync?.at)}</div></div>
     <div class="card" style="grid-column:1/-1"><div class="label">Sync status</div><div class="value" style="font-size:0.9rem">${syncLabel}</div></div>
     ${
@@ -151,6 +154,43 @@ function renderStatus(status) {
         .join("")
     }
   `;
+
+  const snmpCard = document.getElementById("card-snmp-polling");
+  if (snmpCard) {
+    const open = () => openSnmpModal(status);
+    snmpCard.onclick = open;
+    snmpCard.onkeydown = (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        open();
+      }
+    };
+  }
+}
+
+function openSnmpModal(status) {
+  const body = document.getElementById("snmp-modal-body");
+  body.innerHTML = `
+    <p><strong>Status:</strong> ${escapeHtml(status.snmpPollingLabel || "—")}</p>
+    <p><strong>Devices:</strong> ${status.deviceCount ?? 0}</p>
+    <p><strong>SNMP config:</strong> ${
+      status.snmpConfigStale ? "Needs Force apply" : status.snmpBlockPresent === false ? "Missing" : "Applied"
+    }</p>
+    <p><strong>Metrics push:</strong> ${
+      status.metricsConfigured === true ? "Ready" : status.metricsConfigured === false ? "Not set" : "—"
+    }</p>
+    <p class="hint" style="margin-top:12px">
+      Device Up means SNMP polling succeeded (not ping). Wi‑Fi client lists are collected by a LAN walk on this collector and sent to the dashboard.
+    </p>
+    ${
+      status.snmpStaleReason?.detail
+        ? `<p class="warn" style="margin-top:10px">${escapeHtml(status.snmpStaleReason.detail)}</p>`
+        : ""
+    }
+  `;
+  document.getElementById("snmp-modal-msg").textContent = "";
+  document.getElementById("snmp-modal-msg").className = "msg";
+  openModal("modal-snmp");
 }
 
 let cachedDevices = [];
@@ -215,6 +255,7 @@ function openDeviceModal(device) {
   const form = document.getElementById("device-form");
   const title = document.getElementById("device-modal-title");
   const msg = document.getElementById("device-form-msg");
+  const typeSel = document.getElementById("dev-type");
   msg.textContent = "";
   msg.className = "msg";
   form.reset();
@@ -224,7 +265,9 @@ function openDeviceModal(device) {
   document.getElementById("dev-id-hidden").value = editing ? device.id : "";
   document.getElementById("dev-name").value = device?.name || "";
   document.getElementById("dev-snmpIp").value = device?.snmpIp || "";
-  document.getElementById("dev-type").value = normalizeType(device?.type) || "switch";
+  // Keep stored type as-is (access-point vs ap) — do not rewrite on edit.
+  ensureTypeOption(typeSel, device?.type);
+  typeSel.value = resolveTypeValue(device?.type) || "switch";
   document.getElementById("dev-vendor").value = device?.vendor || "generic";
   document.getElementById("dev-snmpCommunity").value = device?.snmpCommunity || "";
   document.getElementById("dev-id").value = "";
@@ -233,13 +276,28 @@ function openDeviceModal(device) {
   openModal("modal-device");
 }
 
-function normalizeType(t) {
-  const n = String(t || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
-  if (n === "accesspoint" || n === "wifi" || n === "wireless") return "ap";
+/** Prefer access-point for new APs; preserve ap / access-point when editing. */
+function resolveTypeValue(t) {
+  const raw = String(t || "").trim();
+  if (!raw) return "switch";
+  const n = raw.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (n === "ap" || n === "accesspoint" || n === "wifi" || n === "wireless") {
+    // Preserve exact stored value when it matches a known option
+    if (raw === "ap" || raw === "access-point") return raw;
+    return "access-point";
+  }
   if (n === "storage") return "nas";
-  return t || "switch";
+  return raw;
+}
+
+function ensureTypeOption(sel, type) {
+  const v = String(type || "").trim();
+  if (!v) return;
+  if ([...sel.options].some((o) => o.value === v)) return;
+  const opt = document.createElement("option");
+  opt.value = v;
+  opt.textContent = v;
+  sel.appendChild(opt);
 }
 
 async function refreshDashboard() {
@@ -297,6 +355,7 @@ document.querySelectorAll("[data-close]").forEach((el) => {
     const which = el.getAttribute("data-close");
     if (which === "device") closeModal("modal-device");
     if (which === "diag") closeModal("modal-diag");
+    if (which === "snmp") closeModal("modal-snmp");
   });
 });
 
@@ -304,6 +363,21 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   closeModal("modal-device");
   closeModal("modal-diag");
+  closeModal("modal-snmp");
+});
+
+document.getElementById("btn-scan-clients").addEventListener("click", async () => {
+  const msg = document.getElementById("snmp-modal-msg");
+  const btn = document.getElementById("btn-scan-clients");
+  btn.disabled = true;
+  try {
+    const result = await api("/api/scan-clients", { method: "POST", body: "{}" });
+    showMsg(msg, result.message || "Client scan complete", result.ok !== false);
+  } catch (e) {
+    showMsg(msg, e.message, false);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 document.getElementById("btn-refresh").addEventListener("click", () => refreshDashboard());
@@ -360,7 +434,10 @@ document.getElementById("dev-type").addEventListener("change", (e) => {
   if (type === "nas" && (!vendor.value || vendor.value === "generic")) {
     vendor.value = "synology";
   }
-  if (type === "ap" && (!vendor.value || vendor.value === "generic")) {
+  if (
+    (type === "ap" || type === "access-point") &&
+    (!vendor.value || vendor.value === "generic")
+  ) {
     vendor.value = "cambium";
   }
 });
