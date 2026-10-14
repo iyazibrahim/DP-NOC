@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import GridLayout, { type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -188,8 +188,11 @@ export function SiteNetworkPanel({ token, site }: Props) {
   const [layout, setLayout] = useState<SiteNetworkLayout | null>(null);
   const [editing, setEditing] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [width, setWidth] = useState(900);
-  const hostRef = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(0);
+  const [hostEl, setHostEl] = useState<HTMLDivElement | null>(null);
+  const hostRef = useCallback((node: HTMLDivElement | null) => {
+    setHostEl(node);
+  }, []);
   const rowH = 36;
   const gridMargin: [number, number] = [10, 10];
 
@@ -224,22 +227,27 @@ export function SiteNetworkPanel({ token, site }: Props) {
     };
   }, [token, site.id, range, site.wanUplink?.deviceId, site.wanUplink?.ifName]);
 
+  // Measure after the grid host actually mounts. Waiting on network used to skip this
+  // (layout arrived first → host not in DOM → width stuck → blank strip on the right).
   useEffect(() => {
-    const el = hostRef.current;
-    if (!el) return;
+    if (!hostEl) return;
     const measure = () => {
-      const w = el.clientWidth;
+      const w = hostEl.clientWidth;
       if (w > 0) setWidth(w);
     };
     measure();
+    const raf = requestAnimationFrame(measure);
+    const t = window.setTimeout(measure, 50);
     const ro = new ResizeObserver(measure);
-    ro.observe(el);
+    ro.observe(hostEl);
     window.addEventListener("resize", measure);
     return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t);
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [layout]);
+  }, [hostEl, layout, editing]);
 
   const aps = network?.aps?.length
     ? network.aps
@@ -532,9 +540,6 @@ export function SiteNetworkPanel({ token, site }: Props) {
                     <div className="wanUtilCellSplit">
                       <span title="Download">↓ {formatBytesUsed(inB)}</span>
                       <span title="Upload">↑ {formatBytesUsed(outB)}</span>
-                    </div>
-                    <div className="wanUtilCellPeak muted">
-                      Avg line {formatPct(win?.avgInPct ?? null)} / {formatPct(win?.avgOutPct ?? null)}
                     </div>
                   </div>
                 );
@@ -888,19 +893,18 @@ export function SiteNetworkPanel({ token, site }: Props) {
       ) : null}
 
       {loading && !network ? (
-        <div className="space-y-3">
-          <Skeleton className="h-20 w-full" />
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <Skeleton className="h-40" />
-            <Skeleton className="h-40 md:col-span-2" />
-          </div>
+        <div className="mb-3 space-y-3">
+          <Skeleton className="h-16 w-full" />
         </div>
-      ) : (
-        <div
-          ref={hostRef}
-          className={`dashboardHost siteNetworkHost${editing ? " dashboardHostEditing" : ""}`}
-          style={{ minHeight: gridMinRows * rowH + 40 }}
-        >
+      ) : null}
+
+      <div
+        id="site-network-grid-host"
+        ref={hostRef}
+        className={`dashboardHost siteNetworkHost${editing ? " dashboardHostEditing" : ""}`}
+        style={{ minHeight: gridMinRows * rowH + 40 }}
+      >
+        {width > 0 ? (
           <GridLayout
             className="layout"
             layout={gridLayout}
@@ -981,8 +985,10 @@ export function SiteNetworkPanel({ token, site }: Props) {
               );
             })}
           </GridLayout>
-        </div>
-      )}
+        ) : (
+          <Skeleton className="h-40 w-full" />
+        )}
+      </div>
 
       {drawerOpen && editing ? (
         <div className="drawer">
