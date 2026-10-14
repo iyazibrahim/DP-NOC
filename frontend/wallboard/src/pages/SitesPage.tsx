@@ -32,6 +32,7 @@ import { Modal } from "@/components/Modal";
 import { SitesLeafletMap } from "@/components/SitesLeafletMap";
 import { TablePagination, TableToolbar, paginateItems } from "@/components/TableControls";
 import { SiteNetworkPanel } from "@/components/SiteNetworkPanel";
+import { SiteClientsPanel } from "@/components/SiteClientsPanel";
 import { PageHeader } from "@/components/noc/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -221,7 +222,7 @@ export function SiteDetailPage() {
   const [revealedCollectorToken, setRevealedCollectorToken] = useState<string | null>(null);
   const [deviceSearch, setDeviceSearch] = useState("");
   const [devicePage, setDevicePage] = useState(1);
-  const [siteTab, setSiteTab] = useState<"overview" | "network">("overview");
+  const [siteTab, setSiteTab] = useState<"overview" | "network" | "clients">("overview");
   const [websiteMetrics, setWebsiteMetrics] = useState<
     Record<string, { state: string; notes?: string; latencyMs?: number | null; uptime24h?: number | null }>
   >({});
@@ -678,10 +679,21 @@ export function SiteDetailPage() {
         >
           Network
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={siteTab === "clients"}
+          className={siteTab === "clients" ? "siteTab siteTab--active" : "siteTab"}
+          onClick={() => setSiteTab("clients")}
+        >
+          Clients
+        </button>
       </div>
 
       {siteTab === "network" && token ? (
         <SiteNetworkPanel token={token} site={site} />
+      ) : siteTab === "clients" && token ? (
+        <SiteClientsPanel token={token} site={site} />
       ) : (
       <div className="siteBento">
         <section className="bentoTile bentoHealth">
