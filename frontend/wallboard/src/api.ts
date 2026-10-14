@@ -149,6 +149,21 @@ export type SiteNetworkSummary = {
     outBps: number | null;
     snmpUp: number | null;
   }>;
+  stations?: Array<{
+    deviceId: string;
+    apLabel: string;
+    vendor: string;
+    mac: string | null;
+    hostname: string | null;
+    ip: string | null;
+    ssid: string | null;
+    snr: number | null;
+    txRate: string | null;
+    inBps: number | null;
+    outBps: number | null;
+    clientOs: string | null;
+    hwMode: string | null;
+  }>;
   speedtest: {
     available: boolean;
     downloadBps: number | null;

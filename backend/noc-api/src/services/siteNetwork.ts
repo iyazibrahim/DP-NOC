@@ -32,6 +32,22 @@ export type SiteNetworkApRow = {
   snmpUp: number | null;
 };
 
+export type SiteNetworkStation = {
+  deviceId: string;
+  apLabel: string;
+  vendor: string;
+  mac: string | null;
+  hostname: string | null;
+  ip: string | null;
+  ssid: string | null;
+  snr: number | null;
+  txRate: string | null;
+  inBps: number | null;
+  outBps: number | null;
+  clientOs: string | null;
+  hwMode: string | null;
+};
+
 export type SiteNetworkSummary = {
   siteId: string;
   wanUplink: Site["wanUplink"] | null;
@@ -57,6 +73,8 @@ export type SiteNetworkSummary = {
     byDevice: Array<{ deviceId: string; name: string; clients: number | null; vendor: string }>;
   };
   aps: SiteNetworkApRow[];
+  /** Per-station Wi‑Fi clients (Cambium rich; Omada MAC-only when table walks). */
+  stations: SiteNetworkStation[];
   speedtest: {
     available: boolean;
     downloadBps: number | null;
@@ -340,7 +358,10 @@ export async function getSiteNetworkSummary(
     }
   }
 
-  const aps = await collectApRows(siteId, site);
+  const [aps, stations] = await Promise.all([
+    collectApRows(siteId, site),
+    collectStations(siteId, site)
+  ]);
   let totalClients = 0;
   let anyClient = false;
   for (const row of aps) {
@@ -373,6 +394,7 @@ export async function getSiteNetworkSummary(
       }))
     },
     aps,
+    stations,
     speedtest,
     utilWindows
   };
@@ -593,6 +615,171 @@ async function collectApRows(siteId: string, site: Site): Promise<SiteNetworkApR
   );
 
   return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+type PromLabeledRow = {
+  metric: Record<string, string>;
+  value: number;
+};
+
+async function readPromLabeledValues(query: string): Promise<PromLabeledRow[]> {
+  try {
+    const data = await promQuery(query);
+    if (data.resultType !== "vector" || !Array.isArray(data.result)) return [];
+    const out: PromLabeledRow[] = [];
+    for (const row of data.result as Array<{
+      metric?: Record<string, string>;
+      value?: [number, string];
+    }>) {
+      const n = Number(row.value?.[1]);
+      if (!Number.isFinite(n) || !row.metric) continue;
+      out.push({ metric: row.metric, value: n });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+function stationKey(deviceId: string, clientIndex: string, mac: string | null): string {
+  if (mac) return `${deviceId}|mac:${mac.toLowerCase()}`;
+  return `${deviceId}|idx:${clientIndex}`;
+}
+
+function cleanLabel(v: string | undefined | null): string | null {
+  const t = (v || "").trim();
+  if (!t || t === "<nil>" || t === "0.0.0.0") return null;
+  return t;
+}
+
+function formatMacLabel(v: string | undefined | null): string | null {
+  const t = cleanLabel(v);
+  if (!t) return null;
+  // PhysAddress often comes as hex without separators or with spaces/colons.
+  const hex = t.replace(/[^0-9a-fA-F]/g, "");
+  if (hex.length === 12) {
+    return hex
+      .toLowerCase()
+      .match(/.{2}/g)!
+      .join(":");
+  }
+  return t.toLowerCase();
+}
+
+async function collectStations(siteId: string, site: Site): Promise<SiteNetworkStation[]> {
+  const s = escapePromLabel(siteId);
+  const apLabelById = new Map<string, { label: string; vendor: string }>();
+  for (const d of site.devices.filter(isApLikeDevice)) {
+    const labels = deviceLabel(d, d.id);
+    apLabelById.set(d.id, { label: labels.label, vendor: d.vendor || "generic" });
+  }
+
+  const byKey = new Map<string, SiteNetworkStation & { clientIndex?: string }>();
+
+  const ensureRow = (
+    deviceId: string,
+    clientIndex: string,
+    macRaw: string | undefined,
+    vendorFallback: string
+  ): SiteNetworkStation & { clientIndex?: string } => {
+    const mac = formatMacLabel(macRaw);
+    const key = stationKey(deviceId, clientIndex, mac);
+    let row = byKey.get(key);
+    if (!row) {
+      const inv = apLabelById.get(deviceId);
+      row = {
+        deviceId,
+        apLabel: inv?.label || deviceId,
+        vendor: inv?.vendor || vendorFallback,
+        mac,
+        hostname: null,
+        ip: null,
+        ssid: null,
+        snr: null,
+        txRate: null,
+        inBps: null,
+        outBps: null,
+        clientOs: null,
+        hwMode: null,
+        clientIndex
+      };
+      byKey.set(key, row);
+    } else if (mac && !row.mac) {
+      row.mac = mac;
+    }
+    return row;
+  };
+
+  const [infoRows, snrRows, txBpsRows, rxBpsRows, omadaRows] = await Promise.all([
+    readPromLabeledValues(`cambiumClientInfo{site="${s}"}`),
+    readPromLabeledValues(`cambiumClientSNR{site="${s}"}`),
+    readPromLabeledValues(`rate(cambiumClientTxDataBytes{site="${s}"}[5m]) * 8`),
+    readPromLabeledValues(`rate(cambiumClientRxDataBytes{site="${s}"}[5m]) * 8`),
+    readPromLabeledValues(`omadaClientInfo{site="${s}"}`)
+  ]);
+
+  for (const row of infoRows) {
+    const deviceId = (row.metric.device || "").trim();
+    const clientIndex = (row.metric.clientIndex || "").trim();
+    if (!deviceId || !clientIndex) continue;
+    const st = ensureRow(deviceId, clientIndex, row.metric.mac, "cambium");
+    st.hostname = cleanLabel(row.metric.client_name) ?? st.hostname;
+    st.ip = cleanLabel(row.metric.client_ip) ?? st.ip;
+    st.ssid = cleanLabel(row.metric.ssid) ?? st.ssid;
+    st.txRate = cleanLabel(row.metric.tx_rate) ?? st.txRate;
+    st.clientOs = cleanLabel(row.metric.client_os) ?? st.clientOs;
+    st.hwMode = cleanLabel(row.metric.hw_mode) ?? st.hwMode;
+    if (normalizeVendorKey(st.vendor) === "generic") st.vendor = "cambium";
+  }
+
+  for (const row of snrRows) {
+    const deviceId = (row.metric.device || "").trim();
+    const clientIndex = (row.metric.clientIndex || "").trim();
+    if (!deviceId || !clientIndex) continue;
+    const st = ensureRow(deviceId, clientIndex, row.metric.mac, "cambium");
+    st.snr = Number.isFinite(row.value) ? Math.round(row.value) : st.snr;
+  }
+
+  // Cambium TxDataBytes = bytes transmitted by the client (uplink from client → AP).
+  // RxDataBytes = bytes received by the client (downlink AP → client).
+  // UI "In" = download to client (rx), "Out" = upload from client (tx).
+  for (const row of rxBpsRows) {
+    const deviceId = (row.metric.device || "").trim();
+    const clientIndex = (row.metric.clientIndex || "").trim();
+    if (!deviceId || !clientIndex) continue;
+    const st = ensureRow(deviceId, clientIndex, row.metric.mac, "cambium");
+    st.inBps = Number.isFinite(row.value) && row.value >= 0 ? row.value : st.inBps;
+  }
+  for (const row of txBpsRows) {
+    const deviceId = (row.metric.device || "").trim();
+    const clientIndex = (row.metric.clientIndex || "").trim();
+    if (!deviceId || !clientIndex) continue;
+    const st = ensureRow(deviceId, clientIndex, row.metric.mac, "cambium");
+    st.outBps = Number.isFinite(row.value) && row.value >= 0 ? row.value : st.outBps;
+  }
+
+  for (const row of omadaRows) {
+    const deviceId = (row.metric.device || "").trim();
+    const clientIndex = (row.metric.clientIndex || "").trim();
+    if (!deviceId || !clientIndex) continue;
+    const st = ensureRow(deviceId, clientIndex, row.metric.mac, "omada");
+    if (normalizeVendorKey(st.vendor) === "generic") st.vendor = "omada";
+  }
+
+  const stations: SiteNetworkStation[] = [...byKey.values()].map(
+    ({ clientIndex: _ci, ...rest }) => rest
+  );
+
+  stations.sort((a, b) => {
+    const ta = (a.inBps ?? 0) + (a.outBps ?? 0);
+    const tb = (b.inBps ?? 0) + (b.outBps ?? 0);
+    if (tb !== ta) return tb - ta;
+    const na = (a.hostname || a.mac || "").toLowerCase();
+    const nb = (b.hostname || b.mac || "").toLowerCase();
+    return na.localeCompare(nb);
+  });
+
+  return stations;
 }
 
 async function collectSpeedtest(

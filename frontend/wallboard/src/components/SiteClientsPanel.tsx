@@ -15,10 +15,26 @@ function apLabel(a: { label?: string; nickname?: string | null; name: string }):
   return (a.label || a.nickname || a.name).trim() || a.name;
 }
 
+function formatBitrate(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)} Gbps`;
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} Mbps`;
+  if (abs >= 1000) return `${(value / 1000).toFixed(1)} Kbps`;
+  return `${Math.round(value)} bps`;
+}
+
+function dash(v: string | number | null | undefined): string {
+  if (v == null || v === "") return "—";
+  return String(v);
+}
+
 export function SiteClientsPanel({ token, site }: Props) {
   const [network, setNetwork] = useState<SiteNetworkSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [apFilter, setApFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -59,8 +75,26 @@ export function SiteClientsPanel({ token, site }: Props) {
     return [...rows].sort((a, b) => (b.clients ?? -1) - (a.clients ?? -1));
   }, [network]);
 
+  const stations = network?.stations ?? [];
   const total = network?.clients.total ?? null;
   const withCounts = aps.filter((a) => a.clients != null).length;
+  const stationTotal = stations.length > 0 ? stations.length : total;
+
+  const filteredStations = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return stations.filter((st) => {
+      if (apFilter !== "all" && st.deviceId !== apFilter) return false;
+      if (!q) return true;
+      const hay = [st.hostname, st.mac, st.ip, st.ssid, st.apLabel, st.clientOs]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [stations, apFilter, search]);
+
+  const needsForceApply =
+    stations.length === 0 && (total ?? 0) > 0 && aps.some((a) => (a.clients ?? 0) > 0);
 
   if (loading && !network) {
     return (
@@ -85,7 +119,7 @@ export function SiteClientsPanel({ token, site }: Props) {
             <Users className="size-3.5" aria-hidden />
             Total clients
           </span>
-          <strong className="healthChipValue">{total != null ? total : "—"}</strong>
+          <strong className="healthChipValue">{stationTotal != null ? stationTotal : "—"}</strong>
         </div>
         <div className="healthChip">
           <span className="healthChipLabel inline-flex items-center gap-1.5">
@@ -102,9 +136,96 @@ export function SiteClientsPanel({ token, site }: Props) {
         </div>
       </div>
 
-      <p className="muted text-sm" style={{ margin: 0 }}>
-        Counts per access point from SNMP. A full list of each phone or laptop is planned next.
-      </p>
+      {needsForceApply ? (
+        <Alert>
+          <AlertDescription>
+            AP totals are present but the station list is empty. Redeploy the collector{" "}
+            <code>snmp.yml</code> (client table walk), then <strong>Force-apply</strong> so Alloy
+            scrapes Cambium/Omada station metrics.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <p className="muted text-sm" style={{ margin: 0 }}>
+          Live clients from SNMP. Cambium includes signal and bandwidth; Omada shows MAC when the
+          table is supported.
+        </p>
+      )}
+
+      <div className="tableCard">
+        <div className="tableTitle" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+          <span>Connected clients</span>
+          <div className="formActions" style={{ marginLeft: "auto", flexWrap: "wrap" }}>
+            <label className="muted text-sm" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+              AP
+              <select
+                value={apFilter}
+                onChange={(e) => setApFilter(e.target.value)}
+                aria-label="Filter by access point"
+              >
+                <option value="all">All</option>
+                {aps.map((a) => (
+                  <option key={a.deviceId} value={a.deviceId}>
+                    {apLabel(a)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search hostname, MAC, IP…"
+              aria-label="Search clients"
+              style={{ minWidth: 180 }}
+            />
+          </div>
+        </div>
+        <table className="dataTable">
+          <thead>
+            <tr>
+              <th>Hostname</th>
+              <th>MAC</th>
+              <th>IP</th>
+              <th>Access point</th>
+              <th>SSID</th>
+              <th>SNR</th>
+              <th>Link rate</th>
+              <th>In</th>
+              <th>Out</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredStations.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="muted">
+                  {stations.length === 0
+                    ? "No station rows yet. Cambium APs need the client-table SNMP module and Force-apply."
+                    : "No clients match this filter."}
+                </td>
+              </tr>
+            ) : (
+              filteredStations.map((st, i) => (
+                <tr key={`${st.deviceId}-${st.mac ?? st.hostname ?? i}`}>
+                  <td>
+                    {dash(st.hostname)}
+                    {st.clientOs ? <div className="muted">{st.clientOs}</div> : null}
+                  </td>
+                  <td>
+                    <code style={{ fontSize: "0.85em" }}>{dash(st.mac)}</code>
+                  </td>
+                  <td>{dash(st.ip)}</td>
+                  <td>{st.apLabel}</td>
+                  <td>{dash(st.ssid)}</td>
+                  <td>{st.snr != null ? st.snr : "—"}</td>
+                  <td>{dash(st.txRate)}</td>
+                  <td>{formatBitrate(st.inBps)}</td>
+                  <td>{formatBitrate(st.outBps)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <div className="tableCard">
         <div className="tableTitle">By access point</div>

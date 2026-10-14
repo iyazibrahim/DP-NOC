@@ -262,8 +262,9 @@ Collector box → Alloy → Prometheus (central)
     - Network cards use the same dashWidget / widgetChrome / widgetInner pattern as the main dashboard
     - Line use shows GB/TB transferred (increase of ifHC*Octets) plus avg %; Today window uses 24h
   - **Clients tab (2026-10-14)**
-    - Site detail: Overview / Network / **Clients** — total + per-AP client counts (existing SNMP scalars)
-    - **Later:** per-station client list (MAC / hostname / signal) needs new Cambium/Omada station-table SNMP modules + Prom metrics
+    - Site detail: Overview / Network / **Clients** — total + per-AP client counts
+    - **Per-station list:** Cambium `cambiumClientTable` → hostname/MAC/IP/SSID/SNR/link rate + live in/out (`rate(*DataBytes)*8`); Omada MAC-only via `omadaClientInfo`
+    - Ops: refresh collector `snmp.yml` + **Force-apply**; Omada per-client bandwidth deferred (no public SNMP counters)
 
 ## Auth (operator login)
 - Wallboard login uses `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` on **noc-app**
