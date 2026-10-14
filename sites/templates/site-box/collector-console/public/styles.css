@@ -11,13 +11,13 @@ body {
 }
 
 .wrap {
-  max-width: 920px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 24px 20px 48px;
 }
 
 header {
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 
 h1 {
@@ -31,10 +31,77 @@ h1 {
   font-size: 0.95rem;
 }
 
+.main-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  min-height: calc(100vh - 140px);
+}
+
+.pane-left {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pane-devices {
+  background: #111820;
+  border: 1px solid #243040;
+  border-radius: 12px;
+  padding: 16px 18px 18px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 140px);
+  position: sticky;
+  top: 16px;
+}
+
+.devices-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.devices-head h2 {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.devices-head .hint {
+  margin: 0;
+}
+
+.devices-table-wrap {
+  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid #243040;
+  border-radius: 10px;
+}
+
+.devices-table-wrap table {
+  margin: 0;
+}
+
+.devices-table-wrap thead th {
+  position: sticky;
+  top: 0;
+  background: #0d131a;
+  z-index: 1;
+}
+
 .tabs {
   display: flex;
   gap: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .tab {
@@ -58,6 +125,9 @@ h1 {
   border: 1px solid #243040;
   border-radius: 12px;
   padding: 20px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .panel.active {
@@ -66,7 +136,7 @@ h1 {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -213,15 +283,6 @@ pre {
   margin-top: 4px;
 }
 
-.section-head {
-  margin-top: 24px;
-  margin-bottom: 8px;
-}
-
-.section-head h3 {
-  margin: 0 0 4px;
-}
-
 .pill {
   display: inline-block;
   padding: 2px 10px;
@@ -332,6 +393,23 @@ body.modal-open {
   max-height: 55vh;
 }
 
+@media (max-width: 1100px) {
+  .main-split {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .pane-devices {
+    position: static;
+    max-height: none;
+  }
+}
+
 @media (max-width: 640px) {
   .row2 { grid-template-columns: 1fr; }
+
+  .devices-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
