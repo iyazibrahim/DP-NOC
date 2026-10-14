@@ -35,6 +35,35 @@ function fmtTime(iso) {
   }
 }
 
+function fmtSyncParts(iso) {
+  if (!iso) return { date: "—", time: "" };
+  try {
+    const d = new Date(iso);
+    return {
+      date: d.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+      time: d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+    };
+  } catch {
+    return { date: String(iso), time: "" };
+  }
+}
+
+function typeLabel(type) {
+  const raw = String(type || "").trim();
+  const n = raw.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const map = {
+    firewall: "Firewall",
+    nas: "NAS",
+    storage: "NAS",
+    switch: "Switch",
+    router: "Router",
+    accesspoint: "Access point",
+    ap: "Access point",
+    other: "Other"
+  };
+  return map[n] || raw || "—";
+}
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -88,6 +117,7 @@ function closeModal(id) {
 
 function renderStatus(status) {
   const cards = document.getElementById("status-cards");
+  const banner = document.getElementById("status-banner");
   const alloy = status.alloyRunning
     ? '<span class="ok">Running</span>'
     : '<span class="bad">Stopped</span>';
@@ -104,25 +134,21 @@ function renderStatus(status) {
       ? `<span class="ok">${escapeHtml(sync.message)}</span>`
       : `<span class="bad">${escapeHtml(sync.message)}</span>`
     : '<span class="warn">No sync yet</span>';
+  const synced = fmtSyncParts(sync?.at);
+  const snmpValue = status.configUnsafe
+    ? '<span class="bad">Unsafe</span>'
+    : status.snmpConfigStale
+      ? '<span class="bad">Stale</span>'
+      : status.snmpBlockPresent === false && (status.deviceCount ?? 0) > 0
+        ? '<span class="bad">Missing</span>'
+        : '<span class="ok">Applied</span>';
 
   cards.innerHTML = `
     <div class="card"><div class="label">Site</div><div class="value">${escapeHtml(status.siteName || "—")}</div></div>
     <div class="card"><div class="label">Alloy</div><div class="value">${alloy}</div></div>
     <div class="card"><div class="label">Dashboard</div><div class="value">${dashHtml}</div></div>
     <div class="card"><div class="label">Devices</div><div class="value">${status.deviceCount ?? 0}</div></div>
-    <div class="card"><div class="label">SNMP config</div><div class="value">${
-      status.configUnsafe
-        ? '<span class="bad">Unsafe — repair</span>'
-        : status.snmpConfigStale
-          ? `<span class="bad">Stale — Force apply</span>${
-              status.snmpStaleReason?.detail
-                ? `<div class="warn" style="font-size:0.8rem;margin-top:4px">${escapeHtml(status.snmpStaleReason.detail)}</div>`
-                : ""
-            }`
-          : status.snmpBlockPresent === false && (status.deviceCount ?? 0) > 0
-            ? '<span class="bad">Missing block</span>'
-            : '<span class="ok">Applied</span>'
-    }</div></div>
+    <div class="card"><div class="label">SNMP config</div><div class="value">${snmpValue}</div></div>
     <div class="card"><div class="label">Metrics push</div><div class="value">${
       status.metricsConfigured === false
         ? '<span class="bad">Not set</span>'
@@ -138,22 +164,26 @@ function renderStatus(status) {
           : '<span class="warn">Idle</span>'
       }</div>
     </div>
-    <div class="card"><div class="label">Last sync</div><div class="value" style="font-size:0.9rem">${fmtTime(sync?.at)}</div></div>
-    <div class="card" style="grid-column:1/-1"><div class="label">Sync status</div><div class="value" style="font-size:0.9rem">${syncLabel}</div></div>
-    ${
-      (status.warnings && status.warnings.length
-        ? status.warnings
-        : status.warning
-          ? [status.warning]
-          : []
-      )
+    <div class="card"><div class="label">Last sync</div><div class="value stack"><span>${escapeHtml(synced.date)}</span>${
+      synced.time ? `<span class="muted">${escapeHtml(synced.time)}</span>` : ""
+    }</div></div>
+  `;
+
+  const warnings = status.warnings && status.warnings.length
+    ? status.warnings
+    : status.warning
+      ? [status.warning]
+      : [];
+  if (banner) {
+    banner.innerHTML =
+      `<div class="banner"><span class="label">Sync status</span>${syncLabel}</div>` +
+      warnings
         .map(
           (w) =>
-            `<div class="card" style="grid-column:1/-1"><div class="label">Warning</div><div class="value" style="font-size:0.9rem;color:#f0c14a">${escapeHtml(w)}</div></div>`
+            `<div class="banner"><span class="label">Warning</span><span class="warn">${escapeHtml(w)}</span></div>`
         )
-        .join("")
-    }
-  `;
+        .join("");
+  }
 
   const snmpCard = document.getElementById("card-snmp-polling");
   if (snmpCard) {
@@ -215,7 +245,7 @@ function renderDevicesTable() {
   const body = document.getElementById("devices-body");
   if (!Array.isArray(cachedDevices) || cachedDevices.length === 0) {
     body.innerHTML =
-      '<tr><td colspan="6" class="hint">No devices yet — click Add device, or Sync now to pull from NOC.</td></tr>';
+      '<tr class="empty-row"><td colspan="6">No devices yet. Add one here, or sync to pull devices already on the NOC.</td></tr>';
     return;
   }
   body.innerHTML = cachedDevices
@@ -225,13 +255,16 @@ function renderDevicesTable() {
       const notes = st?.notes
         ? `<div class="hint" title="${escapeHtml(st.notes)}">${escapeHtml(st.notes)}</div>`
         : "";
+      const community = d.snmpCommunity
+        ? escapeHtml(d.snmpCommunity)
+        : '<span class="muted">default</span>';
       return `<tr>
-        <td>${escapeHtml(d.name || "")}<div class="hint"><code>${escapeHtml(d.id || "")}</code></div></td>
-        <td>${pill}${notes}</td>
-        <td>${escapeHtml(d.snmpIp || "")}</td>
-        <td>${escapeHtml(d.snmpCommunity || "default")}</td>
-        <td>${escapeHtml(d.type || "")}</td>
-        <td><button type="button" class="secondary btn-sm" data-edit="${escapeHtml(d.id || "")}">Edit</button></td>
+        <td class="col-name"><div class="dev-name" title="${escapeHtml(d.name || "")}">${escapeHtml(d.name || "")}</div><div class="dev-id" title="${escapeHtml(d.id || "")}">${escapeHtml(d.id || "")}</div></td>
+        <td class="col-status">${pill}${notes}</td>
+        <td class="col-ip">${escapeHtml(d.snmpIp || "")}</td>
+        <td class="col-community">${community}</td>
+        <td class="col-type">${escapeHtml(typeLabel(d.type))}</td>
+        <td class="col-actions"><button type="button" class="secondary btn-sm" data-edit="${escapeHtml(d.id || "")}">Edit</button></td>
       </tr>`;
     })
     .join("");
@@ -304,24 +337,33 @@ async function refreshDashboard() {
   const status = await api("/api/status");
   renderStatus(status);
   await loadDevices();
-  if (!status.configured) {
-    document.querySelector('[data-tab="setup"]').click();
+  if (status.configured) {
+    hideWizard();
+  } else if (!wizardDismissed) {
+    showWizard();
   }
 }
 
+let siteCatalog = [];
+
 async function loadCatalog() {
-  const catalog = await api("/api/catalog");
-  const sel = document.getElementById("siteName");
-  sel.innerHTML = catalog
+  siteCatalog = await api("/api/catalog");
+  const options = siteCatalog
     .map(
       (s) =>
         `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)} (${escapeHtml(s.id)})</option>`
     )
     .join("");
+  document.getElementById("siteName").innerHTML = options;
+  const wiz = document.getElementById("wiz-site");
+  wiz.innerHTML = options + '<option value="__custom__">Other site id…</option>';
 }
+
+let savedConfig = null;
 
 async function loadConfigForm() {
   const cfg = await api("/api/config");
+  savedConfig = cfg;
   const set = (id, val) => {
     const el = document.getElementById(id);
     if (el && val) el.value = val;
@@ -509,6 +551,306 @@ document.getElementById("btn-view-logs").addEventListener("click", async () => {
   const out = document.getElementById("settings-output");
   out.hidden = false;
   out.textContent = await fetch("/api/logs/alloy").then((r) => r.text());
+});
+
+const WIZARD_LAST = 4;
+let wizardStep = 0;
+let wizardDismissed = false;
+let wizardPrefillDone = false;
+let probeOkFor = "";
+let allowSkipProbe = false;
+
+function hideWizard() {
+  const wiz = document.getElementById("wizard");
+  wiz.hidden = true;
+  document.getElementById("console").hidden = false;
+}
+
+function showWizard() {
+  const wiz = document.getElementById("wizard");
+  const already = !wiz.hidden;
+  if (!wizardPrefillDone) {
+    prefillWizard();
+    wizardPrefillDone = true;
+  }
+  wiz.hidden = false;
+  document.getElementById("console").hidden = true;
+  if (!already) goWizardStep(wizardStep);
+}
+
+function wizardSiteId() {
+  const sel = document.getElementById("wiz-site").value;
+  if (sel === "__custom__") return document.getElementById("wiz-site-custom").value.trim();
+  return sel.trim();
+}
+
+function prefillWizard() {
+  const cfg = savedConfig || {};
+  const formSite = document.getElementById("siteName").value;
+  const siteName = formSite || cfg.siteName || "";
+  const known = siteCatalog.some((s) => s.id === siteName);
+  const siteSel = document.getElementById("wiz-site");
+  if (siteName && known) {
+    siteSel.value = siteName;
+  } else if (siteName) {
+    siteSel.value = "__custom__";
+    document.getElementById("wiz-site-custom").value = siteName;
+  }
+  document.getElementById("wiz-site-custom-row").hidden = siteSel.value !== "__custom__";
+  const take = (formId, cfgVal, fallback) => {
+    const typed = document.getElementById(formId)?.value?.trim();
+    return typed || cfgVal || fallback || "";
+  };
+  document.getElementById("wiz-noc").value = take("nocApiUrl", cfg.nocApiUrl);
+  document.getElementById("wiz-rw").value = take("centralRemoteWriteUrl", cfg.centralRemoteWriteUrl);
+  document.getElementById("wiz-cf-id").value = take("cfAccessClientId", cfg.cfAccessClientId);
+  document.getElementById("wiz-ping1").value = take("pingTarget1", cfg.pingTarget1, "1.1.1.1");
+  document.getElementById("wiz-ping2").value = take("pingTarget2", cfg.pingTarget2, "139.99.88.174");
+  document.getElementById("wiz-community").value = take("snmpCommunity", cfg.snmpCommunity, "public");
+  const typedToken = document.getElementById("collectorToken").value.trim();
+  if (typedToken) document.getElementById("wiz-token").value = typedToken;
+  const tokenHint = document.getElementById("wiz-token-hint");
+  if (cfg.collectorToken) {
+    document.getElementById("wiz-token").placeholder = "Saved — enter a new token to replace";
+    tokenHint.textContent = "A token is already saved. Leave this blank to keep it.";
+  }
+  if (cfg.cfAccessClientSecret) {
+    document.getElementById("wiz-cf-secret").placeholder = "Saved — enter a new secret to replace";
+  }
+}
+
+function copyWizardToSetupForm() {
+  const site = wizardSiteId();
+  if (site) {
+    const sel = document.getElementById("siteName");
+    if (![...sel.options].some((o) => o.value === site)) {
+      const opt = document.createElement("option");
+      opt.value = site;
+      opt.textContent = site;
+      sel.appendChild(opt);
+    }
+    sel.value = site;
+  }
+  const copy = (from, to) => {
+    const value = document.getElementById(from).value.trim();
+    if (value) document.getElementById(to).value = value;
+  };
+  copy("wiz-noc", "nocApiUrl");
+  copy("wiz-token", "collectorToken");
+  copy("wiz-rw", "centralRemoteWriteUrl");
+  copy("wiz-cf-id", "cfAccessClientId");
+  copy("wiz-cf-secret", "cfAccessClientSecret");
+  copy("wiz-ping1", "pingTarget1");
+  copy("wiz-ping2", "pingTarget2");
+  copy("wiz-community", "snmpCommunity");
+}
+
+function goWizardStep(n) {
+  wizardStep = Math.max(0, Math.min(WIZARD_LAST, n));
+  document.querySelectorAll(".wizard-stage").forEach((el) => {
+    el.hidden = Number(el.dataset.step) !== wizardStep;
+  });
+  document.querySelectorAll("#wizard-steps li").forEach((li) => {
+    const step = Number(li.dataset.stepDot);
+    li.classList.toggle("is-current", step === wizardStep);
+    li.classList.toggle("is-done", step < wizardStep);
+  });
+  const titles = [
+    "Set up this collector",
+    "Connect to the NOC",
+    "Send metrics",
+    "Local checks",
+    "Review and start"
+  ];
+  document.getElementById("wizard-title").textContent = titles[wizardStep];
+  const next = document.getElementById("wizard-next");
+  const back = document.getElementById("wizard-back");
+  back.hidden = wizardStep === 0;
+  next.textContent = wizardStep === WIZARD_LAST ? "Save and start" : wizardStep === 1 ? "Test and continue" : "Continue";
+  if (wizardStep === WIZARD_LAST) renderWizardReview();
+  showMsg(document.getElementById("wizard-msg"), "", true);
+  document.getElementById("wizard-msg").textContent = "";
+  document.getElementById("wizard-msg").className = "";
+}
+
+function isHttpUrl(value) {
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function renderWizardReview() {
+  const site = wizardSiteId();
+  const token = document.getElementById("wiz-token").value.trim();
+  const cfId = document.getElementById("wiz-cf-id").value.trim();
+  const cfSecret = document.getElementById("wiz-cf-secret").value.trim();
+  const hostField = document.getElementById("hostDeviceId").value.trim();
+  const rows = [
+    ["Site", site || "—"],
+    ["NOC API", document.getElementById("wiz-noc").value.trim() || "—"],
+    ["Token", token ? "Will be saved" : savedConfig?.collectorToken ? "Keep saved token" : "Missing"],
+    ["Metrics URL", document.getElementById("wiz-rw").value.trim() || "—"],
+    ["Cloudflare Access", cfId || cfSecret ? "Will be saved" : savedConfig?.cfAccessClientId ? "Keep saved credentials" : "Not used"],
+    ["Ping targets", `${document.getElementById("wiz-ping1").value.trim()} and ${document.getElementById("wiz-ping2").value.trim()}`],
+    ["SNMP community", document.getElementById("wiz-community").value.trim() || "—"],
+    ["Host id", hostField || (site ? `${site}-nuc` : "—")]
+  ];
+  document.getElementById("wizard-review").innerHTML = rows
+    .map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`)
+    .join("");
+}
+
+function wizardError(text) {
+  showMsg(document.getElementById("wizard-msg"), text, false);
+}
+
+async function wizardNext() {
+  const btn = document.getElementById("wizard-next");
+  if (wizardStep === 0) {
+    goWizardStep(1);
+    return;
+  }
+  if (wizardStep === 1) {
+    const site = wizardSiteId();
+    const noc = document.getElementById("wiz-noc").value.trim();
+    const token = document.getElementById("wiz-token").value.trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(site)) {
+      wizardError("Enter a site id such as site-1.");
+      return;
+    }
+    if (!isHttpUrl(noc)) {
+      wizardError("NOC API URL must start with https:// or http://.");
+      return;
+    }
+    if (!token && !savedConfig?.collectorToken) {
+      wizardError("Paste the collector token from the site page.");
+      return;
+    }
+    if (allowSkipProbe) {
+      allowSkipProbe = false;
+      goWizardStep(2);
+      return;
+    }
+    const key = `${site}|${noc}|${token}`;
+    if (probeOkFor === key) {
+      goWizardStep(2);
+      return;
+    }
+    btn.disabled = true;
+    try {
+      const result = await api("/api/setup/probe", {
+        method: "POST",
+        body: JSON.stringify({ siteName: site, nocApiUrl: noc, collectorToken: token })
+      });
+      if (!result.ok) {
+        allowSkipProbe = true;
+        btn.textContent = "Continue anyway";
+        wizardError(
+          (result.message || "Could not reach the NOC.") +
+            " You can continue and save these settings anyway."
+        );
+        return;
+      }
+      probeOkFor = key;
+      goWizardStep(2);
+    } catch (err) {
+      allowSkipProbe = true;
+      btn.textContent = "Continue anyway";
+      wizardError(err.message + " You can continue and save these settings anyway.");
+    } finally {
+      btn.disabled = false;
+    }
+    return;
+  }
+  if (wizardStep === 2) {
+    const rw = document.getElementById("wiz-rw").value.trim();
+    const cfId = document.getElementById("wiz-cf-id").value.trim();
+    const cfSecret = document.getElementById("wiz-cf-secret").value.trim();
+    if (!isHttpUrl(rw)) {
+      wizardError("Metrics remote write URL must start with https:// or http://.");
+      return;
+    }
+    if ((cfId && !cfSecret && !savedConfig?.cfAccessClientSecret) || (!cfId && cfSecret)) {
+      wizardError("Cloudflare Access needs both a client ID and a client secret, or leave both blank.");
+      return;
+    }
+    goWizardStep(3);
+    return;
+  }
+  if (wizardStep === 3) {
+    if (!document.getElementById("wiz-ping1").value.trim() || !document.getElementById("wiz-ping2").value.trim()) {
+      wizardError("Both ping targets are required.");
+      return;
+    }
+    if (!document.getElementById("wiz-community").value.trim()) {
+      wizardError("Enter a default SNMP community.");
+      return;
+    }
+    goWizardStep(4);
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const body = {
+      siteName: wizardSiteId(),
+      nocApiUrl: document.getElementById("wiz-noc").value.trim(),
+      collectorToken: document.getElementById("wiz-token").value.trim(),
+      centralRemoteWriteUrl: document.getElementById("wiz-rw").value.trim(),
+      cfAccessClientId: document.getElementById("wiz-cf-id").value.trim(),
+      cfAccessClientSecret: document.getElementById("wiz-cf-secret").value.trim(),
+      pingTarget1: document.getElementById("wiz-ping1").value.trim(),
+      pingTarget2: document.getElementById("wiz-ping2").value.trim(),
+      snmpCommunity: document.getElementById("wiz-community").value.trim()
+    };
+    const result = await api("/api/config", { method: "POST", body: JSON.stringify(body) });
+    wizardDismissed = true;
+    hideWizard();
+    await loadConfigForm();
+    await refreshDashboard();
+    document.querySelector('[data-tab="dashboard"]').click();
+    showMsg(
+      document.getElementById("sync-msg"),
+      result.sync?.message || "Collector setup saved.",
+      result.sync ? result.sync.ok !== false : true
+    );
+  } catch (err) {
+    wizardError(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function resetProbe() {
+  probeOkFor = "";
+  allowSkipProbe = false;
+  if (wizardStep === 1) document.getElementById("wizard-next").textContent = "Test and continue";
+}
+
+document.getElementById("wiz-site").addEventListener("change", () => {
+  const custom = document.getElementById("wiz-site").value === "__custom__";
+  document.getElementById("wiz-site-custom-row").hidden = !custom;
+  resetProbe();
+});
+["wiz-noc", "wiz-token", "wiz-site-custom"].forEach((id) => {
+  document.getElementById(id).addEventListener("input", () => resetProbe());
+});
+document.getElementById("wizard-next").addEventListener("click", () => wizardNext());
+document.getElementById("wizard-back").addEventListener("click", () => goWizardStep(wizardStep - 1));
+document.getElementById("wizard-advanced").addEventListener("click", () => {
+  copyWizardToSetupForm();
+  wizardDismissed = true;
+  hideWizard();
+  document.querySelector('[data-tab="setup"]').click();
+});
+document.getElementById("btn-open-guide").addEventListener("click", () => {
+  wizardDismissed = false;
+  wizardPrefillDone = false;
+  wizardStep = 0;
+  probeOkFor = "";
+  showWizard();
 });
 
 (async () => {

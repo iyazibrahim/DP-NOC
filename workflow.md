@@ -325,3 +325,8 @@ Collector box → Alloy → Prometheus (central)
   - Left: Dashboard / Setup / Settings; Right: Local devices (sticky pane, scrollable table); stacks on narrow screens
 - [x] **Dark scrollbars everywhere (2026-10-14)**
   - Wallboard + Collector Console: `color-scheme: dark`, thin cyan/dark track, hide classic Windows scrollbar arrows
+- [x] **Collector Console layout + guided install (2026-10-14)**
+  - Dashboard tabs sit inside the status card; status is a 2-column grid; sync message is a banner under the cards; Sync / Force apply / Refresh / Diagnostics share one 36px toolbar
+  - Device list is the wider column; Add device matches that toolbar height; names and ids stay on one line; types no longer wrap mid-word
+  - Fresh install (`site`, NOC URL, token, or metrics URL missing) opens a 5-step setup guide: connect (live NOC probe), metrics, ping/SNMP community, review, save
+  - Setup tab keeps the full form and can reopen the guide; probe is `POST /api/setup/probe`

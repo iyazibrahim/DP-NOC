@@ -8,133 +8,244 @@
 </head>
 <body>
   <div class="wrap">
-    <header>
-      <h1>Collector Console</h1>
-      <p class="sub">Manage local SNMP devices for this site. Status comes from the NOC dashboard.</p>
-    </header>
+    <div id="wizard" class="wizard" hidden>
+      <div class="wizard-card">
+        <p class="eyebrow">Collector setup</p>
+        <h1 id="wizard-title">Set up this collector</h1>
+        <ol class="steps" id="wizard-steps">
+          <li data-step-dot="0">Start</li>
+          <li data-step-dot="1">Connect</li>
+          <li data-step-dot="2">Metrics</li>
+          <li data-step-dot="3">Checks</li>
+          <li data-step-dot="4">Finish</li>
+        </ol>
 
-    <div class="main-split">
-      <aside class="pane pane-left">
-        <div class="tabs">
-          <button type="button" class="tab active" data-tab="dashboard">Dashboard</button>
-          <button type="button" class="tab" data-tab="setup">Setup</button>
-          <button type="button" class="tab" data-tab="settings">Settings</button>
+        <div class="wizard-stage" data-step="0">
+          <p class="lead">This box polls switches, firewalls, and access points on the local network, then sends their status to the NOC dashboard.</p>
+          <p class="hint">Have these ready before you continue. You can generate the token on the site page in the wallboard.</p>
+          <ul class="need-list">
+            <li><strong>Site ID</strong> — the same id as the wallboard, such as site-1</li>
+            <li><strong>NOC address</strong> — where the dashboard API lives</li>
+            <li><strong>Collector token</strong> — Sites → your site → Generate collector token</li>
+            <li><strong>Metrics write URL</strong> — and Cloudflare Access, if that host uses it</li>
+          </ul>
         </div>
 
-        <section id="panel-dashboard" class="panel active">
-          <div class="grid" id="status-cards"></div>
-          <div class="actions">
-            <button type="button" id="btn-sync">Sync now</button>
-            <button type="button" class="secondary" id="btn-force-sync">Force apply SNMP</button>
-            <button type="button" class="secondary" id="btn-refresh">Refresh</button>
-            <button type="button" class="secondary" id="btn-diag">Diagnostics</button>
+        <div class="wizard-stage" data-step="1" hidden>
+          <p class="lead">Connect this collector to the site it should report for.</p>
+          <div class="field">
+            <label for="wiz-site">Site</label>
+            <select id="wiz-site"></select>
           </div>
-          <div id="sync-msg"></div>
-        </section>
+          <div class="field" id="wiz-site-custom-row" hidden>
+            <label for="wiz-site-custom">Site ID</label>
+            <input id="wiz-site-custom" placeholder="site-1" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="wiz-noc">NOC API URL</label>
+            <input id="wiz-noc" placeholder="https://noc.example.com" autocomplete="off" />
+            <p class="hint">The dashboard address, without a path. Example: https://noc.example.com</p>
+          </div>
+          <div class="field">
+            <label for="wiz-token">Collector token</label>
+            <input id="wiz-token" placeholder="nocc_…" autocomplete="off" spellcheck="false" />
+            <p class="hint" id="wiz-token-hint">Paste the token from the site page. It is stored on this collector.</p>
+          </div>
+        </div>
 
-        <section id="panel-setup" class="panel">
-          <form id="setup-form">
+        <div class="wizard-stage" data-step="2" hidden>
+          <p class="lead">Tell Alloy where to push metrics. Without this, the dashboard shows the collector as down.</p>
+          <div class="field">
+            <label for="wiz-rw">Metrics remote write URL</label>
+            <input id="wiz-rw" placeholder="https://metrics.example.com/api/v1/write" autocomplete="off" />
+          </div>
+          <fieldset class="optional-set">
+            <legend>Cloudflare Access</legend>
+            <p class="hint">Fill both only if the metrics host is behind Cloudflare Access. Leave both blank if it is not.</p>
             <div class="field">
-              <label for="siteName">Site ID</label>
-              <select id="siteName" name="siteName" required></select>
-              <p class="hint">Must match the site id in the NOC wallboard (e.g. site-1).</p>
-            </div>
-            <div class="field">
-              <label for="nocApiUrl">NOC API URL</label>
-              <input id="nocApiUrl" name="nocApiUrl" placeholder="https://noc.example.com" />
-              <p class="hint">Leave blank if already set in Environment / compose (survives redeploy).</p>
-            </div>
-            <div class="field">
-              <label for="collectorToken">Collector token</label>
-              <input id="collectorToken" name="collectorToken" placeholder="nocc_…" />
-              <p class="hint">Saved on the collector volume — you should not need to re-enter after restart.</p>
+              <label for="wiz-cf-id">Access client ID</label>
+              <input id="wiz-cf-id" autocomplete="off" spellcheck="false" />
             </div>
             <div class="field">
-              <label for="centralRemoteWriteUrl">Metrics remote write URL (optional if already working)</label>
-              <input id="centralRemoteWriteUrl" name="centralRemoteWriteUrl" placeholder="https://metrics.example.com/api/v1/write" />
+              <label for="wiz-cf-secret">Access client secret</label>
+              <input id="wiz-cf-secret" type="password" autocomplete="new-password" />
+              <p class="hint" id="wiz-cf-hint">Leave blank to keep a secret that is already saved.</p>
             </div>
-            <div class="row2">
-              <div class="field">
-                <label for="cfAccessClientId">CF Access Client ID (optional if already in Environment)</label>
-                <input id="cfAccessClientId" name="cfAccessClientId" />
-              </div>
-              <div class="field">
-                <label for="cfAccessClientSecret">CF Access Client Secret</label>
-                <input id="cfAccessClientSecret" name="cfAccessClientSecret" type="password" />
-                <p class="hint">Leave blank to keep existing.</p>
-              </div>
-            </div>
-            <div class="row2">
-              <div class="field">
-                <label for="pingTarget1">Ping target 1 (WAN DNS)</label>
-                <input id="pingTarget1" name="pingTarget1" value="1.1.1.1" />
-              </div>
-              <div class="field">
-                <label for="pingTarget2">Ping target 2 (WAN VPS)</label>
-                <input id="pingTarget2" name="pingTarget2" value="139.99.88.174" />
-              </div>
-            </div>
-            <div class="field">
-              <label for="snmpCommunity">Default SNMP community (v2c)</label>
-              <input id="snmpCommunity" name="snmpCommunity" value="public" autocomplete="off" />
-              <p class="hint">Used when a device has no per-device community.</p>
-            </div>
-            <div class="actions">
-              <button type="submit">Save &amp; sync</button>
-            </div>
-            <div id="setup-msg"></div>
-          </form>
-        </section>
+          </fieldset>
+        </div>
 
-        <section id="panel-settings" class="panel">
+        <div class="wizard-stage" data-step="3" hidden>
+          <p class="lead">These checks decide uplink status and the SNMP community used when a device has none of its own.</p>
           <div class="row2">
             <div class="field">
-              <label for="syncIntervalSec">Auto-sync interval (seconds)</label>
-              <input id="syncIntervalSec" name="syncIntervalSec" type="number" min="30" value="90" />
+              <label for="wiz-ping1">Ping target 1</label>
+              <input id="wiz-ping1" value="1.1.1.1" />
+              <p class="hint">Public DNS, used as a WAN check.</p>
             </div>
             <div class="field">
-              <label for="hostDeviceId">Host device ID</label>
-              <input id="hostDeviceId" name="hostDeviceId" placeholder="site-1-nuc" />
+              <label for="wiz-ping2">Ping target 2</label>
+              <input id="wiz-ping2" value="139.99.88.174" />
+              <p class="hint">Second WAN target, often the VPS.</p>
             </div>
           </div>
-          <div class="actions">
-            <button type="button" id="btn-save-settings">Save settings</button>
-            <button type="button" class="secondary" id="btn-view-alloy">View config.alloy</button>
-            <button type="button" class="secondary" id="btn-view-logs">View Alloy logs</button>
+          <div class="field">
+            <label for="wiz-community">Default SNMP community (v2c)</label>
+            <input id="wiz-community" value="public" autocomplete="off" />
+            <p class="hint">Used only when a device does not have its own community.</p>
           </div>
-          <div id="settings-msg"></div>
-          <pre id="settings-output" hidden></pre>
-        </section>
-      </aside>
+        </div>
 
-      <section class="pane pane-devices" aria-label="Local devices">
-        <div class="devices-head">
-          <div>
-            <h2>Local devices</h2>
-            <p class="hint">Up / Down = SNMP poll from this collector (not ping). Ping can succeed while SNMP fails.</p>
+        <div class="wizard-stage" data-step="4" hidden>
+          <p class="lead">Review, then save. Alloy reloads and the first sync starts immediately.</p>
+          <dl class="review" id="wizard-review"></dl>
+        </div>
+
+        <div id="wizard-msg"></div>
+        <div class="wizard-foot">
+          <button type="button" class="ghost" id="wizard-advanced">Set up manually</button>
+          <div class="wizard-nav">
+            <button type="button" class="secondary" id="wizard-back">Back</button>
+            <button type="button" id="wizard-next">Continue</button>
           </div>
-          <button type="button" id="btn-add-device">Add device</button>
         </div>
-        <div class="devices-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Status</th>
-                <th>SNMP IP</th>
-                <th>Community</th>
-                <th>Type</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="devices-body"></tbody>
-          </table>
-        </div>
-      </section>
+      </div>
+    </div>
+
+    <div id="console">
+      <header class="page-head">
+        <h1>Collector Console</h1>
+        <p class="sub">Manage local SNMP devices for this site. Status comes from the NOC dashboard.</p>
+      </header>
+
+      <div class="main-split">
+        <aside class="pane pane-left">
+          <div class="pane-card">
+            <div class="tabs" role="tablist">
+              <button type="button" class="tab active" data-tab="dashboard" role="tab">Dashboard</button>
+              <button type="button" class="tab" data-tab="setup" role="tab">Setup</button>
+              <button type="button" class="tab" data-tab="settings" role="tab">Settings</button>
+            </div>
+
+            <section id="panel-dashboard" class="panel active" role="tabpanel">
+              <div class="grid" id="status-cards"></div>
+              <div id="status-banner"></div>
+              <div class="toolbar">
+                <button type="button" id="btn-sync">Sync now</button>
+                <button type="button" class="secondary" id="btn-force-sync">Force apply SNMP</button>
+                <button type="button" class="ghost" id="btn-refresh">Refresh</button>
+                <button type="button" class="ghost" id="btn-diag">Diagnostics</button>
+              </div>
+              <div id="sync-msg"></div>
+            </section>
+
+            <section id="panel-setup" class="panel" role="tabpanel">
+              <div class="panel-intro">
+                <p class="hint">Connection, metrics, and the default SNMP community. On a new collector, the setup guide walks through this in order.</p>
+                <button type="button" class="secondary" id="btn-open-guide">Open setup guide</button>
+              </div>
+              <form id="setup-form">
+                <div class="field">
+                  <label for="siteName">Site ID</label>
+                  <select id="siteName" name="siteName" required></select>
+                  <p class="hint">Must match the site id in the NOC wallboard (e.g. site-1).</p>
+                </div>
+                <div class="field">
+                  <label for="nocApiUrl">NOC API URL</label>
+                  <input id="nocApiUrl" name="nocApiUrl" placeholder="https://noc.example.com" />
+                  <p class="hint">Leave blank if already set in Environment / compose (survives redeploy).</p>
+                </div>
+                <div class="field">
+                  <label for="collectorToken">Collector token</label>
+                  <input id="collectorToken" name="collectorToken" placeholder="nocc_…" autocomplete="off" />
+                  <p class="hint">Saved on the collector volume — you should not need to re-enter after restart.</p>
+                </div>
+                <div class="field">
+                  <label for="centralRemoteWriteUrl">Metrics remote write URL</label>
+                  <input id="centralRemoteWriteUrl" name="centralRemoteWriteUrl" placeholder="https://metrics.example.com/api/v1/write" />
+                </div>
+                <div class="row2">
+                  <div class="field">
+                    <label for="cfAccessClientId">CF Access Client ID</label>
+                    <input id="cfAccessClientId" name="cfAccessClientId" autocomplete="off" />
+                  </div>
+                  <div class="field">
+                    <label for="cfAccessClientSecret">CF Access Client Secret</label>
+                    <input id="cfAccessClientSecret" name="cfAccessClientSecret" type="password" autocomplete="new-password" />
+                    <p class="hint">Leave blank to keep existing.</p>
+                  </div>
+                </div>
+                <div class="row2">
+                  <div class="field">
+                    <label for="pingTarget1">Ping target 1 (WAN DNS)</label>
+                    <input id="pingTarget1" name="pingTarget1" value="1.1.1.1" />
+                  </div>
+                  <div class="field">
+                    <label for="pingTarget2">Ping target 2 (WAN VPS)</label>
+                    <input id="pingTarget2" name="pingTarget2" value="139.99.88.174" />
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="snmpCommunity">Default SNMP community (v2c)</label>
+                  <input id="snmpCommunity" name="snmpCommunity" value="public" autocomplete="off" />
+                  <p class="hint">Used when a device has no per-device community.</p>
+                </div>
+                <div class="toolbar">
+                  <button type="submit">Save &amp; sync</button>
+                </div>
+                <div id="setup-msg"></div>
+              </form>
+            </section>
+
+            <section id="panel-settings" class="panel" role="tabpanel">
+              <div class="row2">
+                <div class="field">
+                  <label for="syncIntervalSec">Auto-sync interval (seconds)</label>
+                  <input id="syncIntervalSec" name="syncIntervalSec" type="number" min="30" value="90" />
+                </div>
+                <div class="field">
+                  <label for="hostDeviceId">Host device ID</label>
+                  <input id="hostDeviceId" name="hostDeviceId" placeholder="site-1-nuc" />
+                </div>
+              </div>
+              <div class="toolbar">
+                <button type="button" id="btn-save-settings">Save settings</button>
+                <button type="button" class="ghost" id="btn-view-alloy">View config.alloy</button>
+                <button type="button" class="ghost" id="btn-view-logs">View Alloy logs</button>
+              </div>
+              <div id="settings-msg"></div>
+              <pre id="settings-output" hidden></pre>
+            </section>
+          </div>
+        </aside>
+
+        <section class="pane pane-devices" aria-label="Local devices">
+          <div class="devices-head">
+            <div class="devices-title">
+              <h2>Local devices</h2>
+              <p class="hint">Up / Down is the SNMP poll from this collector. Ping can succeed while SNMP fails.</p>
+            </div>
+            <button type="button" id="btn-add-device">Add device</button>
+          </div>
+          <div class="devices-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Status</th>
+                  <th>SNMP IP</th>
+                  <th>Community</th>
+                  <th>Type</th>
+                  <th class="col-actions"><span class="sr">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody id="devices-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </div>
   </div>
 
-  <!-- Device add / edit modal -->
   <div id="modal-device" class="modal" hidden aria-hidden="true">
     <div class="modal-backdrop" data-close="device"></div>
     <div class="modal-card" role="dialog" aria-labelledby="device-modal-title">
@@ -189,7 +300,6 @@
     </div>
   </div>
 
-  <!-- Diagnostics modal -->
   <div id="modal-diag" class="modal" hidden aria-hidden="true">
     <div class="modal-backdrop" data-close="diag"></div>
     <div class="modal-card modal-card--wide" role="dialog" aria-labelledby="diag-modal-title">
@@ -204,7 +314,6 @@
     </div>
   </div>
 
-  <!-- SNMP polling details modal -->
   <div id="modal-snmp" class="modal" hidden aria-hidden="true">
     <div class="modal-backdrop" data-close="snmp"></div>
     <div class="modal-card" role="dialog" aria-labelledby="snmp-modal-title">

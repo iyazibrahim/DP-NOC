@@ -222,6 +222,87 @@ app.get("/api/config", (_req, res) => {
   res.json(maskConfig(readConfig()));
 });
 
+/** Check NOC URL, site id, and token before a fresh install is saved. */
+app.post("/api/setup/probe", async (req, res) => {
+  const body = (req.body || {}) as {
+    nocApiUrl?: string;
+    siteName?: string;
+    collectorToken?: string;
+  };
+  const nocApiUrl =
+    typeof body.nocApiUrl === "string" ? body.nocApiUrl.trim().replace(/\/$/, "") : "";
+  const siteName = typeof body.siteName === "string" ? body.siteName.trim() : "";
+  const provided =
+    typeof body.collectorToken === "string" ? body.collectorToken.trim() : "";
+  const token =
+    provided && !provided.endsWith("…") ? provided : readConfig().collectorToken;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(nocApiUrl);
+  } catch {
+    return res.status(400).json({ ok: false, message: "NOC API URL is not a valid address." });
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return res.status(400).json({
+      ok: false,
+      message: "NOC API URL must start with https:// or http://."
+    });
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(siteName)) {
+    return res.status(400).json({
+      ok: false,
+      message: "Site ID should look like site-1."
+    });
+  }
+  if (!token) {
+    return res.status(400).json({
+      ok: false,
+      message: "Enter the collector token from the site page in the NOC."
+    });
+  }
+
+  const target = `${nocApiUrl}/api/collector/${encodeURIComponent(siteName)}/devices.json`;
+  try {
+    const r = await fetch(target, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json"
+      },
+      signal: AbortSignal.timeout(12000)
+    });
+    if (r.status === 401 || r.status === 403) {
+      return res.json({
+        ok: false,
+        message:
+          "The NOC rejected this token. On the site page, generate a collector token and paste it again."
+      });
+    }
+    if (r.status === 404) {
+      return res.json({
+        ok: false,
+        message: "That site was not found. Use the site id from the wallboard, such as site-1."
+      });
+    }
+    if (!r.ok) {
+      return res.json({
+        ok: false,
+        message: `The NOC replied with status ${r.status}. Check the address.`
+      });
+    }
+    return res.json({
+      ok: true,
+      message: "Connected. This collector can reach the dashboard for that site."
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    return res.json({
+      ok: false,
+      message: `Could not reach the NOC. Check the address and that this collector can route to it. (${detail})`
+    });
+  }
+});
+
 app.post("/api/config", async (req, res) => {
   try {
     const preserved = await preserveSecretsFromAlloy();
