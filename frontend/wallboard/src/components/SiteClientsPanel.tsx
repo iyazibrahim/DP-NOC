@@ -93,9 +93,6 @@ export function SiteClientsPanel({ token, site }: Props) {
     });
   }, [stations, apFilter, search]);
 
-  const needsForceApply =
-    stations.length === 0 && (total ?? 0) > 0 && aps.some((a) => (a.clients ?? 0) > 0);
-
   if (loading && !network) {
     return (
       <div className="space-y-3">
@@ -136,27 +133,14 @@ export function SiteClientsPanel({ token, site }: Props) {
         </div>
       </div>
 
-      {needsForceApply ? (
-        <Alert>
-          <AlertDescription>
-            AP totals are present but the station list is empty. Redeploy the collector{" "}
-            <code>snmp.yml</code> (client table walk), then <strong>Force-apply</strong> so Alloy
-            scrapes Cambium/Omada station metrics.
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <p className="muted text-sm" style={{ margin: 0 }}>
-          Live clients from SNMP. Cambium includes signal and bandwidth; Omada shows MAC when the
-          table is supported.
-        </p>
-      )}
-
       <div className="tableCard">
-        <div className="tableTitle" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-          <span>Connected clients</span>
-          <div className="formActions" style={{ marginLeft: "auto", flexWrap: "wrap" }}>
-            <label className="muted text-sm" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-              AP
+        <div className="siteClientsToolbar">
+          <div className="tableTitle" style={{ margin: 0 }}>
+            Connected clients
+          </div>
+          <div className="siteClientsFilters">
+            <label className="siteClientsFilter">
+              <span className="muted text-sm">AP</span>
               <select
                 value={apFilter}
                 onChange={(e) => setApFilter(e.target.value)}
@@ -176,7 +160,7 @@ export function SiteClientsPanel({ token, site }: Props) {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search hostname, MAC, IP…"
               aria-label="Search clients"
-              style={{ minWidth: 180 }}
+              className="siteClientsSearch"
             />
           </div>
         </div>
@@ -199,7 +183,7 @@ export function SiteClientsPanel({ token, site }: Props) {
               <tr>
                 <td colSpan={9} className="muted">
                   {stations.length === 0
-                    ? "No station rows yet. Cambium APs need the client-table SNMP module and Force-apply."
+                    ? "No connected clients reported yet."
                     : "No clients match this filter."}
                 </td>
               </tr>
@@ -242,8 +226,7 @@ export function SiteClientsPanel({ token, site }: Props) {
             {aps.length === 0 ? (
               <tr>
                 <td colSpan={4} className="muted">
-                  No access points yet. Add APs under Overview → Devices (type <code>ap</code>), then
-                  Force-apply the collector.
+                  No access points yet. Add APs under Overview → Devices, then sync the collector.
                 </td>
               </tr>
             ) : (

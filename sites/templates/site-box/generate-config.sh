@@ -381,9 +381,9 @@ def vendor_health_module(dtype, vendor):
         return "synology_health"
     if t == "switch" and v == "maipu":
         return "maipu_health"
-    if is_ap_type(t) and v == "cambium":
+    if is_ap_type(t) and (v == "cambium" or v.startswith("cambium")):
         return "cambium_ap_health"
-    if is_ap_type(t) and v in ("omada", "tplink"):
+    if is_ap_type(t) and (v in ("omada", "tplink") or v.startswith("omada") or v.startswith("tplink")):
         return "omada_ap_health"
     return None
 
@@ -391,9 +391,9 @@ def vendor_clients_module(dtype, vendor):
     """Heavy station-table module — separate 60s scrape so it cannot starve health."""
     t = norm(dtype)
     v = norm(vendor)
-    if is_ap_type(t) and v == "cambium":
+    if is_ap_type(t) and (v == "cambium" or v.startswith("cambium")):
         return "cambium_clients"
-    if is_ap_type(t) and v in ("omada", "tplink"):
+    if is_ap_type(t) and (v in ("omada", "tplink") or v.startswith("omada") or v.startswith("tplink")):
         return "omada_clients"
     return None
 

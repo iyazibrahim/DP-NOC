@@ -198,21 +198,13 @@ modules:
         help: Cambium AP total associated clients (E-series scalar .0)
 
   # Cambium station table — scraped on a SLOW separate job (60s), not the health path.
+  # Walk the whole entry once (GETBULK) instead of many column roots — fewer round-trips.
   cambium_clients:
     walk:
-      - 1.3.6.1.4.1.17713.22.1.3.1.1   # index
-      - 1.3.6.1.4.1.17713.22.1.3.1.2   # MAC
-      - 1.3.6.1.4.1.17713.22.1.3.1.3   # IP
-      - 1.3.6.1.4.1.17713.22.1.3.1.4   # name
-      - 1.3.6.1.4.1.17713.22.1.3.1.5   # SSID
-      - 1.3.6.1.4.1.17713.22.1.3.1.6   # OS / vendor name
-      - 1.3.6.1.4.1.17713.22.1.3.1.7   # hw mode
-      - 1.3.6.1.4.1.17713.22.1.3.1.11  # SNR
-      - 1.3.6.1.4.1.17713.22.1.3.1.12  # tx rate
-      - 1.3.6.1.4.1.17713.22.1.3.1.14  # tx bytes
-      - 1.3.6.1.4.1.17713.22.1.3.1.16  # rx bytes
-    max_repetitions: 10
-    timeout: 25s
+      - 1.3.6.1.4.1.17713.22.1.3.1
+    max_repetitions: 5
+    retries: 1
+    timeout: 10s
     metrics:
       - name: cambiumClientInfo
         oid: 1.3.6.1.4.1.17713.22.1.3.1.1

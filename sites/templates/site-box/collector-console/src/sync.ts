@@ -72,6 +72,7 @@ export type SnmpStaleReason =
   | { code: "missing_device"; detail: string }
   | { code: "stale_snmp_yml"; detail: string }
   | { code: "missing_synology_target"; detail: string }
+  | { code: "missing_clients_scrape"; detail: string }
   | null;
 
 /** Why Force-apply is still needed (null = not stale). */
@@ -122,6 +123,29 @@ export function alloySnmpStaleReason(_dataDir?: string): SnmpStaleReason {
       code: "missing_synology_target",
       detail:
         "NAS/storage + Synology vendor should have a synology_health Alloy target — check type/vendor on the device, then Force apply"
+    };
+  }
+
+  // Station list needs the slow site_snmp_clients scrape (separate from 15s health).
+  const needsClientScrape = devices.some((d) => {
+    const t = (d.type || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const v = (d.vendor || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const ap = t === "ap" || t === "accesspoint" || t === "wifi" || t === "wireless";
+    if (!ap) return false;
+    return (
+      v === "cambium" ||
+      v.startsWith("cambium") ||
+      v === "omada" ||
+      v === "tplink" ||
+      v.startsWith("omada") ||
+      v.startsWith("tplink")
+    );
+  });
+  if (needsClientScrape && !alloy.includes("site_snmp_clients")) {
+    return {
+      code: "missing_clients_scrape",
+      detail:
+        "Wi‑Fi APs need the station scrape (site_snmp_clients). Rebuild collector-console, then Force apply so config.alloy includes it."
     };
   }
   return null;

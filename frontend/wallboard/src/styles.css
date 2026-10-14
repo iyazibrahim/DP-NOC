@@ -1590,6 +1590,50 @@ textarea {
   box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.5);
 }
 
+.siteClientsToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.siteClientsFilters {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.siteClientsFilter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.siteClientsFilter select {
+  min-width: 140px;
+}
+
+.siteClientsSearch {
+  min-width: 200px;
+}
+
+@media (max-width: 640px) {
+  .siteClientsFilters {
+    flex-wrap: wrap;
+    width: 100%;
+    margin-left: 0;
+  }
+  .siteClientsSearch {
+    flex: 1;
+    min-width: 140px;
+  }
+}
+
 .websiteKpiStrip {
   display: flex;
   flex-wrap: wrap;

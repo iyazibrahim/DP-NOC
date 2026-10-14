@@ -275,6 +275,7 @@ Collector box → Alloy → Prometheus (central)
   - **SNMP cascade after client-table pack (2026-10-14)**
     - Root cause: Cambium station walk on the 15s `cambium_ap_health` scrape timed out Alloy and starved if_mib for firewall/switch/NAS (no device reconfig)
     - Fix: restore light health modules; station tables on separate `site_snmp_clients` scrape (60s / 45s timeout)
+    - Follow-up: stale check requires `site_snmp_clients` when APs present; Clients tab layout (AP + search row); remove Force-apply nag banner
 
 ## Auth (operator login)
 - Wallboard login uses `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` on **noc-app**
