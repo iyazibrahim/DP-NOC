@@ -309,17 +309,6 @@ Collector box → Alloy → Prometheus (central)
 - VPS docker needs `sudo` (or add user to `docker` group) — plain `docker` gets permission denied on `/var/run/docker.sock`
 
 ## Dokploy notes
-
-### Deploy on git push
-| App | Compose file | On `git push` to main |
-|---|---|---|
-| **NOC central** (`noc-app`, Prometheus, Grafana, …) | `docker-compose.yml` | **Auto-deploys** in Dokploy |
-| **Site-box** (collector-console + Alloy) | `docker-compose.site-box.yml` | **Manual deploy** in Dokploy (per site) |
-
-- Wallboard / noc-api changes: push is enough for central — wait for Dokploy rebuild.
-- Collector / `scanClients` / site-box `snmp.yml` / Console changes: push, then **manually Redeploy** the site-box app in Dokploy (Force-apply in Console if SNMP config changed).
-
-### Ops
 - Publish `noc-app:8080` and optionally `grafana:3000`
 - Keep Prometheus on `127.0.0.1:9090`; expose only via Cloudflare Tunnel `metrics.` + Access Service Token
 - Prometheus accepts out-of-order remote_write for **6h** via `storage.tsdb.out_of_order_time_window` in `prometheus.yml` (not a CLI flag) so site Alloy WAL replay / CF tunnel lag does not drop SNMP; recreate/reload prometheus after pull
@@ -327,7 +316,8 @@ Collector box → Alloy → Prometheus (central)
 - Volumes: `noc_runtime` (sites + retention flags), `noc_exports`, `prometheus_data`
 - Site-box: secrets in Dokploy **Environment** only; do not patch live `config.alloy` when Console sync is used
 - Site-box SNMP: never patch `integrations/snmp`; use site-box compose only (see CUTOVER_SITEBOX_SNMP.md)
-- **Dokploy Compose Path (site-box):** `docker-compose.site-box.yml` (repo root) — NOT `sites/templates/site-box/docker-compose.yml`
+- **Dokploy Compose Path (required):** `docker-compose.site-box.yml` (repo root) — NOT `sites/templates/site-box/docker-compose.yml`
 - Runtime config volume: `noc_sitebox_data` (Console `/data` + Alloy `/etc/alloy`) — survives Dokploy `code/` replacement; avoid bind-mounting `sites/templates/site-box` for `/data`
 - Console bakes `generate-config.sh` into image (`/opt/sitebox`), seeds the data volume on boot, `/api/ready` gates Alloy start
 - Token/devices volume: `noc_sitebox_state`
+- **Site-box auto-deploy:** enable Auto Deploy on the site-box Compose app (separate from noc-app); see `docs/DOKPLOY_SITEBOX_AUTODEPLOY.md`. Optional GH Action `.github/workflows/dokploy-sitebox.yml` + secret `DOKPLOY_SITEBOX_WEBHOOK_URLS` when the NUC Dokploy needs an explicit webhook

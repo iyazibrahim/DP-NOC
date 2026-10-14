@@ -12,6 +12,9 @@
 # Dokploy → Compose Path:
 #   docker-compose.site-box.yml
 #
+# Auto-deploy on git push: enable Auto Deploy on THIS Compose app (separate from
+# noc-app). See docs/DOKPLOY_SITEBOX_AUTODEPLOY.md
+#
 # Environment (required): CENTRAL_REMOTE_WRITE_URL, CF_ACCESS_CLIENT_ID,
 # CF_ACCESS_CLIENT_SECRET, SITE_NAME, HOST_DEVICE_ID, …
 

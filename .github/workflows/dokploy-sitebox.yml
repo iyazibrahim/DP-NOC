@@ -1,0 +1,59 @@
+# Trigger Dokploy site-box redeploy when collector compose/templates change.
+# Primary path: enable Auto Deploy on the site-box Compose app in Dokploy
+# (see docs/DOKPLOY_SITEBOX_AUTODEPLOY.md). This workflow is a backup when
+# GitHub cannot call Dokploy via the GitHub App (e.g. need an explicit webhook).
+#
+# Repo secret (optional):
+#   DOKPLOY_SITEBOX_WEBHOOK_URLS = comma-separated Dokploy Deployments webhook URLs
+#   (one per site-box Dokploy app / NUC)
+
+name: Dokploy site-box deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docker-compose.site-box.yml"
+      - "sites/templates/site-box/**"
+      - ".github/workflows/dokploy-sitebox.yml"
+  workflow_dispatch:
+
+jobs:
+  trigger-webhooks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST Dokploy site-box webhooks
+        env:
+          URLS: ${{ secrets.DOKPLOY_SITEBOX_WEBHOOK_URLS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${URLS:-}" ]; then
+            echo "::notice::Secret DOKPLOY_SITEBOX_WEBHOOK_URLS is empty."
+            echo "Enable Auto Deploy on the site-box Compose app in Dokploy, or set the secret"
+            echo "to comma-separated webhook URLs from Dokploy → Deployments."
+            echo "See docs/DOKPLOY_SITEBOX_AUTODEPLOY.md"
+            exit 0
+          fi
+          ok=0
+          fail=0
+          IFS=',' read -ra LIST <<< "$URLS"
+          for raw in "${LIST[@]}"; do
+            u="$(echo "$raw" | xargs)"
+            [ -z "$u" ] && continue
+            echo "Triggering: ${u%%\?*}"
+            if curl -fsS -X POST -H "Content-Type: application/json" -d '{}' "$u"; then
+              echo "OK"
+              ok=$((ok + 1))
+            else
+              echo "::error::Webhook failed for ${u%%\?*}"
+              fail=$((fail + 1))
+            fi
+          done
+          echo "Triggered=$ok failed=$fail"
+          if [ "$ok" -eq 0 ]; then
+            echo "::error::No webhooks succeeded"
+            exit 1
+          fi
+          if [ "$fail" -gt 0 ]; then
+            exit 1
+          fi

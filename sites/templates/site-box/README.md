@@ -48,6 +48,13 @@ docker-compose.site-box.yml
 
 Do **not** use `sites/templates/site-box/docker-compose.yml` in Dokploy. That file bind-mounts `.:/data` for local editing; Dokploy’s working directory is the monorepo root, and bind mounts to `code/` go **stale** when Dokploy replaces the checkout (Console sees empty `/data` → `config.alloy: No such file`).
 
+### Auto-deploy on git push
+
+noc-app and site-box are **different** Dokploy Compose apps. Site-box only redeploys on push if:
+
+1. This app has **Auto Deploy** ON, branch `main`, Compose Path as above, and  
+2. GitHub can reach that Dokploy (public URL / tunnel). NUC-only LAN panels often need a tunnel or the GitHub Action webhook secret — see [`docs/DOKPLOY_SITEBOX_AUTODEPLOY.md`](../../../docs/DOKPLOY_SITEBOX_AUTODEPLOY.md).
+
 Repo-root `docker-compose.site-box.yml` uses named volume **`noc_sitebox_data`** for runtime `config.alloy` / `snmp.yml` / `blackbox.yml`. Console seeds them from the image on boot; Alloy mounts the same volume at `/etc/alloy`.
 
 ### Environment only (survives redeploy)
