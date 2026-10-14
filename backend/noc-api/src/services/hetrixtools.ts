@@ -522,10 +522,9 @@ export async function getHetrixStatusForUrl(url: string): Promise<HetrixStatus |
       name: mon.name,
       target: mon.target,
       uptimeStatus,
-      uptimePct:
-        typeof mon.uptime === "number" && Number.isFinite(mon.uptime)
-          ? Math.round(mon.uptime * 10) / 10
-          : null,
+      uptimePct: normalizeUptimePct(
+        typeof mon.uptime === "number" && Number.isFinite(mon.uptime) ? mon.uptime : null
+      ),
       latencyMs: locTimes.length
         ? Math.round(locTimes.reduce((a, b) => a + b, 0) / locTimes.length)
         : null

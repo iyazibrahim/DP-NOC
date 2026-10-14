@@ -17,10 +17,10 @@ import { cn } from "@/lib/utils";
 const links = [
   { to: "/", label: "Dashboard", end: true, icon: LayoutDashboard },
   { to: "/maps", label: "Maps", icon: Map },
-  { to: "/sites", label: "Sites", icon: Building2 },
+  { to: "/sites", label: "Locations", icon: Building2 },
   { to: "/devices", label: "Devices", icon: HardDrive },
   { to: "/alerts", label: "Alerts", icon: Bell },
-  { to: "/websites", label: "Website checks", icon: Globe },
+  { to: "/websites", label: "Websites", icon: Globe },
   { to: "/settings", label: "Settings", icon: Settings }
 ];
 

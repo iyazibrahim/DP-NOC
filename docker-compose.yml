@@ -84,8 +84,12 @@ services:
       - JWT_SECRET=dev-noc-jwt-secret
       - JWT_ISSUER=noc-api
       - JWT_AUDIENCE=noc-wallboard
-      - OPERATOR_USERNAME=admin
-      - OPERATOR_PASSWORD=admin
+      - OPERATOR_USERNAME=${OPERATOR_USERNAME:-admin}
+      - OPERATOR_PASSWORD=${OPERATOR_PASSWORD:-admin}
+      # Optional aliases when OPERATOR_* is left at admin/admin
+      - ADMIN_USER=${ADMIN_USER:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - ADMIN_PASS=${ADMIN_PASS:-}
       - PROMETHEUS_BASE_URL=http://prometheus:9090
       - ALERTMANAGER_BASE_URL=http://alertmanager:9093
       - GRAFANA_PUBLIC_URL=http://localhost:3001

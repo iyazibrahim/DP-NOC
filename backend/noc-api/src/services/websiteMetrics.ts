@@ -272,12 +272,14 @@ export async function getWebsiteProbeMetrics(
 
     // HetrixTools overlay — prefer multi-location status when a monitor matches this URL
     try {
-      const { getHetrixStatusForUrl, hetrixEnabled } = await import("./hetrixtools");
+      const { getHetrixStatusForUrl, getHetrixUptimeReport, hetrixEnabled } = await import(
+        "./hetrixtools"
+      );
       if (hetrixEnabled()) {
         const hx = await getHetrixStatusForUrl(url);
         if (hx) {
           void persistHetrixId(siteId, url, hx.id);
-          if (hx.uptimePct != null) uptime24h = hx.uptimePct;
+          if (hx.uptimePct != null && hx.uptimePct > 0) uptime24h = hx.uptimePct;
           if (hx.latencyMs != null) latencyMs = hx.latencyMs;
           if (hx.uptimeStatus === "up") {
             if (state === "critical" || state === "unknown") {
@@ -289,6 +291,16 @@ export async function getWebsiteProbeMetrics(
           } else if (hx.uptimeStatus === "down") {
             state = "critical";
             notes = "HetrixTools: down";
+          }
+          // List path: when Prom is 0% but Hetrix is up, fill from report (same as detail)
+          if (
+            (hx.uptimeStatus === "up" || hx.uptimePct != null) &&
+            uptimeUnusable(uptime24h)
+          ) {
+            const report = await getHetrixUptimeReport(hx.id, { days: 2, hourlyStats: false });
+            if (report?.uptimePct != null && report.uptimePct > 0) {
+              uptime24h = report.uptimePct;
+            }
           }
         }
       }

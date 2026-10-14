@@ -11,6 +11,10 @@ const envSchema = z.object({
 
   OPERATOR_USERNAME: z.string().default("admin"),
   OPERATOR_PASSWORD: z.string().default("admin"),
+  /** Aliases used when OPERATOR_* is still the default admin/admin (Dokploy / ADMIN_* habit). */
+  ADMIN_USER: z.string().optional(),
+  ADMIN_PASSWORD: z.string().optional(),
+  ADMIN_PASS: z.string().optional(),
 
   WALLBOARD_ENABLED: z.coerce.boolean().default(true),
 
@@ -42,4 +46,31 @@ const envSchema = z.object({
 });
 
 export const env = envSchema.parse(process.env);
+
+const DEFAULT_OPERATOR_USER = "admin";
+const DEFAULT_OPERATOR_PASS = "admin";
+
+/**
+ * Prefer OPERATOR_* when customized. If still the built-in admin/admin defaults,
+ * fall back to ADMIN_USER + ADMIN_PASSWORD / ADMIN_PASS so Dokploy-style env names work.
+ * Grafana GF_SECURITY_ADMIN_* is intentionally ignored.
+ */
+export function resolveOperatorCredentials(): { username: string; password: string } {
+  const opUser = env.OPERATOR_USERNAME;
+  const opPass = env.OPERATOR_PASSWORD;
+  const stillDefault =
+    opUser === DEFAULT_OPERATOR_USER && opPass === DEFAULT_OPERATOR_PASS;
+
+  if (!stillDefault) {
+    return { username: opUser, password: opPass };
+  }
+
+  const adminUser = (env.ADMIN_USER || "").trim();
+  const adminPass = (env.ADMIN_PASSWORD || env.ADMIN_PASS || "").trim();
+  if (adminUser && adminPass) {
+    return { username: adminUser, password: adminPass };
+  }
+
+  return { username: opUser, password: opPass };
+}
 

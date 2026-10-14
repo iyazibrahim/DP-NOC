@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { Site } from "@/types";
 
 type WebsiteRow = {
@@ -74,6 +75,7 @@ export function WebsitesPage() {
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   async function reload() {
     if (!token) return;
@@ -91,7 +93,10 @@ export function WebsitesPage() {
   }
 
   useEffect(() => {
-    reload().catch((e) => setError(e instanceof Error ? e.message : "Load failed"));
+    setLoading(true);
+    reload()
+      .catch((e) => setError(e instanceof Error ? e.message : "Load failed"))
+      .finally(() => setLoading(false));
   }, [token, searchParams]);
 
   function openAdd() {
@@ -183,17 +188,25 @@ export function WebsitesPage() {
       ) : null}
       {msg ? <p className="mb-3 text-sm text-muted-foreground">{msg}</p> : null}
 
-      <DataTableCard title="Checked URLs" empty={false}>
+      {loading ? (
+        <div className="space-y-3 rounded-xl border border-border p-4">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : (
+      <DataTableCard title="Website checks" empty={false}>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Site</TableHead>
+              <TableHead>Location</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>URL</TableHead>
-              <TableHead>Latency</TableHead>
-              <TableHead>Uptime 24h</TableHead>
-              <TableHead>24h</TableHead>
-              <TableHead>State</TableHead>
+              <TableHead>Speed</TableHead>
+              <TableHead>Up today</TableHead>
+              <TableHead>Trend</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -205,7 +218,7 @@ export function WebsitesPage() {
                   <Button type="button" variant="link" className="h-auto p-0" onClick={openAdd}>
                     add one
                   </Button>{" "}
-                  or use a <Link to="/sites">site detail page</Link>.
+                  or open a <Link to="/sites">location</Link>.
                 </TableCell>
               </TableRow>
             ) : (
@@ -234,7 +247,7 @@ export function WebsitesPage() {
                         href={r.url}
                         target="_blank"
                         rel="noreferrer"
-                        title="Open live site"
+                        title="Open site"
                         onClick={(e) => e.stopPropagation()}
                       >
                         ↗
@@ -273,6 +286,7 @@ export function WebsitesPage() {
           </TableBody>
         </Table>
       </DataTableCard>
+      )}
 
       <Modal open={modalOpen} title={editingUrl ? "Edit website" : "Add website"} onClose={closeModal}>
         <form className="flex flex-col gap-3" onSubmit={onSubmit}>

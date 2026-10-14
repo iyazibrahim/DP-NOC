@@ -67,6 +67,19 @@ export type SiteNetworkSummary = {
     uploadSeries: SiteNetworkSeriesPoint[];
     message?: string;
   };
+  /** Period averages / peaks for the Total bandwidth card (Today / 7d / 30d). */
+  utilWindows?: {
+    "1d": SiteNetworkUtilWindow;
+    "7d": SiteNetworkUtilWindow;
+    "30d": SiteNetworkUtilWindow;
+  };
+};
+
+export type SiteNetworkUtilWindow = {
+  avgInPct: number | null;
+  avgOutPct: number | null;
+  peakInPct: number | null;
+  peakOutPct: number | null;
 };
 
 function parseSeries(data: PromQueryResult): SiteNetworkSeriesPoint[] {
@@ -313,6 +326,10 @@ export async function getSiteNetworkSummary(
 
   const speedtest = await collectSpeedtest(siteId, start, end, step);
 
+  const utilWindows = wanUplink
+    ? await collectUtilWindows(siteId, wanUplink.deviceId, wanUplink.ifName)
+    : undefined;
+
   return {
     siteId,
     wanUplink,
@@ -330,8 +347,47 @@ export async function getSiteNetworkSummary(
       }))
     },
     aps,
-    speedtest
+    speedtest,
+    utilWindows
   };
+}
+
+async function collectUtilWindows(
+  siteId: string,
+  deviceId: string,
+  ifName: string
+): Promise<NonNullable<SiteNetworkSummary["utilWindows"]>> {
+  const utilIn = buildIfUtilQuery("in", siteId, deviceId, ifName);
+  const utilOut = buildIfUtilQuery("out", siteId, deviceId, ifName);
+
+  const roundPct = (v: number | null) =>
+    v != null && Number.isFinite(v) ? Math.round(v * 10) / 10 : null;
+
+  const queryWindow = async (range: string): Promise<SiteNetworkUtilWindow> => {
+    try {
+      const [avgIn, avgOut, peakIn, peakOut] = await Promise.all([
+        parseFirstVectorValue(await promQuery(`avg_over_time((${utilIn})[${range}:1h])`)),
+        parseFirstVectorValue(await promQuery(`avg_over_time((${utilOut})[${range}:1h])`)),
+        parseFirstVectorValue(await promQuery(`max_over_time((${utilIn})[${range}:1h])`)),
+        parseFirstVectorValue(await promQuery(`max_over_time((${utilOut})[${range}:1h])`))
+      ]);
+      return {
+        avgInPct: roundPct(avgIn),
+        avgOutPct: roundPct(avgOut),
+        peakInPct: roundPct(peakIn),
+        peakOutPct: roundPct(peakOut)
+      };
+    } catch {
+      return { avgInPct: null, avgOutPct: null, peakInPct: null, peakOutPct: null };
+    }
+  };
+
+  const [d1, d7, d30] = await Promise.all([
+    queryWindow("1d"),
+    queryWindow("7d"),
+    queryWindow("30d")
+  ]);
+  return { "1d": d1, "7d": d7, "30d": d30 };
 }
 
 function isApLikeDevice(d: { type: string; kind: string; vendor: string }): boolean {

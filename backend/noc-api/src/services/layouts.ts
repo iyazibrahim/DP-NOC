@@ -105,3 +105,147 @@ export function resetLayout(userId: string) {
   saveLayout(userId, layout);
   return layout;
 }
+
+/** Site Network tab widgets (per-user, per-site). */
+export type SiteNetworkWidgetType =
+  | "kpi_strip"
+  | "wan_status"
+  | "wan_util_summary"
+  | "wan_bandwidth_chart"
+  | "speedtest_chart"
+  | "ap_clients_bar"
+  | "ap_clients_pie"
+  | "ap_traffic_bar"
+  | "ap_traffic_pie"
+  | "ap_table";
+
+export type SiteNetworkSection = "status" | "traffic" | "wireless";
+
+export type SiteNetworkWidget = {
+  i: string;
+  type: SiteNetworkWidgetType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  config?: Record<string, string>;
+};
+
+export type SiteNetworkLayout = {
+  version: 1;
+  widgets: SiteNetworkWidget[];
+};
+
+const DEFAULT_SITE_NETWORK_LAYOUT: SiteNetworkLayout = {
+  version: 1,
+  widgets: [
+    { i: "kpi", type: "kpi_strip", x: 0, y: 0, w: 12, h: 2, config: { section: "status" } },
+    { i: "wan_note", type: "wan_status", x: 0, y: 2, w: 12, h: 1, config: { section: "status" } },
+    {
+      i: "util",
+      type: "wan_util_summary",
+      x: 0,
+      y: 3,
+      w: 4,
+      h: 4,
+      config: { section: "traffic" }
+    },
+    {
+      i: "wan_chart",
+      type: "wan_bandwidth_chart",
+      x: 4,
+      y: 3,
+      w: 8,
+      h: 5,
+      config: { section: "traffic" }
+    },
+    {
+      i: "speed",
+      type: "speedtest_chart",
+      x: 0,
+      y: 8,
+      w: 12,
+      h: 5,
+      config: { section: "traffic" }
+    },
+    {
+      i: "ap_bar",
+      type: "ap_clients_bar",
+      x: 0,
+      y: 13,
+      w: 6,
+      h: 5,
+      config: { section: "wireless" }
+    },
+    {
+      i: "ap_pie",
+      type: "ap_clients_pie",
+      x: 6,
+      y: 13,
+      w: 6,
+      h: 5,
+      config: { section: "wireless" }
+    },
+    {
+      i: "ap_tbar",
+      type: "ap_traffic_bar",
+      x: 0,
+      y: 18,
+      w: 6,
+      h: 5,
+      config: { section: "wireless" }
+    },
+    {
+      i: "ap_tpie",
+      type: "ap_traffic_pie",
+      x: 6,
+      y: 18,
+      w: 6,
+      h: 5,
+      config: { section: "wireless" }
+    },
+    { i: "ap_table", type: "ap_table", x: 0, y: 23, w: 12, h: 5, config: { section: "wireless" } }
+  ]
+};
+
+function siteNetworkLayoutPath(userId: string, siteId: string) {
+  const safeUser = userId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const safeSite = siteId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return path.join(layoutsDir(), `${safeUser}__siteNetwork__${safeSite}.json`);
+}
+
+export function getDefaultSiteNetworkLayout(): SiteNetworkLayout {
+  return structuredClone(DEFAULT_SITE_NETWORK_LAYOUT);
+}
+
+export function loadSiteNetworkLayout(userId: string, siteId: string): SiteNetworkLayout {
+  const file = siteNetworkLayoutPath(userId, siteId);
+  if (!fs.existsSync(file)) {
+    return getDefaultSiteNetworkLayout();
+  }
+  try {
+    const raw = fs.readFileSync(file, "utf8");
+    const parsed = JSON.parse(raw) as SiteNetworkLayout;
+    if (!parsed?.widgets || !Array.isArray(parsed.widgets)) {
+      return getDefaultSiteNetworkLayout();
+    }
+    return parsed;
+  } catch {
+    return getDefaultSiteNetworkLayout();
+  }
+}
+
+export function saveSiteNetworkLayout(
+  userId: string,
+  siteId: string,
+  layout: SiteNetworkLayout
+) {
+  const file = siteNetworkLayoutPath(userId, siteId);
+  fs.writeFileSync(file, JSON.stringify(layout, null, 2), "utf8");
+}
+
+export function resetSiteNetworkLayout(userId: string, siteId: string) {
+  const layout = getDefaultSiteNetworkLayout();
+  saveSiteNetworkLayout(userId, siteId, layout);
+  return layout;
+}

@@ -83,7 +83,7 @@ export function SitesPage() {
   return (
     <div className="page">
       <PageHeader
-        title="Sites"
+        title="Locations"
         subtitle="All monitored locations"
         actions={
           <Button

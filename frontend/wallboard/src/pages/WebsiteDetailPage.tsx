@@ -304,7 +304,7 @@ export function WebsiteDetailPage() {
               Edit
             </Button>
             <Button type="button" variant="outline" onClick={() => void onApply()} disabled={!detail || busy}>
-              Start checking
+              Start checks
             </Button>
             <Button type="button" variant="outline" onClick={() => void onDelete()} disabled={!detail || busy}>
               Remove
@@ -312,7 +312,7 @@ export function WebsiteDetailPage() {
             {detail ? (
               <Button asChild>
                 <a href={detail.url} target="_blank" rel="noreferrer" className="text-primary-foreground no-underline hover:no-underline">
-                  Open URL
+                  Open site
                 </a>
               </Button>
             ) : null}
@@ -328,51 +328,51 @@ export function WebsiteDetailPage() {
       {msg ? <p className="mb-3 text-sm text-muted-foreground">{msg}</p> : null}
 
       {detail?.metricsSource === "hetrix" || detail?.metricsSource === "mixed" ? (
-        <p className="mb-3 text-xs text-muted-foreground">
+        <p className="mb-3 text-sm text-muted-foreground">
           {detail.metricsSource === "hetrix"
-            ? "History from HetrixTools (local blackbox probe empty)."
-            : "Mixed history — some metrics from HetrixTools where local probe data was missing."}
+            ? "Numbers from the backup checker — our own check could not see this site."
+            : "Backup checker filled in gaps where our own check had no data."}
         </p>
       ) : null}
 
       <KpiStrip>
         <KpiChip
-          label="State"
+          label="Status"
           value={detail ? <StatusBadge state={detail.state} notes={detail.notes} /> : "—"}
         />
-        <KpiChip label="Latency" value={detail?.latencyMs != null ? `${detail.latencyMs} ms` : "—"} />
+        <KpiChip label="Speed" value={detail?.latencyMs != null ? `${detail.latencyMs} ms` : "—"} />
         <KpiChip
-          label={`Avg / max (${range})`}
+          label={`Avg / peak (${range})`}
           value={`${detail?.latencyAvgMs != null ? detail.latencyAvgMs : "—"} / ${
             detail?.latencyMaxMs != null ? `${detail.latencyMaxMs} ms` : "—"
           }`}
         />
         <KpiChip
-          label={`Uptime ${range}`}
+          label={`Up (${range})`}
           value={detail?.uptimeRangePct != null ? `${detail.uptimeRangePct}%` : "—"}
         />
         <KpiChip
-          label="Uptime 24h / 7d / 30d"
+          label="Up today / 7d / 30d"
           value={`${detail?.uptime24h != null ? `${detail.uptime24h}%` : "—"} / ${
             detail?.uptime7d != null ? `${detail.uptime7d}%` : "—"
           } / ${detail?.uptime30d != null ? `${detail.uptime30d}%` : "—"}`}
         />
-        <KpiChip label="Last check" value={formatAge(detail?.lastCheckAt ?? null)} />
+        <KpiChip label="Checked" value={formatAge(detail?.lastCheckAt ?? null)} />
         <KpiChip label="Outages" value={detail?.outages.length ?? 0} />
         {detail?.metricsSource === "hetrix" || detail?.metricsSource === "mixed" ? (
           <KpiChip
             label="Source"
-            value={detail.metricsSource === "hetrix" ? "HetrixTools" : "Mixed"}
+            value={detail.metricsSource === "hetrix" ? "Backup" : "Mixed"}
           />
         ) : null}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Range</span>
+          <span className="text-sm text-muted-foreground">Range</span>
           <RangeToggle value={range} onChange={(v) => setRange(v as DetailRange)} />
         </div>
       </KpiStrip>
 
       <div className="websiteDetailCharts mb-4 grid gap-3 md:grid-cols-2">
-        <MetricChartFrame title={`Availability (${range})`}>
+        <MetricChartFrame title={`Up time (${range})`}>
           <div className="websiteChartInner h-[220px]">
             {availChart.length < 2 ? (
               <p className="text-sm text-muted-foreground">No availability history yet.</p>
@@ -400,10 +400,10 @@ export function WebsiteDetailPage() {
           </div>
         </MetricChartFrame>
 
-        <MetricChartFrame title={`Latency ms (${range})`}>
+        <MetricChartFrame title={`Speed (${range})`}>
           <div className="websiteChartInner h-[220px]">
             {latencyChart.length < 2 ? (
-              <p className="text-sm text-muted-foreground">No latency history yet.</p>
+              <p className="text-sm text-muted-foreground">No speed history yet.</p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={latencyChart}>
@@ -412,7 +412,7 @@ export function WebsiteDetailPage() {
                   <YAxis tick={{ fontSize: 11 }} width={44} />
                   <Tooltip
                     {...darkTooltipProps()}
-                    formatter={(value) => [formatMs(Number(value)), "Latency"]}
+                    formatter={(value) => [formatMs(Number(value)), "Speed"]}
                   />
                   <Line
                     type="monotone"
@@ -430,14 +430,14 @@ export function WebsiteDetailPage() {
       </div>
 
       <div className="websiteDetailCharts mb-4 grid gap-3 md:grid-cols-2">
-        <TrendBars title="Weekly uptime trend (daily)" bars={detail?.weeklyTrend ?? []} />
-        <TrendBars title="Monthly uptime trend (daily)" bars={detail?.monthlyTrend ?? []} />
+        <TrendBars title="Last 7 days" bars={detail?.weeklyTrend ?? []} />
+        <TrendBars title="Last 30 days" bars={detail?.monthlyTrend ?? []} />
       </div>
 
       <Card className="mb-4">
         <CardHeader className="py-3">
-          <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Outage timeline
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Outages
           </CardTitle>
         </CardHeader>
         <CardContent>

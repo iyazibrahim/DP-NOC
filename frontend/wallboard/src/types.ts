@@ -128,6 +128,34 @@ export type DashboardLayout = {
   widgets: DashboardWidget[];
 };
 
+export type SiteNetworkWidgetType =
+  | "kpi_strip"
+  | "wan_status"
+  | "wan_util_summary"
+  | "wan_bandwidth_chart"
+  | "speedtest_chart"
+  | "ap_clients_bar"
+  | "ap_clients_pie"
+  | "ap_traffic_bar"
+  | "ap_traffic_pie"
+  | "ap_table";
+
+export type SiteNetworkWidget = {
+  i: string;
+  type: SiteNetworkWidgetType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Optional: section (status|traffic|wireless), title, collapsed ("0"|"1") */
+  config?: Record<string, string>;
+};
+
+export type SiteNetworkLayout = {
+  version: 1;
+  widgets: SiteNetworkWidget[];
+};
+
 export type DeviceRow = SiteDevice & {
   siteId: string;
   siteName: string;

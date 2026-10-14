@@ -253,12 +253,25 @@ Collector box → Alloy → Prometheus (central)
     - Incidents: `Internet DOWN — {site}`, `Collector offline — {site}`, `Website DOWN — {name}`, `Location health critical — {site}` (no generic Site DOWN); per-URL website keys
     - Website detail: harden Hetrix daily parse + UTC midnight align; synthesize weekly/monthly bars from summary/downtimes when daily array missing
 
+  - **Login + uptime list + site network layout (2026-10-14)**
+    - Login restyled (Welcome back, empty fields, cyan Sign in); auth accepts `OPERATOR_*` via compose interpolation + `ADMIN_*` aliases
+    - Website list uptime uses Hetrix report when Prom is 0% but Hetrix is up (Eventree list vs detail mismatch)
+    - Site Network tab: per-user/per-site RGL layout (Status / Traffic / Wireless), collapse, Line use card for Today / 7d / 30d
+    - Plain-language labels, cyan selected toggles, consistent pill padding, loading skeletons
+
+## Auth (operator login)
+- Wallboard login uses `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` on **noc-app**
+- Compose passes them through: `OPERATOR_USERNAME=${OPERATOR_USERNAME:-admin}` (and password)
+- If `OPERATOR_*` is still the default `admin`/`admin`, `ADMIN_USER` + `ADMIN_PASSWORD` (or `ADMIN_PASS`) are accepted as aliases — **not** Grafana `GF_SECURITY_ADMIN_*`
+- Login form starts empty (no prefilled password)
+
 ## HetrixTools
 - Env on **noc-app** (Dokploy Environment, then redeploy): `HETRIXTOOLS_API_TOKEN`, optional `HETRIXTOOLS_LOCATIONS=sgp,ams,nyc`, `HETRIXTOOLS_CONTACT_LIST`
 - Compose must pass them through: `HETRIXTOOLS_API_TOKEN=${HETRIXTOOLS_API_TOKEN:-}` (commented lines never reach the container even if Dokploy has the var)
 - Without token, create/delete/status overlay are no-ops (silent)
 - Live overlay: list/detail **and site overall / incidents** prefer Hetrix up when Blackbox disagrees (CF/WAF)
 - **History fallback:** website detail fills empty Prom uptime / availability / outages / daily trends from Hetrix `report` + `downtimes` APIs. Also **replaces** Prom history when blackbox is all-failures (`probe_success=0`, e.g. CF/WAF) while Hetrix says up (Eventree case). If daily points missing, synthesize flat weekly/monthly bars from report uptime % or downtime buckets. UI shows Source chip when `metricsSource` is `hetrix` or `mixed`. History responses cached ~3 min.
+- **List uptime:** `getWebsiteProbeMetrics` also loads Hetrix report when Prom/status uptime is 0% but Hetrix says up — so Eventree list “Up today” matches detail
 - Check: Settings → Status strip (Hetrix pill), or `sudo docker exec noc_app printenv HETRIXTOOLS_API_TOKEN`
 - VPS docker needs `sudo` (or add user to `docker` group) — plain `docker` gets permission denied on `/var/run/docker.sock`
 

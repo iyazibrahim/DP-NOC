@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import express from "express";
-import { requireJwt } from "../middleware/auth";
+import { z } from "zod";
+import { requireJwt, type AuthenticatedRequest } from "../middleware/auth";
 import {
   siteList,
   getSiteById,
@@ -29,6 +30,12 @@ import { applyWebsiteProbes } from "../services/websiteProbes";
 import { discoverDevicesForSite } from "../services/deviceDiscovery";
 import { addGlobalWebsite, removeGlobalWebsite, updateGlobalWebsite, getGlobalWebsites } from "../data/globalWebsites";
 import { getSiteNetworkSummary, listDeviceInterfaces } from "../services/siteNetwork";
+import {
+  getDefaultSiteNetworkLayout,
+  loadSiteNetworkLayout,
+  saveSiteNetworkLayout,
+  resetSiteNetworkLayout
+} from "../services/layouts";
 
 export const sitesRouter = express.Router();
 
@@ -169,6 +176,101 @@ sitesRouter.get("/:id/network", requireJwt(["operator", "wallboard"]), async (re
     });
   }
 });
+
+const siteNetworkWidgetSchema = z.object({
+  i: z.string().min(1),
+  type: z.enum([
+    "kpi_strip",
+    "wan_status",
+    "wan_util_summary",
+    "wan_bandwidth_chart",
+    "speedtest_chart",
+    "ap_clients_bar",
+    "ap_clients_pie",
+    "ap_traffic_bar",
+    "ap_traffic_pie",
+    "ap_table"
+  ]),
+  x: z.preprocess((v) => {
+    const n = Number(v);
+    return v == null || !Number.isFinite(n) ? 0 : Math.trunc(n);
+  }, z.number().int().min(0)),
+  y: z.preprocess((v) => {
+    const n = Number(v);
+    return v == null || !Number.isFinite(n) ? 0 : Math.trunc(n);
+  }, z.number().int().min(0)),
+  w: z.preprocess((v) => {
+    const n = Number(v);
+    return v == null || !Number.isFinite(n) || n < 1 ? 4 : Math.trunc(n);
+  }, z.number().int().min(1).max(12)),
+  h: z.preprocess((v) => {
+    const n = Number(v);
+    return v == null || !Number.isFinite(n) || n < 1 ? 4 : Math.trunc(n);
+  }, z.number().int().min(1).max(24)),
+  config: z.record(z.string()).optional()
+});
+
+const siteNetworkLayoutSchema = z.object({
+  version: z.literal(1),
+  widgets: z.array(siteNetworkWidgetSchema)
+});
+
+sitesRouter.get(
+  "/:id/network/layout",
+  requireJwt(["operator", "wallboard"]),
+  (req: AuthenticatedRequest, res: Response) => {
+    const siteId = req.params.id;
+    if (!getSiteById(siteId)) {
+      return res.status(404).json({ error: "Site not found" });
+    }
+    const userId = req.auth?.sub ?? "anonymous";
+    return res.json({ layout: loadSiteNetworkLayout(userId, siteId) });
+  }
+);
+
+sitesRouter.put(
+  "/:id/network/layout",
+  requireJwt(["operator", "wallboard"]),
+  (req: AuthenticatedRequest, res: Response) => {
+    const siteId = req.params.id;
+    if (!getSiteById(siteId)) {
+      return res.status(404).json({ error: "Site not found" });
+    }
+    const parsed = siteNetworkLayoutSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Invalid layout", details: parsed.error.flatten() });
+    }
+    const userId = req.auth?.sub ?? "anonymous";
+    saveSiteNetworkLayout(userId, siteId, parsed.data);
+    return res.json({ layout: parsed.data });
+  }
+);
+
+sitesRouter.post(
+  "/:id/network/layout/reset",
+  requireJwt(["operator", "wallboard"]),
+  (req: AuthenticatedRequest, res: Response) => {
+    const siteId = req.params.id;
+    if (!getSiteById(siteId)) {
+      return res.status(404).json({ error: "Site not found" });
+    }
+    const userId = req.auth?.sub ?? "anonymous";
+    const layout = resetSiteNetworkLayout(userId, siteId);
+    return res.json({ layout });
+  }
+);
+
+sitesRouter.get(
+  "/:id/network/layout/default",
+  requireJwt(["operator", "wallboard"]),
+  (req: AuthenticatedRequest, res: Response) => {
+    const siteId = req.params.id;
+    if (!getSiteById(siteId)) {
+      return res.status(404).json({ error: "Site not found" });
+    }
+    return res.json({ layout: getDefaultSiteNetworkLayout() });
+  }
+);
 
 sitesRouter.get(
   "/:id/devices/:deviceId/interfaces",

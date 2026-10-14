@@ -9,6 +9,7 @@ import type {
   RetentionConfig,
   Site,
   SiteDevice,
+  SiteNetworkLayout,
   SiteStatus,
   StatusMeta,
   NotificationsConfig,
@@ -108,6 +109,13 @@ export async function updateSite(
   });
 }
 
+export type SiteNetworkUtilWindow = {
+  avgInPct: number | null;
+  avgOutPct: number | null;
+  peakInPct: number | null;
+  peakOutPct: number | null;
+};
+
 export type SiteNetworkSummary = {
   siteId: string;
   wanUplink: { deviceId: string; ifName: string } | null;
@@ -149,6 +157,11 @@ export type SiteNetworkSummary = {
     uploadSeries: Array<{ ts: number; value: number }>;
     message?: string;
   };
+  utilWindows?: {
+    "1d": SiteNetworkUtilWindow;
+    "7d": SiteNetworkUtilWindow;
+    "30d": SiteNetworkUtilWindow;
+  };
 };
 
 export async function getSiteNetwork(token: string, siteId: string, hours = 24) {
@@ -156,6 +169,31 @@ export async function getSiteNetwork(token: string, siteId: string, hours = 24) 
     `/api/sites/${siteId}/network?hours=${hours}`,
     { headers: authHeaders(token) }
   );
+}
+
+export async function getSiteNetworkLayout(token: string, siteId: string) {
+  return fetchJson<{ layout: SiteNetworkLayout }>(`/api/sites/${siteId}/network/layout`, {
+    headers: authHeaders(token)
+  });
+}
+
+export async function saveSiteNetworkLayout(
+  token: string,
+  siteId: string,
+  layout: SiteNetworkLayout
+) {
+  return fetchJson<{ layout: SiteNetworkLayout }>(`/api/sites/${siteId}/network/layout`, {
+    method: "PUT",
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify(layout)
+  });
+}
+
+export async function resetSiteNetworkLayout(token: string, siteId: string) {
+  return fetchJson<{ layout: SiteNetworkLayout }>(`/api/sites/${siteId}/network/layout/reset`, {
+    method: "POST",
+    headers: authHeaders(token)
+  });
 }
 
 export async function getDeviceInterfaces(token: string, siteId: string, deviceId: string) {

@@ -32,7 +32,7 @@ export function StatusBadge({
       variant="outline"
       title={notes}
       className={cn(
-        "h-6 rounded-full px-2.5 font-mono text-[11px] font-bold uppercase tracking-wide",
+        "h-6 rounded-full px-3 font-mono text-[11px] font-bold uppercase tracking-wide",
         stateStyles[s] ?? stateStyles.unknown,
         className
       )}

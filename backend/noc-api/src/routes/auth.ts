@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import express from "express";
 import { z } from "zod";
-import { env } from "../env";
+import { resolveOperatorCredentials } from "../env";
 import { signJwt } from "../auth/jwt";
 import { requireJwt } from "../middleware/auth";
 
@@ -19,10 +19,8 @@ authRouter.post("/login", async (req: Request, res: Response) => {
   }
 
   const { username, password } = parsed.data;
-  if (
-    username !== env.OPERATOR_USERNAME ||
-    password !== env.OPERATOR_PASSWORD
-  ) {
+  const creds = resolveOperatorCredentials();
+  if (username !== creds.username || password !== creds.password) {
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
