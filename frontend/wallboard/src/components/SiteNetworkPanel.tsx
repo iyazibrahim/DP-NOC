@@ -112,10 +112,6 @@ function formatAge(tsSec: number | null): string {
   return `${Math.floor(age / 3600)}h ago`;
 }
 
-function formatPct(v: number | null): string {
-  return v != null && Number.isFinite(v) ? `${v}%` : "—";
-}
-
 /** Format transferred octets as human volume (GB used, etc.). */
 function formatBytesUsed(bytes: number | null): string {
   if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return "—";
@@ -470,9 +466,9 @@ export function SiteNetworkPanel({ token, site }: Props) {
             <div className="healthChip">
               <span className="healthChipLabel">Line in use</span>
               <strong className="healthChipValue">
-                {formatPct(network?.traffic.utilInPct ?? null)}
+                {formatBitrate(network?.traffic.inBps ?? null)}
                 {" / "}
-                {formatPct(network?.traffic.utilOutPct ?? null)}
+                {formatBitrate(network?.traffic.outBps ?? null)}
               </strong>
             </div>
             <div className="healthChip">

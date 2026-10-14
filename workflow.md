@@ -289,7 +289,8 @@ Collector box → Alloy → Prometheus (central)
   - Omada MIB is MAC-only (no hostname/SSID/SNR/link/In/Out via SNMP) — Clients tab notes that when applicable
 - [x] **Fortigate Bandwidth overall → Mbps (2026-10-14)**
   - Preset `if_util_max_pct` now returns `max(in,out)` bitrate (unit `bps`) instead of % of `ifHighSpeed`/`ifSpeed`
-  - Network status chips unchanged: Download/Upload = tagged WAN `rate(ifHC*Octets)*8`; Line in use = those rates ÷ capacity × 100
+  - Network status chips: Download/Upload = tagged WAN `rate(ifHC*Octets)*8`; Line in use = same rates as Mbps (not %)
+  - Follow-up: tooltip no longer appends `%` to raw bps; chart margins + wider Y-axis so labels/bars are not clipped
 
 ## Auth (operator login)
 - Wallboard login uses `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` on **noc-app**

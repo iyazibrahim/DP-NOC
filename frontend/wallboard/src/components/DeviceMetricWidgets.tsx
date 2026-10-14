@@ -76,6 +76,17 @@ function toScaledBitrate(value: number, scale: "Gbps" | "Mbps" | "Kbps"): number
   return value / 1000;
 }
 
+/** Overall bandwidth preset used to be %; always treat as bitrate. */
+function resolveMetricUnit(metricId: string, presetUnit: string | undefined, values: number[]): string {
+  if (metricId === "if_util_max_pct" || metricId === "if_max_bps") return "bps";
+  const unit = presetUnit ?? "";
+  // Stale API still saying "%" while series is raw bps (e.g. 9e7)
+  if (unit === "%" && values.some((v) => Number.isFinite(v) && Math.abs(v) > 1000)) {
+    return "bps";
+  }
+  return unit;
+}
+
 function formatMetricValue(value: number, unit?: string): string {
   if (!Number.isFinite(value)) return "—";
   if (unit === "bps") {
@@ -169,14 +180,19 @@ export function DeviceMetricChart({
   const preset = presets.find((p) => p.id === metric);
   const customTitle = title?.trim();
   const label = customTitle || preset?.label || metric;
-  const unit = preset?.unit ?? "";
   // Chrome already shows config.title — avoid stacking the same label again.
   const showInnerTitle = !customTitle;
+  const unit = useMemo(
+    () => resolveMetricUnit(metric, preset?.unit, points.map((p) => p.v)),
+    [metric, preset?.unit, points]
+  );
   const bitrateScale = useMemo(
     () => (unit === "bps" ? bitrateScaleForSeries(points.map((p) => p.v)) : undefined),
     [unit, points]
   );
   const unitBadge = chartUnitBadge(unit, bitrateScale);
+  const chartMargin = { top: 8, right: 16, left: 4, bottom: 4 };
+  const yAxisWidth = unit === "bps" ? 52 : 48;
 
   useEffect(() => {
     if (!token || !siteId || !deviceId || !metric) return;
@@ -241,12 +257,12 @@ export function DeviceMetricChart({
       ) : (
         <div className="chartFlexFill">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={points}>
+            <AreaChart data={points} margin={chartMargin}>
               <CartesianGrid stroke="rgba(148,163,184,0.12)" strokeDasharray="3 3" />
               <XAxis dataKey="t" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" />
               <YAxis
                 tick={{ fill: "#94a3b8", fontSize: 10 }}
-                width={44}
+                width={yAxisWidth}
                 tickFormatter={(v) => formatYAxisTick(v, unit, bitrateScale)}
               />
               <Tooltip content={<ChartTooltip unit={unit} />} />
@@ -280,13 +296,18 @@ export function DeviceMetricBar({
   const preset = presets.find((p) => p.id === metric);
   const customTitle = title?.trim();
   const label = customTitle || preset?.label || metric;
-  const unit = preset?.unit ?? "";
   const showInnerTitle = !customTitle;
+  const unit = useMemo(
+    () => resolveMetricUnit(metric, preset?.unit, points.map((p) => p.v)),
+    [metric, preset?.unit, points]
+  );
   const bitrateScale = useMemo(
     () => (unit === "bps" ? bitrateScaleForSeries(points.map((p) => p.v)) : undefined),
     [unit, points]
   );
   const unitBadge = chartUnitBadge(unit, bitrateScale);
+  const chartMargin = { top: 8, right: 16, left: 4, bottom: 4 };
+  const yAxisWidth = unit === "bps" ? 52 : 48;
 
   useEffect(() => {
     if (!token || !siteId || !deviceId || !metric) return;
@@ -351,12 +372,12 @@ export function DeviceMetricBar({
       ) : (
         <div className="chartFlexFill">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={points}>
+            <BarChart data={points} margin={chartMargin}>
               <CartesianGrid stroke="rgba(148,163,184,0.12)" strokeDasharray="3 3" />
               <XAxis dataKey="t" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" />
               <YAxis
                 tick={{ fill: "#94a3b8", fontSize: 10 }}
-                width={44}
+                width={yAxisWidth}
                 tickFormatter={(v) => formatYAxisTick(v, unit, bitrateScale)}
               />
               <Tooltip content={<ChartTooltip unit={unit} />} />
@@ -391,7 +412,7 @@ export function DeviceStatGauge({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const preset = presets.find((p) => p.id === metric);
-  const unit = preset?.unit ?? "";
+  const unit = resolveMetricUnit(metric, preset?.unit, value != null ? [value] : []);
   const isBool = BOOLEAN_METRICS.has(metric);
   const customTitle = title?.trim();
   const displayTitle = customTitle || preset?.label || metric;

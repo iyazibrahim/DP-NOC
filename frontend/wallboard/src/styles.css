@@ -1381,6 +1381,8 @@ textarea {
   flex: 1 1 auto;
   min-height: 80px;
   width: 100%;
+  padding: 0 2px 4px;
+  box-sizing: border-box;
 }
 
 .metricChartWidget {
@@ -1390,6 +1392,8 @@ textarea {
   height: 100%;
   min-height: 0;
   width: 100%;
+  padding: 2px 4px 4px;
+  box-sizing: border-box;
 }
 
 .metricChartWidget .widgetTitle {
@@ -1639,6 +1643,8 @@ textarea {
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 14px;
+  padding: 4px 2px;
+  box-sizing: border-box;
 }
 
 .websiteUrlLink {
