@@ -88,9 +88,9 @@ export const METRIC_PRESETS: MetricPreset[] = [
   },
   {
     id: "if_util_max_pct",
-    label: "Bandwidth utilization (overall)",
+    label: "Bandwidth (overall)",
     kind: "network",
-    unit: "%",
+    unit: "bps",
     query: `IF_UTIL_MAX_PLACEHOLDER`
   },
   {
@@ -317,10 +317,10 @@ export function buildIfUtilQuery(
 ) * 100`;
 }
 
+/** Peak of device-summed in/out bitrates (Mbps-scale chart), not % of capacity. */
 export function buildIfUtilMaxQuery(siteId: string, deviceId: string): string {
-  const cap = buildCapacityDenom(siteId, deviceId);
-  const inQ = `(sum(rate(ifHCInOctets{site="${siteId}",device="${deviceId}"}[5m]) * 8) / ${cap}) * 100`;
-  const outQ = `(sum(rate(ifHCOutOctets{site="${siteId}",device="${deviceId}"}[5m]) * 8) / ${cap}) * 100`;
+  const inQ = `sum(rate(ifHCInOctets{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
+  const outQ = `sum(rate(ifHCOutOctets{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
   return `max(
   label_replace(${inQ}, "side", "in", "", "")
   or
@@ -550,10 +550,16 @@ export function listPresetsForApi(): MetricPreset[] {
         query: `sum(rate(ifHCOutOctets{site,device}[5m]) * 8)`
       };
     }
-    if (p.id === "if_util_in_pct" || p.id === "if_util_out_pct" || p.id === "if_util_max_pct") {
+    if (p.id === "if_util_in_pct" || p.id === "if_util_out_pct") {
       return {
         ...p,
         query: `(sum(rate(ifHC*Octets[5m])*8) / capacity) * 100 — prefers ifHighSpeed`
+      };
+    }
+    if (p.id === "if_util_max_pct") {
+      return {
+        ...p,
+        query: `max(sum(rate(ifHCInOctets[5m])*8), sum(rate(ifHCOutOctets[5m])*8))`
       };
     }
     if (p.id === "if_capacity_bps") {

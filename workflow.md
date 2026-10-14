@@ -287,6 +287,9 @@ Collector box → Alloy → Prometheus (central)
   - Root cause: Omada `macAddress` is OctetString Hex-STRING of ASCII `AA-BB-…`, not 6-byte binary; UI showed raw `"31 38 2D…"`
   - Fix: decode binary (6 bytes) vs ASCII Hex-STRING in collector `formatMac` + noc-api `formatMacLabel`
   - Omada MIB is MAC-only (no hostname/SSID/SNR/link/In/Out via SNMP) — Clients tab notes that when applicable
+- [x] **Fortigate Bandwidth overall → Mbps (2026-10-14)**
+  - Preset `if_util_max_pct` now returns `max(in,out)` bitrate (unit `bps`) instead of % of `ifHighSpeed`/`ifSpeed`
+  - Network status chips unchanged: Download/Upload = tagged WAN `rate(ifHC*Octets)*8`; Line in use = those rates ÷ capacity × 100
 
 ## Auth (operator login)
 - Wallboard login uses `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` on **noc-app**
