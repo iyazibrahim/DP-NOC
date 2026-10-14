@@ -80,6 +80,10 @@ export type SiteNetworkUtilWindow = {
   avgOutPct: number | null;
   peakInPct: number | null;
   peakOutPct: number | null;
+  /** Total octets downloaded (in) over the window. */
+  inBytes: number | null;
+  /** Total octets uploaded (out) over the window. */
+  outBytes: number | null;
 };
 
 function parseSeries(data: PromQueryResult): SiteNetworkSeriesPoint[] {
@@ -169,6 +173,28 @@ function buildIfUtilQuery(
 ): string {
   const cap = `clamp_min((${buildIfCapacityQuery(siteId, deviceId, ifName)}), 1)`;
   return `(${buildIfTrafficQuery(direction, siteId, deviceId, ifName)} / ${cap}) * 100`;
+}
+
+/** Total octets transferred over `range` (e.g. 24h, 7d, 30d) on the tagged WAN if. */
+function buildIfVolumeQuery(
+  direction: "in" | "out",
+  siteId: string,
+  deviceId: string,
+  ifName: string,
+  range: string
+): string {
+  const octets = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
+  const s = escapePromLabel(siteId);
+  const d = escapePromLabel(deviceId);
+  const indexOnly = /^ifIndex:(\d+)$/i.exec(ifName.trim());
+  if (indexOnly) {
+    return `sum(increase(${octets}{site="${s}",device="${d}",ifIndex="${indexOnly[1]}"}[${range}]))`;
+  }
+  const join = ifNameJoinMatcher(siteId, deviceId, ifName);
+  return `sum(
+  increase(${octets}{site="${s}",device="${d}"}[${range}])
+  and on(ifIndex) ${join}
+)`;
 }
 
 function collectInterfacesFromProm(
@@ -363,29 +389,53 @@ async function collectUtilWindows(
   const roundPct = (v: number | null) =>
     v != null && Number.isFinite(v) ? Math.round(v * 10) / 10 : null;
 
-  const queryWindow = async (range: string): Promise<SiteNetworkUtilWindow> => {
+  const roundBytes = (v: number | null) =>
+    v != null && Number.isFinite(v) && v >= 0 ? Math.round(v) : null;
+
+  const emptyWindow = (): SiteNetworkUtilWindow => ({
+    avgInPct: null,
+    avgOutPct: null,
+    peakInPct: null,
+    peakOutPct: null,
+    inBytes: null,
+    outBytes: null
+  });
+
+  /** Prom range for util avg/peak vs volume increase (24h reads better than 1d for “Today”). */
+  const queryWindow = async (
+    utilRange: string,
+    volumeRange: string
+  ): Promise<SiteNetworkUtilWindow> => {
     try {
-      const [avgIn, avgOut, peakIn, peakOut] = await Promise.all([
-        parseFirstVectorValue(await promQuery(`avg_over_time((${utilIn})[${range}:1h])`)),
-        parseFirstVectorValue(await promQuery(`avg_over_time((${utilOut})[${range}:1h])`)),
-        parseFirstVectorValue(await promQuery(`max_over_time((${utilIn})[${range}:1h])`)),
-        parseFirstVectorValue(await promQuery(`max_over_time((${utilOut})[${range}:1h])`))
+      const [avgIn, avgOut, peakIn, peakOut, inBytes, outBytes] = await Promise.all([
+        parseFirstVectorValue(await promQuery(`avg_over_time((${utilIn})[${utilRange}:1h])`)),
+        parseFirstVectorValue(await promQuery(`avg_over_time((${utilOut})[${utilRange}:1h])`)),
+        parseFirstVectorValue(await promQuery(`max_over_time((${utilIn})[${utilRange}:1h])`)),
+        parseFirstVectorValue(await promQuery(`max_over_time((${utilOut})[${utilRange}:1h])`)),
+        parseFirstVectorValue(
+          await promQuery(buildIfVolumeQuery("in", siteId, deviceId, ifName, volumeRange))
+        ),
+        parseFirstVectorValue(
+          await promQuery(buildIfVolumeQuery("out", siteId, deviceId, ifName, volumeRange))
+        )
       ]);
       return {
         avgInPct: roundPct(avgIn),
         avgOutPct: roundPct(avgOut),
         peakInPct: roundPct(peakIn),
-        peakOutPct: roundPct(peakOut)
+        peakOutPct: roundPct(peakOut),
+        inBytes: roundBytes(inBytes),
+        outBytes: roundBytes(outBytes)
       };
     } catch {
-      return { avgInPct: null, avgOutPct: null, peakInPct: null, peakOutPct: null };
+      return emptyWindow();
     }
   };
 
   const [d1, d7, d30] = await Promise.all([
-    queryWindow("1d"),
-    queryWindow("7d"),
-    queryWindow("30d")
+    queryWindow("24h", "24h"),
+    queryWindow("7d", "7d"),
+    queryWindow("30d", "30d")
   ]);
   return { "1d": d1, "7d": d7, "30d": d30 };
 }

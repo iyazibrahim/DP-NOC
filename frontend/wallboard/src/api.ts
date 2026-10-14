@@ -114,6 +114,8 @@ export type SiteNetworkUtilWindow = {
   avgOutPct: number | null;
   peakInPct: number | null;
   peakOutPct: number | null;
+  inBytes: number | null;
+  outBytes: number | null;
 };
 
 export type SiteNetworkSummary = {

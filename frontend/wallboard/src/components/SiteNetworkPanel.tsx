@@ -27,12 +27,12 @@ import {
 } from "@/api";
 import type { Site, SiteNetworkLayout, SiteNetworkWidget, SiteNetworkWidgetType } from "@/types";
 import { StatusPill } from "@/components/StatusPill";
-import { MetricChartFrame, darkTooltipProps } from "@/components/noc/MetricChart";
+import { darkTooltipProps } from "@/components/noc/MetricChart";
 import { RangeToggle } from "@/components/noc/RangeToggle";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Activity, Gauge, Users, Wifi } from "lucide-react";
+import { Users } from "lucide-react";
 
 type ChartRange = "1h" | "24h" | "7d" | "30d";
 
@@ -116,6 +116,19 @@ function formatPct(v: number | null): string {
   return v != null && Number.isFinite(v) ? `${v}%` : "—";
 }
 
+/** Format transferred octets as human volume (GB used, etc.). */
+function formatBytesUsed(bytes: number | null): string {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return "—";
+  const tb = 1_000_000_000_000;
+  const gb = 1_000_000_000;
+  const mb = 1_000_000;
+  if (bytes >= tb) return `${(bytes / tb).toFixed(bytes >= 10 * tb ? 1 : 2)} TB`;
+  if (bytes >= gb) return `${(bytes / gb).toFixed(bytes >= 10 * gb ? 1 : 2)} GB`;
+  if (bytes >= mb) return `${(bytes / mb).toFixed(bytes >= 100 * mb ? 0 : 1)} MB`;
+  if (bytes >= 1000) return `${(bytes / 1000).toFixed(0)} KB`;
+  return `${Math.round(bytes)} B`;
+}
+
 function uplinkLabel(v: number | null): { state: string; label: string } {
   if (v == null) return { state: "unknown", label: "Unknown" };
   if (v >= 1) return { state: "healthy", label: "UP" };
@@ -150,10 +163,16 @@ function normalizeLayoutForSave(layout: SiteNetworkLayout): SiteNetworkLayout {
   };
 }
 
-function widgetLabel(type: SiteNetworkWidgetType, config?: Record<string, string>) {
+function widgetLabel(
+  type: SiteNetworkWidgetType,
+  config?: Record<string, string>,
+  range?: ChartRange
+) {
   const custom = config?.title?.trim();
   if (custom) return custom;
-  return WIDGET_CATALOG.find((c) => c.type === type)?.label ?? type;
+  const base = WIDGET_CATALOG.find((c) => c.type === type)?.label ?? type;
+  if (type === "wan_bandwidth_chart" && range) return `${base} (${range})`;
+  return base;
 }
 
 type Props = {
@@ -473,7 +492,7 @@ export function SiteNetworkPanel({ token, site }: Props) {
 
       case "wan_status":
         return (
-          <p className="siteNetworkWanStatus muted px-1">
+          <p className="siteNetworkWanStatus muted" style={{ margin: 0 }}>
             {network?.wanUplink ? (
               <>
                 Line:{" "}
@@ -499,32 +518,23 @@ export function SiteNetworkPanel({ token, site }: Props) {
         ];
         return (
           <div className="wanUtilSummary">
-            <div className="wanUtilSummaryHead">
-              <Gauge className="size-4 text-primary" aria-hidden />
-              <span className="text-sm font-medium">Line use</span>
-            </div>
             <div className="wanUtilSummaryGrid">
               {windows.map(({ key, label }) => {
                 const win = network?.utilWindows?.[key];
+                const inB = win?.inBytes ?? null;
+                const outB = win?.outBytes ?? null;
+                const total =
+                  inB != null || outB != null ? (inB ?? 0) + (outB ?? 0) : null;
                 return (
                   <div key={key} className="wanUtilCell">
                     <div className="wanUtilCellLabel">{label}</div>
-                    <div className="wanUtilCellMain">
-                      <Activity className="size-3.5 text-muted-foreground" aria-hidden />
-                      <span>
-                        {formatPct(win?.avgInPct ?? null)}
-                        <span className="text-muted-foreground"> in</span>
-                      </span>
-                    </div>
-                    <div className="wanUtilCellMain">
-                      <Activity className="size-3.5 text-muted-foreground" aria-hidden />
-                      <span>
-                        {formatPct(win?.avgOutPct ?? null)}
-                        <span className="text-muted-foreground"> out</span>
-                      </span>
+                    <div className="wanUtilCellTotal">{formatBytesUsed(total)}</div>
+                    <div className="wanUtilCellSplit">
+                      <span title="Download">↓ {formatBytesUsed(inB)}</span>
+                      <span title="Upload">↑ {formatBytesUsed(outB)}</span>
                     </div>
                     <div className="wanUtilCellPeak muted">
-                      Peak {formatPct(win?.peakInPct ?? null)} / {formatPct(win?.peakOutPct ?? null)}
+                      Avg line {formatPct(win?.avgInPct ?? null)} / {formatPct(win?.avgOutPct ?? null)}
                     </div>
                   </div>
                 );
@@ -536,18 +546,15 @@ export function SiteNetworkPanel({ token, site }: Props) {
 
       case "wan_bandwidth_chart":
         return (
-          <MetricChartFrame
-            title={`Download / upload (${range})`}
-            className="websiteChartCard h-full border-0 bg-transparent shadow-none"
-            actions={
+          <div className="siteNetworkChartBody">
+            <div className="siteNetworkChartToolbar">
               <RangeToggle
                 value={range}
                 onChange={(v) => setRange(v as ChartRange)}
                 options={["1h", "24h", "7d", "30d"]}
               />
-            }
-          >
-            <div className="websiteChartInner">
+            </div>
+            <div className="chartFlexFill">
               {!network?.wanUplink || wanChartData.length < 2 ? (
                 <p className="muted">No traffic history yet.</p>
               ) : (
@@ -584,16 +591,13 @@ export function SiteNetworkPanel({ token, site }: Props) {
                 </ResponsiveContainer>
               )}
             </div>
-          </MetricChartFrame>
+          </div>
         );
 
       case "speedtest_chart":
         return (
-          <MetricChartFrame
-            title="Speed test"
-            className="websiteChartCard h-full border-0 bg-transparent shadow-none"
-          >
-            <div className="websiteChartInner">
+          <div className="siteNetworkChartBody">
+            <div className="chartFlexFill">
               {!st?.available || speedChartData.length < 2 ? (
                 <p className="muted">{st?.message ?? "Waiting for first speed test…"}</p>
               ) : (
@@ -630,16 +634,13 @@ export function SiteNetworkPanel({ token, site }: Props) {
                 </ResponsiveContainer>
               )}
             </div>
-          </MetricChartFrame>
+          </div>
         );
 
       case "ap_clients_bar":
         return (
-          <MetricChartFrame
-            title="Clients by AP"
-            className="websiteChartCard h-full border-0 bg-transparent shadow-none"
-          >
-            <div className="websiteChartInner">
+          <div className="siteNetworkChartBody">
+            <div className="chartFlexFill">
               {clientBarData.length === 0 ? (
                 <p className="muted">
                   {aps.length > 0
@@ -663,16 +664,13 @@ export function SiteNetworkPanel({ token, site }: Props) {
                 </ResponsiveContainer>
               )}
             </div>
-          </MetricChartFrame>
+          </div>
         );
 
       case "ap_clients_pie":
         return (
-          <MetricChartFrame
-            title="Client share"
-            className="websiteChartCard h-full border-0 bg-transparent shadow-none"
-          >
-            <div className="websiteChartInner">
+          <div className="siteNetworkChartBody">
+            <div className="chartFlexFill">
               {clientPieData.length === 0 ? (
                 <p className="muted">No client share yet.</p>
               ) : (
@@ -698,16 +696,13 @@ export function SiteNetworkPanel({ token, site }: Props) {
                 </ResponsiveContainer>
               )}
             </div>
-          </MetricChartFrame>
+          </div>
         );
 
       case "ap_traffic_bar":
         return (
-          <MetricChartFrame
-            title="AP traffic"
-            className="websiteChartCard h-full border-0 bg-transparent shadow-none"
-          >
-            <div className="websiteChartInner">
+          <div className="siteNetworkChartBody">
+            <div className="chartFlexFill">
               {trafficBarData.length === 0 ? (
                 <p className="muted">No AP traffic yet.</p>
               ) : (
@@ -735,16 +730,13 @@ export function SiteNetworkPanel({ token, site }: Props) {
                 </ResponsiveContainer>
               )}
             </div>
-          </MetricChartFrame>
+          </div>
         );
 
       case "ap_traffic_pie":
         return (
-          <MetricChartFrame
-            title="Traffic share"
-            className="websiteChartCard h-full border-0 bg-transparent shadow-none"
-          >
-            <div className="websiteChartInner">
+          <div className="siteNetworkChartBody">
+            <div className="chartFlexFill">
               {trafficPieData.length === 0 ? (
                 <p className="muted">No traffic share yet.</p>
               ) : (
@@ -776,16 +768,12 @@ export function SiteNetworkPanel({ token, site }: Props) {
                 </ResponsiveContainer>
               )}
             </div>
-          </MetricChartFrame>
+          </div>
         );
 
       case "ap_table":
         return (
-          <div className="tableCard h-full overflow-auto border-0 bg-transparent shadow-none">
-            <div className="tableTitle flex items-center gap-2">
-              <Wifi className="size-3.5" aria-hidden />
-              Access points
-            </div>
+          <div className="widgetInnerScroll h-full">
             <table className="dataTable">
               <thead>
                 <tr>
@@ -863,22 +851,22 @@ export function SiteNetworkPanel({ token, site }: Props) {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {editing ? (
           <>
-            <Button type="button" variant="outline" size="sm" onClick={() => setDrawerOpen(true)}>
-              Add card
+            <Button type="button" variant="outline" onClick={() => setDrawerOpen(true)}>
+              Add widget
             </Button>
-            <Button type="button" size="sm" onClick={() => void persist()}>
+            <Button type="button" onClick={() => void persist()}>
               Save layout
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => void cancelEdit()}>
+            <Button type="button" variant="outline" onClick={() => void cancelEdit()}>
               Cancel
             </Button>
           </>
         ) : (
           <>
-            <Button type="button" size="sm" onClick={() => setEditing(true)}>
+            <Button type="button" onClick={() => setEditing(true)}>
               Edit layout
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => void doReset()}>
+            <Button type="button" variant="outline" onClick={() => void doReset()}>
               Reset
             </Button>
           </>
@@ -887,8 +875,9 @@ export function SiteNetworkPanel({ token, site }: Props) {
 
       {editing ? (
         <div className="bannerHint mb-3">
-          Drag cards to rearrange. Collapse to a title bar. Set Status / Traffic / Wireless in the
-          card menu. Click <strong>Save layout</strong> when done.
+          Unsaved changes — drag into empty space, resize from the bottom-right corner. Use the
+          section menu on a widget for Status / Traffic / Wireless. Click <strong>Save layout</strong>{" "}
+          when done.
         </div>
       ) : null}
 
@@ -933,16 +922,16 @@ export function SiteNetworkPanel({ token, site }: Props) {
           >
             {layout.widgets.map((w) => {
               const section = w.config?.section ?? "traffic";
+              const collapsed = w.config?.collapsed === "1";
               return (
-                <div key={w.i} className="dashWidget siteNetworkWidget">
+                <div key={w.i} className="dashWidget">
                   <div className="widgetChrome">
                     {editing ? (
                       <span className="widgetDrag" title="Drag">
                         ⋮⋮
                       </span>
                     ) : null}
-                    <span className="widgetTypeLabel">{widgetLabel(w.type, w.config)}</span>
-                    <span className="siteNetworkSectionTag">{section}</span>
+                    <span className="widgetTypeLabel">{widgetLabel(w.type, w.config, range)}</span>
                     {editing ? (
                       <select
                         className="siteNetworkSectionSelect"
@@ -956,14 +945,16 @@ export function SiteNetworkPanel({ token, site }: Props) {
                         <option value="wireless">Wireless</option>
                       </select>
                     ) : null}
-                    <button
-                      type="button"
-                      className="iconBtn"
-                      title={w.config?.collapsed === "1" ? "Expand" : "Collapse"}
-                      onClick={() => toggleCollapse(w.i)}
-                    >
-                      {w.config?.collapsed === "1" ? "▸" : "▾"}
-                    </button>
+                    {editing ? (
+                      <button
+                        type="button"
+                        className="iconBtn"
+                        title={collapsed ? "Expand" : "Collapse"}
+                        onClick={() => toggleCollapse(w.i)}
+                      >
+                        {collapsed ? "▸" : "▾"}
+                      </button>
+                    ) : null}
                     {editing ? (
                       <button
                         type="button"
@@ -975,7 +966,17 @@ export function SiteNetworkPanel({ token, site }: Props) {
                       </button>
                     ) : null}
                   </div>
-                  <div className="siteNetworkWidgetBody">{renderBody(w)}</div>
+                  <div
+                    className={`widgetInner${
+                      w.type === "wan_bandwidth_chart" ||
+                      w.type === "speedtest_chart" ||
+                      w.type.startsWith("ap_")
+                        ? " flush"
+                        : ""
+                    }`}
+                  >
+                    {renderBody(w)}
+                  </div>
                 </div>
               );
             })}

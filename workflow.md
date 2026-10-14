@@ -258,6 +258,9 @@ Collector box → Alloy → Prometheus (central)
     - Website list uptime uses Hetrix report when Prom is 0% but Hetrix is up (Eventree list vs detail mismatch)
     - Site Network tab: per-user/per-site RGL layout (Status / Traffic / Wireless), collapse, Line use card for Today / 7d / 30d
     - Plain-language labels, cyan selected toggles, consistent pill padding, loading skeletons
+  - **Site network polish (2026-10-14)**
+    - Network cards use the same dashWidget / widgetChrome / widgetInner pattern as the main dashboard
+    - Line use shows GB/TB transferred (increase of ifHC*Octets) plus avg %; Today window uses 24h
 
 ## Auth (operator login)
 - Wallboard login uses `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` on **noc-app**
