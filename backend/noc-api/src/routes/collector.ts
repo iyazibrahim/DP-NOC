@@ -8,6 +8,7 @@ import {
   upsertNetworkDevice,
   verifyCollectorToken
 } from "../data/sites";
+import { computeSiteStatus } from "../services/status";
 
 export const collectorRouter = express.Router();
 
@@ -55,6 +56,35 @@ collectorRouter.get("/:siteId/devices.json", (req, res) => {
   markCollectorDevicesSynced(siteId);
   res.setHeader("content-type", "application/json");
   return res.send(JSON.stringify(devices, null, 2) + "\n");
+});
+
+/**
+ * Collector Console → per-device SNMP status from the same logic as the wallboard.
+ */
+collectorRouter.get("/:siteId/device-status", async (req, res) => {
+  const siteId = req.params.siteId;
+  if (!requireCollectorAuth(req, res, siteId)) return;
+  try {
+    const status = await computeSiteStatus(siteId);
+    if (!status) return res.status(404).json({ error: "Site not found" });
+    return res.json({
+      siteId,
+      overall: status.overall,
+      collector: status.collector,
+      uplink: status.uplink,
+      localDevices: status.localDevices,
+      devices: status.localDeviceStates ?? [],
+      dashboard: {
+        connected: true,
+        notes: "NOC dashboard is reachable and returned live status"
+      }
+    });
+  } catch (e) {
+    return res.status(502).json({
+      error: e instanceof Error ? e.message : "Status lookup failed",
+      dashboard: { connected: false, notes: "Could not read live status from NOC" }
+    });
+  }
 });
 
 /**

@@ -269,6 +269,9 @@ Collector box → Alloy → Prometheus (central)
     - Root cause: volume `snmp.yml` kept old modules; refresh only checked `synology_health`, so Cambium client-table packs never replaced live file; Force apply could no-op while 90s sync held the lock
     - Fix: module markers (`cambiumClientInfo`, `omadaClientInfo`, …) in generate-config + `snmpStaleReason` diagnostics; Force apply waits for in-flight sync
     - Follow-up: false “NAS missing synology_health” when type/vendor did not match generate-config — align stale check with vendor_module (nas|storage + synology*)
+  - **AP false-DOWN + Collector Console UX (2026-10-14)**
+    - Root cause: multi-target SNMP (`if_mib` + vendor pack) — `parseFirstVectorValue` picked a timed-out target while IF-MIB/ping still OK; status now uses `max(up)`
+    - Console: Dashboard connection card, per-device Up/Down from NOC, human SNMP polling copy, closable Diagnostics / Add / Edit modals
 
 ## Auth (operator login)
 - Wallboard login uses `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` on **noc-app**

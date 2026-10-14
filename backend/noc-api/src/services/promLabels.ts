@@ -37,7 +37,8 @@ export function dualSnmpUpFresh(siteId: string, deviceId: string, window = METRI
   const siteScrapeDevice = `last_over_time(up{${SITE_SNMP_JOB_SELECTOR},device="${deviceId}"}[${window}])`;
   const legacyDevice = `last_over_time(up{${LEGACY_SNMP_JOB_SELECTOR},device="${deviceId}"}[${window}])`;
   const legacySiteDevice = `last_over_time(up{${LEGACY_SNMP_JOB_SELECTOR},site="${siteId}",device="${deviceId}"}[${window}])`;
-  return `(${preferred} or ${siteScrape} or ${siteScrapeDevice} or ${legacySiteDevice} or ${legacyDevice})`;
+  // max: healthy if any SNMP target for this device is up (if_mib vs vendor pack).
+  return `max(${preferred} or ${siteScrape} or ${siteScrapeDevice} or ${legacySiteDevice} or ${legacyDevice})`;
 }
 
 export function dualSnmpUpAvg(siteId: string, deviceId: string, range: string): string {

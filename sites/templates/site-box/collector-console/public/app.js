@@ -35,26 +35,80 @@ function fmtTime(iso) {
   }
 }
 
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function statusPill(state, label) {
+  const s = (state || "unknown").toLowerCase();
+  let cls = "pill warn";
+  let text = label || "Unknown";
+  if (s === "healthy" || s === "ok" || s === "up") {
+    cls = "pill ok";
+    text = label || "Up";
+  } else if (s === "critical" || s === "fail" || s === "down") {
+    cls = "pill bad";
+    text = label || "Down";
+  } else if (s === "warning") {
+    cls = "pill warn";
+    text = label || "Degraded";
+  }
+  return `<span class="${cls}">${escapeHtml(text)}</span>`;
+}
+
+function deviceStatePill(state) {
+  const s = (state || "unknown").toLowerCase();
+  if (s === "healthy") return statusPill("ok", "Up");
+  if (s === "critical") return statusPill("fail", "Down");
+  if (s === "warning") return statusPill("warn", "Degraded");
+  return statusPill("unknown", "Unknown");
+}
+
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.hidden = false;
+  el.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+}
+
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.hidden = true;
+  el.setAttribute("aria-hidden", "true");
+  if (![...document.querySelectorAll(".modal")].some((m) => !m.hidden)) {
+    document.body.classList.remove("modal-open");
+  }
+}
+
 function renderStatus(status) {
   const cards = document.getElementById("status-cards");
-  const alloy = status.alloyRunning ? '<span class="ok">Running</span>' : '<span class="bad">Stopped</span>';
-  const noc =
-    status.nocReachable === null
-      ? '<span class="warn">Not configured</span>'
-      : status.nocReachable
-        ? '<span class="ok">Reachable</span>'
-        : '<span class="bad">Unreachable</span>';
+  const alloy = status.alloyRunning
+    ? '<span class="ok">Running</span>'
+    : '<span class="bad">Stopped</span>';
+  const dash = status.dashboardConnection || {};
+  const dashHtml =
+    dash.state === "ok"
+      ? `<span class="ok">${escapeHtml(dash.label || "Connected")}</span>`
+      : dash.state === "fail"
+        ? `<span class="bad">${escapeHtml(dash.label || "Failed")}</span>`
+        : `<span class="warn">${escapeHtml(dash.label || "Not configured")}</span>`;
   const sync = status.lastSync;
   const syncLabel = sync
     ? sync.ok
-      ? `<span class="ok">${sync.message}</span>`
-      : `<span class="bad">${sync.message}</span>`
+      ? `<span class="ok">${escapeHtml(sync.message)}</span>`
+      : `<span class="bad">${escapeHtml(sync.message)}</span>`
     : '<span class="warn">No sync yet</span>';
 
   cards.innerHTML = `
-    <div class="card"><div class="label">Site</div><div class="value">${status.siteName || "—"}</div></div>
+    <div class="card"><div class="label">Site</div><div class="value">${escapeHtml(status.siteName || "—")}</div></div>
     <div class="card"><div class="label">Alloy</div><div class="value">${alloy}</div></div>
-    <div class="card"><div class="label">NOC API</div><div class="value">${noc}</div></div>
+    <div class="card"><div class="label">Dashboard</div><div class="value">${dashHtml}</div></div>
     <div class="card"><div class="label">Devices</div><div class="value">${status.deviceCount ?? 0}</div></div>
     <div class="card"><div class="label">SNMP config</div><div class="value">${
       status.configUnsafe
@@ -71,15 +125,15 @@ function renderStatus(status) {
     }</div></div>
     <div class="card"><div class="label">Metrics push</div><div class="value">${
       status.metricsConfigured === false
-        ? '<span class="bad">Missing CF env</span>'
+        ? '<span class="bad">Not set</span>'
         : status.metricsConfigured === true
-          ? '<span class="ok">Env set</span>'
+          ? '<span class="ok">Ready</span>'
           : "—"
     }</div></div>
-    <div class="card"><div class="label">SNMP scrape</div><div class="value" style="font-size:0.85rem">${
-      status.snmpScrapeHint
-        ? `<code>${escapeHtml(status.snmpScrapeHint)}</code>`
-        : "—"
+    <div class="card"><div class="label">SNMP polling</div><div class="value">${
+      status.snmpPollingLabel === "Active"
+        ? `<span class="ok">Active</span><div class="hint" style="margin-top:6px">${escapeHtml(status.snmpScrapeHint || "")}</div>`
+        : `<span class="warn">Idle</span><div class="hint" style="margin-top:6px">${escapeHtml(status.snmpScrapeHint || "")}</div>`
     }</div></div>
     <div class="card"><div class="label">Last sync</div><div class="value" style="font-size:0.9rem">${fmtTime(sync?.at)}</div></div>
     <div class="card" style="grid-column:1/-1"><div class="label">Sync status</div><div class="value" style="font-size:0.9rem">${syncLabel}</div></div>
@@ -99,27 +153,93 @@ function renderStatus(status) {
   `;
 }
 
-async function loadDevices() {
-  const devices = await api("/api/devices");
-  const body = document.getElementById("devices-body");
-  if (!Array.isArray(devices) || devices.length === 0) {
-    body.innerHTML = '<tr><td colspan="5" class="hint">No devices yet — use Add SNMP device above, or Sync now to pull from NOC.</td></tr>';
-    return;
+let cachedDevices = [];
+let statusById = {};
+
+async function loadDeviceStatus() {
+  try {
+    const res = await api("/api/device-status");
+    const rows = Array.isArray(res.devices) ? res.devices : [];
+    statusById = {};
+    for (const row of rows) {
+      if (row.deviceId) statusById[row.deviceId] = row;
+    }
+    return res;
+  } catch {
+    statusById = {};
+    return null;
   }
-  body.innerHTML = devices
-    .map(
-      (d) =>
-        `<tr><td>${escapeHtml(d.name || "")}</td><td><code>${escapeHtml(d.id || "")}</code></td><td>${escapeHtml(d.snmpIp || "")}</td><td>${escapeHtml(d.snmpCommunity || "default")}</td><td>${escapeHtml(d.type || "")}</td></tr>`
-    )
-    .join("");
 }
 
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function renderDevicesTable() {
+  const body = document.getElementById("devices-body");
+  if (!Array.isArray(cachedDevices) || cachedDevices.length === 0) {
+    body.innerHTML =
+      '<tr><td colspan="6" class="hint">No devices yet — click Add device, or Sync now to pull from NOC.</td></tr>';
+    return;
+  }
+  body.innerHTML = cachedDevices
+    .map((d) => {
+      const st = statusById[d.id];
+      const pill = deviceStatePill(st?.state);
+      const notes = st?.notes
+        ? `<div class="hint" title="${escapeHtml(st.notes)}">${escapeHtml(st.notes)}</div>`
+        : "";
+      return `<tr>
+        <td>${escapeHtml(d.name || "")}<div class="hint"><code>${escapeHtml(d.id || "")}</code></div></td>
+        <td>${pill}${notes}</td>
+        <td>${escapeHtml(d.snmpIp || "")}</td>
+        <td>${escapeHtml(d.snmpCommunity || "default")}</td>
+        <td>${escapeHtml(d.type || "")}</td>
+        <td><button type="button" class="secondary btn-sm" data-edit="${escapeHtml(d.id || "")}">Edit</button></td>
+      </tr>`;
+    })
+    .join("");
+
+  body.querySelectorAll("[data-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-edit");
+      const d = cachedDevices.find((x) => x.id === id);
+      if (d) openDeviceModal(d);
+    });
+  });
+}
+
+async function loadDevices() {
+  cachedDevices = await api("/api/devices");
+  await loadDeviceStatus();
+  renderDevicesTable();
+}
+
+function openDeviceModal(device) {
+  const form = document.getElementById("device-form");
+  const title = document.getElementById("device-modal-title");
+  const msg = document.getElementById("device-form-msg");
+  msg.textContent = "";
+  msg.className = "msg";
+  form.reset();
+
+  const editing = Boolean(device?.id);
+  title.textContent = editing ? "Edit device" : "Add device";
+  document.getElementById("dev-id-hidden").value = editing ? device.id : "";
+  document.getElementById("dev-name").value = device?.name || "";
+  document.getElementById("dev-snmpIp").value = device?.snmpIp || "";
+  document.getElementById("dev-type").value = normalizeType(device?.type) || "switch";
+  document.getElementById("dev-vendor").value = device?.vendor || "generic";
+  document.getElementById("dev-snmpCommunity").value = device?.snmpCommunity || "";
+  document.getElementById("dev-id").value = "";
+  document.getElementById("dev-id-row").style.display = editing ? "none" : "block";
+  document.getElementById("device-submit").textContent = editing ? "Save changes" : "Add device";
+  openModal("modal-device");
+}
+
+function normalizeType(t) {
+  const n = String(t || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+  if (n === "accesspoint" || n === "wifi" || n === "wireless") return "ap";
+  if (n === "storage") return "nas";
+  return t || "switch";
 }
 
 async function refreshDashboard() {
@@ -135,7 +255,10 @@ async function loadCatalog() {
   const catalog = await api("/api/catalog");
   const sel = document.getElementById("siteName");
   sel.innerHTML = catalog
-    .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)} (${escapeHtml(s.id)})</option>`)
+    .map(
+      (s) =>
+        `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)} (${escapeHtml(s.id)})</option>`
+    )
     .join("");
 }
 
@@ -155,7 +278,8 @@ async function loadConfigForm() {
   set("syncIntervalSec", cfg.syncIntervalSec);
   set("hostDeviceId", cfg.hostDeviceId);
   if (cfg.collectorToken) {
-    document.getElementById("collectorToken").placeholder = cfg.collectorToken + " (saved — enter new to replace)";
+    document.getElementById("collectorToken").placeholder =
+      cfg.collectorToken + " (saved — enter new to replace)";
   }
 }
 
@@ -168,7 +292,23 @@ document.querySelectorAll(".tab").forEach((btn) => {
   });
 });
 
+document.querySelectorAll("[data-close]").forEach((el) => {
+  el.addEventListener("click", () => {
+    const which = el.getAttribute("data-close");
+    if (which === "device") closeModal("modal-device");
+    if (which === "diag") closeModal("modal-diag");
+  });
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  closeModal("modal-device");
+  closeModal("modal-diag");
+});
+
 document.getElementById("btn-refresh").addEventListener("click", () => refreshDashboard());
+document.getElementById("btn-add-device").addEventListener("click", () => openDeviceModal(null));
+
 document.getElementById("btn-sync").addEventListener("click", async () => {
   const msg = document.getElementById("sync-msg");
   const btn = document.getElementById("btn-sync");
@@ -204,7 +344,8 @@ document.getElementById("btn-force-sync").addEventListener("click", async () => 
 
 document.getElementById("btn-diag").addEventListener("click", async () => {
   const out = document.getElementById("diag-out");
-  out.hidden = false;
+  out.textContent = "Loading…";
+  openModal("modal-diag");
   try {
     const diag = await api("/api/diagnostics");
     out.textContent = JSON.stringify(diag, null, 2);
@@ -219,29 +360,31 @@ document.getElementById("dev-type").addEventListener("change", (e) => {
   if (type === "nas" && (!vendor.value || vendor.value === "generic")) {
     vendor.value = "synology";
   }
+  if (type === "ap" && (!vendor.value || vendor.value === "generic")) {
+    vendor.value = "cambium";
+  }
 });
 
-document.getElementById("add-device-form").addEventListener("submit", async (e) => {
+document.getElementById("device-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const msg = document.getElementById("add-device-msg");
+  const msg = document.getElementById("device-form-msg");
   const form = e.target;
-  const btn = form.querySelector('button[type="submit"]');
+  const btn = document.getElementById("device-submit");
   const fd = new FormData(form);
+  const existingId = String(fd.get("id") || "").trim();
   const body = {
     name: String(fd.get("name") || "").trim(),
     snmpIp: String(fd.get("snmpIp") || "").trim(),
     type: String(fd.get("type") || "switch").trim(),
     vendor: String(fd.get("vendor") || "generic").trim(),
-    id: String(fd.get("id") || "").trim() || undefined,
+    id: existingId || String(fd.get("newId") || "").trim() || undefined,
     snmpCommunity: String(fd.get("snmpCommunity") || "").trim() || undefined
   };
   btn.disabled = true;
   try {
     const result = await api("/api/devices", { method: "POST", body: JSON.stringify(body) });
-    showMsg(msg, result.message || "Device added", result.ok !== false);
-    form.reset();
-    document.getElementById("dev-vendor").value = "generic";
-    document.getElementById("dev-type").value = "firewall";
+    showMsg(msg, result.message || (existingId ? "Device updated" : "Device added"), result.ok !== false);
+    closeModal("modal-device");
     await refreshDashboard();
   } catch (err) {
     showMsg(msg, err.message, false);

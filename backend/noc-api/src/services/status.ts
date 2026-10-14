@@ -229,7 +229,10 @@ async function queryBooleanMetricState(
     opts?.downNotes ?? `No data in the last ${METRIC_FRESH_WINDOW} — treated as down`;
 
   try {
-    const freshQ = `last_over_time(${metricSelector}[${METRIC_FRESH_WINDOW}])`;
+    // max(): one device can have several SNMP targets (if_mib + vendor pack).
+    // Taking only the first series falsely marks APs DOWN when the vendor walk times out
+    // while IF-MIB (and ICMP ping) still succeed.
+    const freshQ = `max(last_over_time(${metricSelector}[${METRIC_FRESH_WINDOW}]))`;
     const fresh = parseFirstVectorValue(await promQuery(freshQ));
     if (fresh !== null) {
       const state = booleanValueToDomain(fresh);
@@ -239,7 +242,7 @@ async function queryBooleanMetricState(
       };
     }
 
-    const histQ = `last_over_time(${metricSelector}[${METRIC_HISTORY_WINDOW}])`;
+    const histQ = `max(last_over_time(${metricSelector}[${METRIC_HISTORY_WINDOW}]))`;
     const hist = parseFirstVectorValue(await promQuery(histQ));
     if (hist !== null) {
       return silenceMeansDown
@@ -605,6 +608,7 @@ export async function computeSiteStatus(
         continue;
       }
       // Prefer snmp_up; then site_snmp_if_mib scrape up (Alloy may omit snmp_up); then legacy job name.
+      // Status is SNMP reachability — not ICMP ping (a device can ping and still fail SNMP).
       let st = await queryBooleanMetricState(`snmp_up{site="${siteId}",device="${d.id}"}`);
       if (st.state === "unknown") {
         const fallbackSelectors = [
@@ -626,15 +630,22 @@ export async function computeSiteStatus(
             notes:
               fb.state === "healthy"
                 ? viaSiteJob
-                  ? "OK via site_snmp_if_mib scrape up (snmp_up metric not present)"
-                  : "OK via legacy integrations/snmp up (site-box snmp_up not publishing yet)"
-                : fb.notes ?? "SNMP scrape reports down"
+                  ? "SNMP polling OK"
+                  : "SNMP polling OK (legacy collector job)"
+                : fb.state === "critical"
+                  ? "SNMP poll failed — device may still respond to ping"
+                  : fb.notes ?? "SNMP scrape reports down"
           };
           break;
         }
         if (st.state === "unknown" && !st.notes) {
           st.notes = "Not polled yet — waiting for collector SNMP scrape";
         }
+      } else if (st.state === "critical") {
+        st = {
+          ...st,
+          notes: "SNMP poll failed — device may still respond to ping"
+        };
       }
       deviceStatuses.push(st);
       localDeviceStates.push({

@@ -198,8 +198,16 @@ app.get("/api/status", async (_req, res) => {
     configUnsafe: cfgHealth.configUnsafe,
     snmpScrapeHint:
       devices.length > 0
-        ? `Verify in Grafana: up{job="site_snmp_if_mib",device="site-1-fw1"} (and snmp_up if present)`
-        : "No SNMP devices yet",
+        ? "SNMP polling is active. The dashboard marks a device Up when at least one SNMP check succeeds (ping alone is not enough)."
+        : "No SNMP devices yet — add one to start polling.",
+    snmpPollingLabel: devices.length > 0 ? "Active" : "Idle",
+    dashboardConnection: !config.nocApiUrl
+      ? { state: "unknown" as const, label: "Not configured" }
+      : nocReachable === false
+        ? { state: "fail" as const, label: "Failed" }
+        : nocReachable === true
+          ? { state: "ok" as const, label: "Connected" }
+          : { state: "unknown" as const, label: "Unknown" },
     nocReachable,
     lastSync: last,
     siteName: config.siteName,
@@ -306,6 +314,52 @@ app.get("/api/devices", (_req, res) => {
   res.json(readDevicesJson());
 });
 
+/** Live per-device SNMP status from the NOC dashboard (same source as wallboard). */
+app.get("/api/device-status", async (_req, res) => {
+  const config = readConfig();
+  if (!config.nocApiUrl || !config.siteName || !config.collectorToken) {
+    return res.status(400).json({
+      ok: false,
+      error: "Finish Setup first (NOC URL, site, collector token)",
+      devices: [],
+      dashboard: { connected: false, notes: "Collector not configured" }
+    });
+  }
+  try {
+    const url = `${config.nocApiUrl.replace(/\/$/, "")}/api/collector/${config.siteName}/device-status`;
+    const r = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${config.collectorToken}`,
+        Accept: "application/json"
+      },
+      signal: AbortSignal.timeout(15000)
+    });
+    const text = await r.text();
+    let body: Record<string, unknown> = {};
+    try {
+      body = text ? JSON.parse(text) : {};
+    } catch {
+      body = { error: text.slice(0, 200) };
+    }
+    if (!r.ok) {
+      return res.status(502).json({
+        ok: false,
+        error: typeof body.error === "string" ? body.error : `NOC HTTP ${r.status}`,
+        devices: [],
+        dashboard: { connected: false, notes: "Could not load device status from NOC" }
+      });
+    }
+    return res.json({ ok: true, ...body });
+  } catch (err) {
+    return res.status(502).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      devices: [],
+      dashboard: { connected: false, notes: "NOC unreachable" }
+    });
+  }
+});
+
 app.get("/api/diagnostics", async (_req, res) => {
   const devices = readDevicesJson() as Array<{ id?: string; snmpIp?: string }>;
   const alloyPath = path.join(dir, "config.alloy");
@@ -381,7 +435,8 @@ app.get("/api/diagnostics", async (_req, res) => {
     crashHints,
     configUnsafe: cfgHealth.configUnsafe,
     configUnsafeReason: cfgHealth.configUnsafeReason,
-    snmpScrapeHint: `up{job="site_snmp_if_mib",device=...} (need discovery.relabel snmp_job in config.alloy)`,
+    snmpScrapeHint:
+      "SNMP polling active when Alloy scrapes devices; dashboard Up = at least one SNMP check OK (not ping).",
     deviceCount: devices.length,
     devices,
     hasSnmpBlock,
