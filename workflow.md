@@ -268,6 +268,7 @@ Collector box → Alloy → Prometheus (central)
   - **Force-apply stale snmp.yml (2026-10-14)**
     - Root cause: volume `snmp.yml` kept old modules; refresh only checked `synology_health`, so Cambium client-table packs never replaced live file; Force apply could no-op while 90s sync held the lock
     - Fix: module markers (`cambiumClientInfo`, `omadaClientInfo`, …) in generate-config + `snmpStaleReason` diagnostics; Force apply waits for in-flight sync
+    - Follow-up: false “NAS missing synology_health” when type/vendor did not match generate-config — align stale check with vendor_module (nas|storage + synology*)
 
 ## Auth (operator login)
 - Wallboard login uses `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` on **noc-app**

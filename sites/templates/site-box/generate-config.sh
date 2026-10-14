@@ -373,7 +373,9 @@ def vendor_module(dtype, vendor):
     v = norm(vendor)
     if t == "firewall" and (v in ("fortinet", "fortigate") or v == ""):
         return "fortigate_health"
-    if t in ("nas", "storage") and (v in ("synology", "syno") or v in ("", "generic")):
+    if t in ("nas", "storage") and (
+        v in ("synology", "syno", "", "generic") or v.startswith("synology")
+    ):
         return "synology_health"
     if t == "switch" and v == "maipu":
         return "maipu_health"

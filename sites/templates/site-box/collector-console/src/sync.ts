@@ -107,15 +107,19 @@ export function alloySnmpStaleReason(_dataDir?: string): SnmpStaleReason {
   } else if (fs.existsSync(bundledSnmp) && !fs.existsSync(liveSnmp)) {
     return { code: "stale_snmp_yml", detail: "volume snmp.yml missing" };
   }
-  const needsSynology = devices.some((d) => {
+  // Must match generate-config.sh vendor_module(): type nas|storage AND
+  // vendor synology/syno/empty/generic (not "any device with NAS in the name").
+  const needsSynologyTarget = devices.some((d) => {
     const t = (d.type || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
     const v = (d.vendor || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-    return t === "nas" || t === "storage" || v === "synology" || v === "syno";
+    if (t !== "nas" && t !== "storage") return false;
+    return v === "" || v === "generic" || v === "synology" || v === "syno" || v.startsWith("synology");
   });
-  if (needsSynology && !alloy.includes("synology_health")) {
+  if (needsSynologyTarget && !alloy.includes("synology_health")) {
     return {
       code: "missing_synology_target",
-      detail: "NAS device present but config.alloy has no synology_health target"
+      detail:
+        "NAS/storage + Synology vendor should have a synology_health Alloy target — check type/vendor on the device, then Force apply"
     };
   }
   return null;
