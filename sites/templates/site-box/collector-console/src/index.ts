@@ -24,7 +24,13 @@ import {
   reloadAlloy,
   assertAlloyConfigSafe
 } from "./alloy";
-import { alloySnmpConfigStale, getLastSync, startSyncLoop, syncDevices } from "./sync";
+import {
+  alloySnmpConfigStale,
+  alloySnmpStaleReason,
+  getLastSync,
+  startSyncLoop,
+  syncDevices
+} from "./sync";
 import { pushDeviceToNoc } from "./pushDevice";
 
 const PORT = Number(process.env.PORT || "8090");
@@ -171,8 +177,12 @@ app.get("/api/status", async (_req, res) => {
   if (crashHints.length > 0) {
     warnings.push(...crashHints);
   }
+  const snmpStaleReason = alloySnmpStaleReason(dir);
   if (snmpStale) {
-    warnings.push("SNMP targets in devices.json are not fully applied in config.alloy — click Force apply SNMP.");
+    warnings.push(
+      snmpStaleReason?.detail ||
+        "SNMP targets in devices.json are not fully applied in config.alloy — click Force apply SNMP."
+    );
   }
 
   res.json({
@@ -183,6 +193,7 @@ app.get("/api/status", async (_req, res) => {
     metricsConfigured,
     deviceCount: devices.length,
     snmpConfigStale: snmpStale,
+    snmpStaleReason,
     snmpBlockPresent: cfgHealth.hasSnmpBlock,
     configUnsafe: cfgHealth.configUnsafe,
     snmpScrapeHint:
@@ -375,6 +386,7 @@ app.get("/api/diagnostics", async (_req, res) => {
     devices,
     hasSnmpBlock,
     snmpConfigStale: alloySnmpConfigStale(dir),
+    snmpStaleReason: alloySnmpStaleReason(dir),
     missingDeviceLabelsInAlloy: missingInAlloy,
     siteName: readConfig().siteName,
     hint,

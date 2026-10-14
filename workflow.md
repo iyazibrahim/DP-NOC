@@ -264,7 +264,10 @@ Collector box → Alloy → Prometheus (central)
   - **Clients tab (2026-10-14)**
     - Site detail: Overview / Network / **Clients** — total + per-AP client counts
     - **Per-station list:** Cambium `cambiumClientTable` → hostname/MAC/IP/SSID/SNR/link rate + live in/out (`rate(*DataBytes)*8`); Omada MAC-only via `omadaClientInfo`
-    - Ops: refresh collector `snmp.yml` + **Force-apply**; Omada per-client bandwidth deferred (no public SNMP counters)
+    - Ops: rebuild **collector-console** (embeds snmp.yml) + Force-apply; Omada per-client bandwidth deferred
+  - **Force-apply stale snmp.yml (2026-10-14)**
+    - Root cause: volume `snmp.yml` kept old modules; refresh only checked `synology_health`, so Cambium client-table packs never replaced live file; Force apply could no-op while 90s sync held the lock
+    - Fix: module markers (`cambiumClientInfo`, `omadaClientInfo`, …) in generate-config + `snmpStaleReason` diagnostics; Force apply waits for in-flight sync
 
 ## Auth (operator login)
 - Wallboard login uses `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` on **noc-app**

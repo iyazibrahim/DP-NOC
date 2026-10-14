@@ -60,7 +60,11 @@ function renderStatus(status) {
       status.configUnsafe
         ? '<span class="bad">Unsafe — repair</span>'
         : status.snmpConfigStale
-          ? '<span class="bad">Stale — Force apply</span>'
+          ? `<span class="bad">Stale — Force apply</span>${
+              status.snmpStaleReason?.detail
+                ? `<div class="warn" style="font-size:0.8rem;margin-top:4px">${escapeHtml(status.snmpStaleReason.detail)}</div>`
+                : ""
+            }`
           : status.snmpBlockPresent === false && (status.deviceCount ?? 0) > 0
             ? '<span class="bad">Missing block</span>'
             : '<span class="ok">Applied</span>'

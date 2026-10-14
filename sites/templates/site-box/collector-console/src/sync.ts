@@ -45,67 +45,143 @@ function readLocalDevices(): Array<{ id?: string; snmpIp?: string; type?: string
   }
 }
 
-/** True if config.alloy is missing SNMP exporter or any device id from devices.json. */
-export function alloySnmpConfigStale(_dataDir?: string): boolean {
+/**
+ * Vendor-pack strings that mean the image snmp.yml is newer than the volume copy.
+ * Keep in sync with generate-config.sh MODULE_MARKERS.
+ */
+export const SNMP_MODULE_MARKERS = [
+  "synology_health",
+  "cambiumClientInfo",
+  "cambiumClientSNR",
+  "cambiumClientTxDataBytes",
+  "omadaClientInfo"
+] as const;
+
+export function snmpModulesNewerInBundled(bundled: string, live: string): string | null {
+  for (const m of SNMP_MODULE_MARKERS) {
+    if (bundled.includes(m) && !live.includes(m)) return m;
+  }
+  return null;
+}
+
+export type SnmpStaleReason =
+  | { code: "missing_alloy"; detail: string }
+  | { code: "missing_snmp_block"; detail: string }
+  | { code: "missing_device"; detail: string }
+  | { code: "stale_snmp_yml"; detail: string }
+  | { code: "missing_synology_target"; detail: string }
+  | null;
+
+/** Why Force-apply is still needed (null = not stale). */
+export function alloySnmpStaleReason(_dataDir?: string): SnmpStaleReason {
   const devices = readLocalDevices().filter((d) => d.id && d.snmpIp);
   const alloyFile = configAlloyPath();
-  if (!fs.existsSync(alloyFile)) return devices.length > 0;
+  if (!fs.existsSync(alloyFile)) {
+    return devices.length > 0
+      ? { code: "missing_alloy", detail: "config.alloy missing while devices.json has SNMP devices" }
+      : null;
+  }
 
   const alloy = fs.readFileSync(alloyFile, "utf8");
-  if (devices.length === 0) return false;
-  if (!alloy.includes("prometheus.exporter.snmp")) return true;
+  if (devices.length === 0) return null;
+  if (!alloy.includes("prometheus.exporter.snmp")) {
+    return { code: "missing_snmp_block", detail: "config.alloy has no prometheus.exporter.snmp block" };
+  }
   for (const d of devices) {
-    if (!alloy.includes(`device = "${d.id}"`)) return true;
+    if (!alloy.includes(`device = "${d.id}"`)) {
+      return { code: "missing_device", detail: `device ${d.id} missing from config.alloy` };
+    }
   }
   const liveSnmp = path.join(dataDir(), "snmp.yml");
   const bundledSnmp = path.join(bundledToolkitDir(), "snmp.yml");
   if (fs.existsSync(bundledSnmp) && fs.existsSync(liveSnmp)) {
     const bundled = fs.readFileSync(bundledSnmp, "utf8");
     const live = fs.readFileSync(liveSnmp, "utf8");
-    if (bundled.includes("synology_health") && !live.includes("synology_health")) return true;
+    const missing = snmpModulesNewerInBundled(bundled, live);
+    if (missing) {
+      return {
+        code: "stale_snmp_yml",
+        detail: `volume snmp.yml missing ${missing} (image has newer vendor packs — Force apply refreshes modules)`
+      };
+    }
+  } else if (fs.existsSync(bundledSnmp) && !fs.existsSync(liveSnmp)) {
+    return { code: "stale_snmp_yml", detail: "volume snmp.yml missing" };
   }
   const needsSynology = devices.some((d) => {
     const t = (d.type || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
     const v = (d.vendor || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
     return t === "nas" || t === "storage" || v === "synology" || v === "syno";
   });
-  if (needsSynology && !alloy.includes("synology_health")) return true;
-  return false;
+  if (needsSynology && !alloy.includes("synology_health")) {
+    return {
+      code: "missing_synology_target",
+      detail: "NAS device present but config.alloy has no synology_health target"
+    };
+  }
+  return null;
+}
+
+/** True if config.alloy / snmp.yml is behind devices.json or the image toolkit. */
+export function alloySnmpConfigStale(_dataDir?: string): boolean {
+  return alloySnmpStaleReason(_dataDir) != null;
 }
 
 export async function ensureAlloySnmpApplied(
   _dataDir?: string,
   force = false
 ): Promise<{ reloaded: boolean; message: string }> {
-  const stale = force || alloySnmpConfigStale();
+  const reason = alloySnmpStaleReason();
+  const stale = force || reason != null;
   if (!stale) {
     return { reloaded: false, message: "Alloy SNMP config already matches devices.json" };
   }
 
+  const why = reason?.detail || (force ? "forced refresh" : "stale SNMP config");
   const genMsg = await regenerateAlloyConfig();
+  const still = alloySnmpStaleReason();
   const reloadMsg = await reloadAlloy({ forceRecreate: false });
+  if (still) {
+    return {
+      reloaded: true,
+      message: `Regenerated (${why}); ${genMsg}; ${reloadMsg} — still stale: ${still.detail}. Rebuild collector-console so /opt/sitebox/snmp.yml has the new packs, then Force apply again.`
+    };
+  }
   return {
     reloaded: true,
-    message: `${genMsg}; ${reloadMsg}`
+    message: `Regenerated (${why}); ${genMsg}; ${reloadMsg}`
   };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function syncDevices(
   _dataDir?: string,
   opts?: { forceAlloyReload?: boolean }
 ): Promise<SyncResult> {
+  const forceAlloyReload = opts?.forceAlloyReload === true;
+
+  // Force apply must not no-op when the 90s sync loop holds the lock.
   if (syncInFlight) {
-    return {
-      ok: false,
-      message: "Sync already in progress",
-      changed: false,
-      at: new Date().toISOString()
-    };
+    if (forceAlloyReload) {
+      for (let i = 0; i < 60; i++) {
+        await sleep(500);
+        if (!syncInFlight) break;
+      }
+    }
+    if (syncInFlight) {
+      return {
+        ok: false,
+        message: "Sync already in progress — wait a few seconds and Force apply again",
+        changed: false,
+        at: new Date().toISOString()
+      };
+    }
   }
 
   syncInFlight = true;
   const at = new Date().toISOString();
-  const forceAlloyReload = opts?.forceAlloyReload === true;
 
   try {
     const config = readConfig();

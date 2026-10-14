@@ -16,12 +16,14 @@ Each network device always scrapes **`if_mib`**. `generate-config.sh` adds **one
 
 ## Ops: apply on collectors
 
-1. Redeploy / refresh the site-box template so `snmp.yml` includes the new modules.
-2. **Force apply** (regenerate `config.alloy` + restart Alloy) so vendor targets appear.
-3. Set **type** and **vendor** correctly on each device in Sites (e.g. firewall + fortinet).
+1. **Rebuild and redeploy collector-console** (image embeds `/opt/sitebox/snmp.yml`). Redeploying only noc-app is not enough for new SNMP packs.
+2. **Force apply** in Collector Console (regenerate `config.alloy` + refresh stale `snmp.yml` modules from the image + restart Alloy).
+3. Set **type** and **vendor** correctly on each device in Sites (e.g. firewall + fortinet, AP + cambium).
 4. Prove with `snmpget`/`snmpwalk` on the collector LAN, then Prometheus series, then wallboard charts.
 
-`generate-config.sh` rewrites **auths** only and **preserves** the `modules:` block already in `snmp.yml`. If a volume still has an old `snmp.yml` (IF-MIB only), replace it from the image/template before Force-apply.
+`generate-config.sh` rewrites **auths** and replaces the `modules:` block when the image template has newer markers (`synology_health`, `cambiumClientInfo`, `omadaClientInfo`, …) that the volume `snmp.yml` lacks. Diagnostics show `snmpStaleReason` if Force apply still reports Stale.
+
+If Force apply says “Sync already in progress”, wait a few seconds and click again (the 90s sync loop can hold the lock).
 
 ## OID notes
 

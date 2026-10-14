@@ -6,7 +6,8 @@
 # - Always emit numeric scrape_interval (e.g. "15s"), never ${SCRAPE_INTERVAL_SEC}
 # - SNMP uses full snmp.yml (auths + if_mib + vendor health modules) beside config.alloy
 # - Each device: if_mib always; optional second target for fortigate/maipu/cambium/omada/synology
-# - Live snmp.yml modules are kept unless the image template has a newer vendor pack (e.g. synology_health)
+# - Live snmp.yml modules are kept unless the image template has newer vendor packs
+#   (synology_health, cambiumClientInfo, omadaClientInfo, … — see MODULE_MARKERS)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -220,6 +221,15 @@ if not re.fullmatch(r"[0-9]+", scrape_sec or ""):
 
 # Prefer image/template modules (vendor packs) when the live volume snmp.yml is stale.
 # Otherwise keep live modules so local OID tweaks survive auth rewrites.
+# Markers must stay in sync with collector-console alloySnmpConfigStale().
+MODULE_MARKERS = (
+    "synology_health",
+    "cambiumClientInfo",
+    "cambiumClientSNR",
+    "cambiumClientTxDataBytes",
+    "omadaClientInfo",
+)
+
 def extract_modules(path):
     if not path or not os.path.isfile(path):
         return ""
@@ -234,6 +244,14 @@ def extract_modules(path):
         block = "modules:" + block.split("modules:", 1)[-1]
     return block
 
+def template_has_newer_modules(tmpl, live):
+    if not tmpl.strip():
+        return False
+    for m in MODULE_MARKERS:
+        if m in tmpl and m not in live:
+            return True
+    return False
+
 template = (os.environ.get("SNMP_MODULES_FILE") or "").strip()
 if not template or not os.path.isfile(template):
     if os.path.isfile("/opt/sitebox/snmp.yml"):
@@ -243,7 +261,7 @@ if not template or not os.path.isfile(template):
 
 live = extract_modules(snmp_path)
 tmpl = extract_modules(template)
-if "synology_health" in tmpl and "synology_health" not in live:
+if template_has_newer_modules(tmpl, live):
     modules_block = tmpl
 elif live.strip():
     modules_block = live
