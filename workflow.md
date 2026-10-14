@@ -283,6 +283,10 @@ Collector box → Alloy → Prometheus (central)
   - Clients tab: `TablePagination` (20/page); resets on AP filter / search
   - Collector `scanClients`: parse Cambium link rate (col 12); byte counters → In/Out bps after 2nd scan (~90s)
   - noc-api: overlay Prom rx/tx rates onto stored stations by MAC when Prom has series
+- [x] **Omada client MAC decode (2026-10-14)**
+  - Root cause: Omada `macAddress` is OctetString Hex-STRING of ASCII `AA-BB-…`, not 6-byte binary; UI showed raw `"31 38 2D…"`
+  - Fix: decode binary (6 bytes) vs ASCII Hex-STRING in collector `formatMac` + noc-api `formatMacLabel`
+  - Omada MIB is MAC-only (no hostname/SSID/SNR/link/In/Out via SNMP) — Clients tab notes that when applicable
 
 ## Auth (operator login)
 - Wallboard login uses `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` on **noc-app**

@@ -101,6 +101,19 @@ export function SiteClientsPanel({ token, site }: Props) {
 
   const pager = useMemo(() => paginateItems(filteredStations, page, 20), [filteredStations, page]);
 
+  const omadaMacOnly = useMemo(() => {
+    if (stations.length === 0) return false;
+    return stations.every(
+      (st) =>
+        /omada|tplink/i.test(st.vendor || "") &&
+        !st.hostname &&
+        !st.ip &&
+        st.txRate == null &&
+        st.inBps == null &&
+        st.outBps == null
+    );
+  }, [stations]);
+
   if (loading && !network) {
     return (
       <div className="space-y-3">
@@ -217,6 +230,12 @@ export function SiteClientsPanel({ token, site }: Props) {
             )}
           </tbody>
         </table>
+        {omadaMacOnly ? (
+          <p className="muted" style={{ marginTop: "0.75rem", fontSize: "0.85em" }}>
+            Omada/TP-Link SNMP only exposes client MAC (no hostname, SSID, SNR, link rate, or
+            per-client In/Out). Those columns stay empty for Omada APs.
+          </p>
+        ) : null}
         <TablePagination
           page={pager.page}
           totalPages={pager.totalPages}

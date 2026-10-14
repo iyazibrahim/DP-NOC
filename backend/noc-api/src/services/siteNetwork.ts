@@ -653,18 +653,53 @@ function cleanLabel(v: string | undefined | null): string | null {
   return t;
 }
 
+/** Normalize MAC from Prom SNMP labels (binary PhysAddress or Omada ASCII Hex-STRING). */
 function formatMacLabel(v: string | undefined | null): string | null {
-  const t = cleanLabel(v);
+  let t = cleanLabel(v);
   if (!t) return null;
-  // PhysAddress often comes as hex without separators or with spaces/colons.
-  const hex = t.replace(/[^0-9a-fA-F]/g, "");
-  if (hex.length === 12) {
-    return hex
-      .toLowerCase()
-      .match(/.{2}/g)!
-      .join(":");
+  if (
+    (t.startsWith('"') && t.endsWith('"')) ||
+    (t.startsWith("'") && t.endsWith("'"))
+  ) {
+    t = t.slice(1, -1).trim();
   }
-  return t.toLowerCase();
+
+  // Spaced Hex-STRING: 6 bytes = binary MAC; longer = Omada ASCII "AA-BB-CC-DD-EE-FF"
+  if (/^[0-9A-Fa-f]{2}( [0-9A-Fa-f]{2})+$/.test(t)) {
+    const parts = t.split(/\s+/);
+    if (parts.length === 6) {
+      return parts.map((h) => h.toLowerCase()).join(":");
+    }
+    t = parts
+      .map((h) => String.fromCharCode(parseInt(h, 16)))
+      .join("")
+      .replace(/\0/g, "")
+      .trim();
+  }
+
+  const extract12 = (s: string): string | null => {
+    const hex = s.replace(/[^0-9a-fA-F]/g, "");
+    if (hex.length === 12) {
+      return hex.toLowerCase().match(/.{2}/g)!.join(":");
+    }
+    return null;
+  };
+
+  const direct = extract12(t);
+  if (direct) return direct;
+
+  const onlyHex = t.replace(/[^0-9a-fA-F]/g, "");
+  if (onlyHex.length > 12 && onlyHex.length % 2 === 0 && !/[:\-]/.test(t)) {
+    const ascii = onlyHex
+      .match(/.{2}/g)!
+      .map((h) => String.fromCharCode(parseInt(h, 16)))
+      .join("")
+      .replace(/[^\x20-\x7E]/g, "")
+      .trim();
+    return extract12(ascii);
+  }
+
+  return null;
 }
 
 async function collectStations(siteId: string, site: Site): Promise<SiteNetworkStation[]> {
