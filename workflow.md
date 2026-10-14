@@ -323,3 +323,5 @@ Collector box → Alloy → Prometheus (central)
 - **Site-box auto-deploy:** enable Auto Deploy on the site-box Compose app (separate from noc-app); see `docs/DOKPLOY_SITEBOX_AUTODEPLOY.md`. Optional GH Action `.github/workflows/dokploy-sitebox.yml` + secret `DOKPLOY_SITEBOX_WEBHOOK_URLS` when the NUC Dokploy needs an explicit webhook
 - [x] **Collector Console half-split layout (2026-10-14)**
   - Left: Dashboard / Setup / Settings; Right: Local devices (sticky pane, scrollable table); stacks on narrow screens
+- [x] **Dark scrollbars everywhere (2026-10-14)**
+  - Wallboard + Collector Console: `color-scheme: dark`, thin cyan/dark track, hide classic Windows scrollbar arrows

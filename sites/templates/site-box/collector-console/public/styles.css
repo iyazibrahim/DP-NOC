@@ -2,12 +2,55 @@
   box-sizing: border-box;
 }
 
+html {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   font-family: "Segoe UI", system-ui, sans-serif;
   background: #0b0f14;
   color: #e8eef5;
   line-height: 1.5;
+  color-scheme: dark;
+}
+
+/* Dark thin scrollbars (replace Windows classic white track) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(61, 139, 253, 0.55) #0d131a;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+*::-webkit-scrollbar-track {
+  background: #0d131a;
+  border-radius: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(61, 139, 253, 0.45);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(61, 139, 253, 0.7);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: #0d131a;
 }
 
 .wrap {
