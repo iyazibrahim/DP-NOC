@@ -8,7 +8,8 @@ import {
   dualHostMemFresh,
   dualHostUpFresh,
   METRIC_FRESH_WINDOW,
-  METRIC_HISTORY_WINDOW
+  METRIC_HISTORY_WINDOW,
+  SITE_SNMP_JOB_SELECTOR
 } from "./promLabels";
 
 export type DomainState = "healthy" | "warning" | "critical" | "unknown";
@@ -150,6 +151,23 @@ function worst(a: DomainState, b: DomainState): DomainState {
   return score[a] >= score[b] ? a : b;
 }
 
+/** Collapse repeated per-device notes into one short summary line. */
+function summarizeCriticalNotes(statuses: DomainStatus[]): string {
+  const notes = statuses
+    .filter((s) => s.state === "critical")
+    .map((s) => s.notes?.trim())
+    .filter((n): n is string => Boolean(n));
+  if (notes.length === 0) return "One or more checks are down";
+
+  const counts = new Map<string, number>();
+  for (const n of notes) {
+    counts.set(n, (counts.get(n) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([note, count]) => (count > 1 ? `${note} (${count} devices)` : note))
+    .join("; ");
+}
+
 function aggregateProbeStatuses(statuses: DomainStatus[]): DomainStatus {
   const states = statuses.map((s) => s.state);
   if (states.every((s) => s === "unknown")) {
@@ -159,18 +177,13 @@ function aggregateProbeStatuses(statuses: DomainStatus[]): DomainStatus {
     };
   }
   if (states.some((s) => s === "critical")) {
-    const notes = statuses
-      .filter((s) => s.state === "critical")
-      .map((s) => s.notes)
-      .filter(Boolean)
-      .join("; ");
-    return { state: "critical", notes: notes || "One or more checks are down" };
+    return { state: "critical", notes: summarizeCriticalNotes(statuses) };
   }
   if (states.some((s) => s === "warning")) {
-    return { state: "warning", notes: "Degraded readings" };
+    return { state: "warning", notes: "Degraded" };
   }
   if (states.some((s) => s === "unknown")) {
-    return { state: "warning", notes: "Partial data — other checks are up" };
+    return { state: "warning", notes: "Partial data" };
   }
   return { state: "healthy" };
 }
@@ -194,23 +207,20 @@ function aggregateUplinkQuorum(wanDns: DomainStatus, wanVps: DomainStatus): Doma
   if (criticalCount >= 2) {
     return {
       state: "critical",
-      notes:
-        [wanDns.notes, wanVps.notes].filter(Boolean).join("; ") || "Internet / uplink down"
+      notes: [wanDns.notes, wanVps.notes].filter(Boolean).join("; ") || "Uplink down"
     };
   }
   if (criticalCount === 1) {
     const bad = a === "critical" ? wanDns : wanVps;
     return {
       state: "warning",
-      notes: bad.notes
-        ? `Partial uplink issue: ${bad.notes}`
-        : "One uplink path down — other still up"
+      notes: bad.notes ? `Partial: ${bad.notes}` : "One path down"
     };
   }
   if (a === "warning" || b === "warning" || a === "unknown" || b === "unknown") {
     return {
       state: "warning",
-      notes: "Partial or degraded uplink readings"
+      notes: "Degraded"
     };
   }
   return { state: "healthy" };
@@ -225,8 +235,7 @@ async function queryBooleanMetricState(
   opts?: { silenceMeansDown?: boolean; downNotes?: string }
 ): Promise<DomainStatus> {
   const silenceMeansDown = opts?.silenceMeansDown ?? true;
-  const downNotes =
-    opts?.downNotes ?? `No data in the last ${METRIC_FRESH_WINDOW} — treated as down`;
+  const downNotes = opts?.downNotes ?? "No recent data";
 
   try {
     // max(): one device can have several SNMP targets (if_mib + vendor pack).
@@ -238,7 +247,7 @@ async function queryBooleanMetricState(
       const state = booleanValueToDomain(fresh);
       return {
         state,
-        notes: state === "critical" ? "Reported down by the latest check" : undefined
+        notes: state === "critical" ? "Down" : undefined
       };
     }
 
@@ -250,7 +259,7 @@ async function queryBooleanMetricState(
         : { state: "unknown", notes: downNotes };
     }
 
-    return { state: "unknown", notes: "No data received yet" };
+    return { state: "unknown", notes: "No data yet" };
   } catch {
     return { state: "unknown", notes: "Could not read metrics" };
   }
@@ -377,17 +386,30 @@ function isWebsiteAlert(alert: Alert): boolean {
   return name.includes("website") || name === "sitewebsitedown";
 }
 
+/**
+ * Fresh successful SNMP for this site means Alloy is still scraping and remote_writing.
+ * Used as a secondary collector liveness signal when the host heartbeat is missing.
+ */
+async function siteHasFreshSuccessfulSnmp(siteId: string): Promise<boolean> {
+  try {
+    const q = `max(
+      last_over_time(snmp_up{site="${siteId}"}[${METRIC_FRESH_WINDOW}])
+      or last_over_time(up{${SITE_SNMP_JOB_SELECTOR},site="${siteId}"}[${METRIC_FRESH_WINDOW}])
+    )`;
+    const v = parseFirstVectorValue(await promQuery(q));
+    return v !== null && v >= 1;
+  } catch {
+    return false;
+  }
+}
+
 async function collectorIdStatus(siteId: string, metricId: string): Promise<DomainStatus> {
   try {
     const upFresh = parseFirstVectorValue(
       await promQuery(dualHostUpFresh(siteId, metricId, METRIC_FRESH_WINDOW))
     );
-    if (upFresh !== null) {
-      const state = booleanValueToDomain(upFresh >= 1 ? 1 : upFresh === 0 ? 0 : upFresh);
-      return {
-        state,
-        notes: state === "critical" ? "Collector not responding" : undefined
-      };
+    if (upFresh !== null && upFresh >= 1) {
+      return { state: "healthy" };
     }
 
     const memFresh = parseFirstVectorValue(
@@ -397,6 +419,15 @@ async function collectorIdStatus(siteId: string, metricId: string): Promise<Doma
       return { state: "healthy" };
     }
 
+    // Host scrape missing or up=0 — fresh SNMP still proves the collector is alive.
+    if (await siteHasFreshSuccessfulSnmp(siteId)) {
+      return { state: "healthy" };
+    }
+
+    if (upFresh !== null && upFresh < 1) {
+      return { state: "critical", notes: "Offline" };
+    }
+
     const upHist = parseFirstVectorValue(
       await promQuery(dualHostUpFresh(siteId, metricId, METRIC_HISTORY_WINDOW))
     );
@@ -404,14 +435,11 @@ async function collectorIdStatus(siteId: string, metricId: string): Promise<Doma
       await promQuery(dualHostMemFresh(siteId, metricId, METRIC_HISTORY_WINDOW))
     );
     if (upHist !== null || memHist !== null) {
-      return {
-        state: "critical",
-        notes: `Collector silent for ${METRIC_FRESH_WINDOW} — treated as down`
-      };
+      return { state: "critical", notes: "Offline" };
     }
-    return { state: "unknown", notes: "Waiting for collector data" };
+    return { state: "unknown", notes: "Waiting for data" };
   } catch {
-    return { state: "unknown", notes: "Could not read collector metrics" };
+    return { state: "unknown", notes: "Could not read metrics" };
   }
 }
 
@@ -456,8 +484,7 @@ async function computeCollectorStatus(siteId: string): Promise<{
     return {
       aggregate: {
         state: "warning",
-        notes:
-          "Collector is sending data but is not registered yet — it should appear under Devices shortly"
+        notes: "Sending data — not registered yet"
       },
       devices: []
     };
@@ -466,13 +493,13 @@ async function computeCollectorStatus(siteId: string): Promise<{
     return {
       aggregate: {
         state: "warning",
-        notes: "Collector data found — waiting to add it automatically"
+        notes: "Data found — waiting to register"
       },
       devices: []
     };
   }
   return {
-    aggregate: { state: "unknown", notes: "Waiting for collector data" },
+    aggregate: { state: "unknown", notes: "Waiting for data" },
     devices: []
   };
 }
@@ -490,7 +517,7 @@ function applyCollectorInhibitOnUplink(
   }
   return {
     state: "warning",
-    notes: "Unknown — collector offline (cannot confirm uplink)"
+    notes: "Collector offline"
   };
 }
 
@@ -542,28 +569,32 @@ export async function computeSiteStatus(
     `probe_success{site="${siteId}",check="wan_dns"}`,
     {
       silenceMeansDown: true,
-      downNotes: `Internet probe silent for ${METRIC_FRESH_WINDOW}`
+      downNotes: "No recent data"
     }
   );
   const wanVpsRaw = await queryBooleanMetricState(
     `probe_success{site="${siteId}",check="wan_vps"}`,
     {
       silenceMeansDown: true,
-      downNotes: `Central uplink probe silent for ${METRIC_FRESH_WINDOW}`
+      downNotes: "No recent data"
     }
   );
   const wanDns = {
     ...wanDnsRaw,
     notes:
       wanDnsRaw.state === "critical"
-        ? wanDnsRaw.notes ?? "Cannot reach DNS (internet)"
+        ? wanDnsRaw.notes === "No recent data"
+          ? "No recent data"
+          : "DNS unreachable"
         : wanDnsRaw.notes
   };
   const wanVps = {
     ...wanVpsRaw,
     notes:
       wanVpsRaw.state === "critical"
-        ? wanVpsRaw.notes ?? "Cannot reach central server"
+        ? wanVpsRaw.notes === "No recent data"
+          ? "No recent data"
+          : "Central unreachable"
         : wanVpsRaw.notes
   };
 
@@ -585,7 +616,7 @@ export async function computeSiteStatus(
   const collector = applyRecoveryHysteresis(`collector:${siteId}`, collectorRaw);
   uplink = applyRecoveryHysteresis(`uplink:${siteId}`, uplink);
 
-  let localDevices: DomainStatus = { state: "unknown", notes: "No local devices configured" };
+  let localDevices: DomainStatus = { state: "unknown", notes: "No devices configured" };
   const localDeviceStates: SiteStatus["localDeviceStates"] = [];
   const devices = site.devices ?? [];
   const networkOrAll = devices.filter((d) => (d.kind ?? "network") === "network");
@@ -595,7 +626,7 @@ export async function computeSiteStatus(
       if (!d.snmpIp) {
         const st: DomainStatus = {
           state: "unknown",
-          notes: "Needs SNMP IP — collector cannot poll yet"
+          notes: "Needs SNMP IP"
         };
         deviceStatuses.push(st);
         localDeviceStates.push({
@@ -630,21 +661,21 @@ export async function computeSiteStatus(
             notes:
               fb.state === "healthy"
                 ? viaSiteJob
-                  ? "SNMP polling OK"
-                  : "SNMP polling OK (legacy collector job)"
+                  ? undefined
+                  : "Legacy SNMP job"
                 : fb.state === "critical"
-                  ? "SNMP poll failed — device may still respond to ping"
-                  : fb.notes ?? "SNMP scrape reports down"
+                  ? "SNMP down"
+                  : fb.notes ?? "SNMP down"
           };
           break;
         }
         if (st.state === "unknown" && !st.notes) {
-          st.notes = "Not polled yet — waiting for collector SNMP scrape";
+          st.notes = "Not polled yet";
         }
       } else if (st.state === "critical") {
         st = {
           ...st,
-          notes: "SNMP poll failed — device may still respond to ping"
+          notes: "SNMP down"
         };
       }
       deviceStatuses.push(st);
@@ -660,7 +691,7 @@ export async function computeSiteStatus(
   } else if (devices.length === 0 && (await hasUnregisteredHostMetrics(siteId))) {
     localDevices = {
       state: "warning",
-      notes: "Collector is reporting — add local devices (switches, etc.) when ready"
+      notes: "Add local devices when ready"
     };
   }
 

@@ -42,7 +42,13 @@ const envSchema = z.object({
   /** Comma-separated location codes: nyc,sfo,dal,ams,lon,fra,sgp,syd,sao,tok,mba,waw */
   HETRIXTOOLS_LOCATIONS: z.string().default("sgp,ams,nyc"),
   /** Optional Hetrix contact list ID for alerts (empty = none). */
-  HETRIXTOOLS_CONTACT_LIST: z.string().default("")
+  HETRIXTOOLS_CONTACT_LIST: z.string().default(""),
+
+  /**
+   * Carto basemap API key (Dokploy / .env name kept as NEXT_PUBLIC_* for continuity).
+   * Served at runtime via GET /api/settings/map — not baked into the Vite build.
+   */
+  NEXT_PUBLIC_CARTO_API_KEY: z.string().default("")
 });
 
 export const env = envSchema.parse(process.env);

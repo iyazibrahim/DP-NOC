@@ -97,6 +97,8 @@ services:
       - HETRIXTOOLS_API_TOKEN=${HETRIXTOOLS_API_TOKEN:-}
       - HETRIXTOOLS_LOCATIONS=${HETRIXTOOLS_LOCATIONS:-sgp,ams,nyc}
       - HETRIXTOOLS_CONTACT_LIST=${HETRIXTOOLS_CONTACT_LIST:-}
+      # Carto basemaps: served to the UI at runtime (same Dokploy name)
+      - NEXT_PUBLIC_CARTO_API_KEY=${NEXT_PUBLIC_CARTO_API_KEY:-}
       # Optional: docker restart noc_prometheus (requires Docker socket mount on VPS)
       # - PROMETHEUS_APPLY_CMD=docker restart noc_prometheus
       # - ALERTMANAGER_APPLY_CMD=docker restart noc_alertmanager

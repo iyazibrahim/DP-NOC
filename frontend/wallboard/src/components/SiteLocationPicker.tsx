@@ -1,6 +1,7 @@
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import { MapContainer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { CartoTileLayer } from "./CartoTileLayer";
 
 const defaultIcon = L.icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -38,10 +39,7 @@ export function SiteLocationPicker({
         style={{ height: "100%", width: "100%", background: "#0b1215" }}
         scrollWheelZoom
       >
-        <TileLayer
-          attribution='&copy; OpenStreetMap'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        />
+        <CartoTileLayer />
         <MapClickHandler onPick={onChange} />
         <Marker
           position={[lat, lng]}

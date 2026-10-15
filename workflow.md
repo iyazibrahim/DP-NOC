@@ -330,3 +330,7 @@ Collector box → Alloy → Prometheus (central)
   - Device list is the wider column; Add device matches that toolbar height; names and ids stay on one line; types no longer wrap mid-word
   - Fresh install (`site`, NOC URL, token, or metrics URL missing) opens a 5-step setup guide: connect (live NOC probe), metrics, ping/SNMP community, review, save
   - Setup tab keeps the full form and can reopen the guide; probe is `POST /api/setup/probe`
+- [x] **Map tiles + short health notes + stable collector (2026-10-15)**
+  - Carto: read `NEXT_PUBLIC_CARTO_API_KEY` on noc-app at runtime; compose forwards it; `GET /api/settings/map` returns tile URL; shared `CartoTileLayer` for Maps / site location
+  - Health notes: dedupe aggregated critical messages (`SNMP down (N devices)`); short copy (`Offline`, `Collector offline`, `SNMP down`, `No recent data`); CSS clamp health-card notes to 2 lines
+  - Collector liveness: if host heartbeat is missing/`up=0` but site SNMP is still fresh and successful, collector stays healthy (Alloy still polling + remote_write)

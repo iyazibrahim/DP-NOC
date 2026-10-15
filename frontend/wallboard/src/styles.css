@@ -2294,6 +2294,15 @@ textarea {
   color: var(--muted);
 }
 
+.healthMini > .muted {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.35;
+  font-size: 12px;
+}
+
 .healthMini--healthy {
   border-color: rgba(52, 211, 153, 0.35);
 }

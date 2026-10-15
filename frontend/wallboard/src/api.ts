@@ -668,6 +668,12 @@ export async function getStatusTiming(token: string) {
   });
 }
 
+export async function getMapSettings(token: string) {
+  return fetchJson<{ tileUrl: string; configured: boolean }>("/api/settings/map", {
+    headers: authHeaders(token)
+  });
+}
+
 export type HetrixSettingsStatus = {
   configured: boolean;
   locations: string;

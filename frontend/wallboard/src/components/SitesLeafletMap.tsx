@@ -1,6 +1,7 @@
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, CircleMarker, Popup, useMap, useMapEvents } from "react-leaflet";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { Site, SiteStatus } from "../types";
+import { CartoTileLayer } from "./CartoTileLayer";
 import "leaflet/dist/leaflet.css";
 
 const VIEW_KEY = "noc.map.view.v1";
@@ -155,10 +156,7 @@ export function SitesLeafletMap({
         style={{ height: "100%", width: "100%", background: "#0b1215" }}
         scrollWheelZoom
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        />
+        <CartoTileLayer />
         <FitBoundsOnce sites={sites} enabled={!saved} />
         <PersistView />
         <InvalidateOnResize containerRef={containerRef} />
