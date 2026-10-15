@@ -334,3 +334,6 @@ Collector box → Alloy → Prometheus (central)
   - Carto: read `NEXT_PUBLIC_CARTO_API_KEY` on noc-app at runtime; compose forwards it; `GET /api/settings/map` returns tile URL; shared `CartoTileLayer` for Maps / site location
   - Health notes: dedupe aggregated critical messages (`SNMP down (N devices)`); short copy (`Offline`, `Collector offline`, `SNMP down`, `No recent data`); CSS clamp health-card notes to 2 lines
   - Collector liveness: if host heartbeat is missing/`up=0` but site SNMP is still fresh and successful, collector stays healthy (Alloy still polling + remote_write)
+- [x] **Carto tile key param fix (2026-10-15)**
+  - Watermark persisted because tiles used `?api_key=`; Carto basemaps require `?key=`
+  - Frontend only caches tile URLs that include `?key=` so a keyless first response cannot stick

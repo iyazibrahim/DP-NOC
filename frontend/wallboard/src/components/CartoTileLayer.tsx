@@ -11,12 +11,16 @@ let cachedTileUrl: string | null = null;
 let inflight: Promise<string> | null = null;
 
 async function loadTileUrl(token: string): Promise<string> {
-  if (cachedTileUrl) return cachedTileUrl;
+  // Only cache a URL that includes the Carto key — avoid sticky keyless watermark.
+  if (cachedTileUrl && cachedTileUrl.includes("?key=")) return cachedTileUrl;
   if (!inflight) {
     inflight = getMapSettings(token)
       .then((r) => {
-        cachedTileUrl = r.tileUrl || FALLBACK_TILE;
-        return cachedTileUrl;
+        const next = r.tileUrl || FALLBACK_TILE;
+        if (r.configured && next.includes("?key=")) {
+          cachedTileUrl = next;
+        }
+        return next;
       })
       .catch(() => FALLBACK_TILE)
       .finally(() => {

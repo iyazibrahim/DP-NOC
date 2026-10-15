@@ -77,11 +77,11 @@ settingsRouter.get("/status-timing", requireJwt(["operator", "wallboard"]), (_re
 const CARTO_DARK_TILE =
   "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 
-/** Leaflet tile URL; appends Carto api_key from env when set. */
+/** Leaflet tile URL; Carto basemaps require `?key=` (not api_key). */
 settingsRouter.get("/map", requireJwt(["operator", "wallboard"]), (_req, res) => {
   const key = env.NEXT_PUBLIC_CARTO_API_KEY.trim();
   const tileUrl = key
-    ? `${CARTO_DARK_TILE}?api_key=${encodeURIComponent(key)}`
+    ? `${CARTO_DARK_TILE}?key=${encodeURIComponent(key)}`
     : CARTO_DARK_TILE;
   return res.json({ tileUrl, configured: Boolean(key) });
 });
