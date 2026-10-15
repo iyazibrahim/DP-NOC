@@ -7,9 +7,37 @@ import {
 import { getSiteById, type Site } from "../data/sites";
 import { loadSiteStations } from "../data/siteStations";
 import { dualSnmpUpFresh, probeSuccessFresh, METRIC_FRESH_WINDOW } from "./promLabels";
+import { env } from "../env";
 
 function escapePromLabel(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+/**
+ * Seconds elapsed since local midnight in `timeZone` (IANA).
+ * Used for calendar-day “Today” line-use (resets at 00:00).
+ */
+export function secondsSinceMidnightInTz(timeZone: string, now = new Date()): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(now);
+  const num = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((p) => p.type === type)?.value ?? "0");
+  const h = num("hour");
+  const m = num("minute");
+  const s = num("second");
+  if (![h, m, s].every((n) => Number.isFinite(n))) return 24 * 3600;
+  return Math.max(0, h * 3600 + m * 60 + s);
+}
+
+/** Prom range selector for calendar Today, e.g. `15234s` (min 60s). */
+export function calendarTodayPromRange(timeZone = env.NOC_TZ, now = new Date()): string {
+  const sec = Math.max(60, secondsSinceMidnightInTz(timeZone, now));
+  return `${sec}s`;
 }
 
 export type SnmpInterfaceInfo = {
@@ -424,17 +452,18 @@ async function collectUtilWindows(
     outBytes: null
   });
 
-  /** Prom range for util avg/peak vs volume increase (24h reads better than 1d for “Today”). */
   const queryWindow = async (
     utilRange: string,
     volumeRange: string
   ): Promise<SiteNetworkUtilWindow> => {
     try {
+      // Subquery step: 1h for multi-day windows; 5m for calendar Today (often < 1h early morning).
+      const step = utilRange.endsWith("s") || utilRange.endsWith("m") ? "5m" : "1h";
       const [avgIn, avgOut, peakIn, peakOut, inBytes, outBytes] = await Promise.all([
-        parseFirstVectorValue(await promQuery(`avg_over_time((${utilIn})[${utilRange}:1h])`)),
-        parseFirstVectorValue(await promQuery(`avg_over_time((${utilOut})[${utilRange}:1h])`)),
-        parseFirstVectorValue(await promQuery(`max_over_time((${utilIn})[${utilRange}:1h])`)),
-        parseFirstVectorValue(await promQuery(`max_over_time((${utilOut})[${utilRange}:1h])`)),
+        parseFirstVectorValue(await promQuery(`avg_over_time((${utilIn})[${utilRange}:${step}])`)),
+        parseFirstVectorValue(await promQuery(`avg_over_time((${utilOut})[${utilRange}:${step}])`)),
+        parseFirstVectorValue(await promQuery(`max_over_time((${utilIn})[${utilRange}:${step}])`)),
+        parseFirstVectorValue(await promQuery(`max_over_time((${utilOut})[${utilRange}:${step}])`)),
         parseFirstVectorValue(
           await promQuery(buildIfVolumeQuery("in", siteId, deviceId, ifName, volumeRange))
         ),
@@ -455,8 +484,10 @@ async function collectUtilWindows(
     }
   };
 
+  // Today = calendar day in NOC_TZ (midnight → now); 7d / 30d stay rolling.
+  const todayRange = calendarTodayPromRange();
   const [d1, d7, d30] = await Promise.all([
-    queryWindow("24h", "24h"),
+    queryWindow(todayRange, todayRange),
     queryWindow("7d", "7d"),
     queryWindow("30d", "30d")
   ]);

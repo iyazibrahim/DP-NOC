@@ -260,7 +260,7 @@ Collector box → Alloy → Prometheus (central)
     - Plain-language labels, cyan selected toggles, consistent pill padding, loading skeletons
   - **Site network polish (2026-10-14)**
     - Network cards use the same dashWidget / widgetChrome / widgetInner pattern as the main dashboard
-    - Line use shows GB/TB transferred (increase of ifHC*Octets) plus avg %; Today window uses 24h
+    - Line use shows GB/TB transferred (increase of ifHC*Octets) plus avg %; Today = calendar day in `NOC_TZ` (default Asia/Kuala_Lumpur, resets at midnight); 7d/30d remain rolling
   - **Clients tab (2026-10-14)**
     - Site detail: Overview / Network / **Clients** — total + per-AP client counts
     - **Per-station list:** Cambium `cambiumClientTable` → hostname/MAC/IP/SSID/SNR/link rate + live in/out (`rate(*DataBytes)*8`); Omada MAC-only via `omadaClientInfo`
@@ -337,3 +337,5 @@ Collector box → Alloy → Prometheus (central)
 - [x] **Carto tile key param fix (2026-10-15)**
   - Watermark persisted because tiles used `?api_key=`; Carto basemaps require `?key=`
   - Frontend only caches tile URLs that include `?key=` so a keyless first response cannot stick
+- [x] **Line use Today = calendar day (2026-10-15)**
+  - `collectUtilWindows` “1d” uses midnight→now in `NOC_TZ` (default `Asia/Kuala_Lumpur`), not rolling 24h; 7d/30d unchanged

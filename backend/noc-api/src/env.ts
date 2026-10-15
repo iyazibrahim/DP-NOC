@@ -48,7 +48,13 @@ const envSchema = z.object({
    * Carto basemap API key (Dokploy / .env name kept as NEXT_PUBLIC_* for continuity).
    * Served at runtime via GET /api/settings/map — not baked into the Vite build.
    */
-  NEXT_PUBLIC_CARTO_API_KEY: z.string().default("")
+  NEXT_PUBLIC_CARTO_API_KEY: z.string().default(""),
+
+  /**
+   * IANA timezone for calendar-day “Today” line-use (midnight → now).
+   * Default Malaysia / Penang.
+   */
+  NOC_TZ: z.string().default("Asia/Kuala_Lumpur")
 });
 
 export const env = envSchema.parse(process.env);
