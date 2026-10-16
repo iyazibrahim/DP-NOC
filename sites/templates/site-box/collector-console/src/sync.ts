@@ -163,22 +163,22 @@ export async function ensureAlloySnmpApplied(
   const reason = alloySnmpStaleReason();
   const stale = force || reason != null;
   if (!stale) {
-    return { reloaded: false, message: "Alloy SNMP config already matches devices.json" };
+    return { reloaded: false, message: "Device checks already match the list." };
   }
 
-  const why = reason?.detail || (force ? "forced refresh" : "stale SNMP config");
-  const genMsg = await regenerateAlloyConfig();
+  await regenerateAlloyConfig();
   const still = alloySnmpStaleReason();
-  const reloadMsg = await reloadAlloy({ forceRecreate: false });
+  await reloadAlloy({ forceRecreate: false });
   if (still) {
     return {
       reloaded: true,
-      message: `Regenerated (${why}); ${genMsg}; ${reloadMsg} — still stale: ${still.detail}. Rebuild collector-console so /opt/sitebox/snmp.yml has the new packs, then Force apply again.`
+      message:
+        "Device checks were rebuilt, but they still do not match the list. Use Force apply again. If it stays stuck, open Diagnostics."
     };
   }
   return {
     reloaded: true,
-    message: `Regenerated (${why}); ${genMsg}; ${reloadMsg}`
+    message: "Device checks were updated."
   };
 }
 
@@ -203,7 +203,7 @@ export async function syncDevices(
     if (syncInFlight) {
       return {
         ok: false,
-        message: "Sync already in progress — wait a few seconds and Force apply again",
+        message: "A sync is already running. Wait a few seconds, then use Force apply again.",
         changed: false,
         at: new Date().toISOString()
       };
@@ -218,7 +218,7 @@ export async function syncDevices(
     if (!config.nocApiUrl || !config.siteName || !config.collectorToken) {
       const result: SyncResult = {
         ok: false,
-        message: "Missing NOC_API_URL, SITE_NAME, or COLLECTOR_TOKEN",
+        message: "Finish Setup first. The NOC address, site, and collector token are required.",
         changed: false,
         at
       };
@@ -245,11 +245,11 @@ export async function syncDevices(
     if (httpCode === 304) {
       deviceCount = readLocalDevices().length;
     } else if (httpCode !== 200) {
-      const body = await res.text();
+      await res.text();
       const result: SyncResult = {
         ok: false,
         httpCode,
-        message: `Fetch failed HTTP ${httpCode}: ${body.slice(0, 200)}`,
+        message: "Could not load the device list from the NOC. Check Setup and try again.",
         changed: false,
         at
       };
@@ -290,16 +290,21 @@ export async function syncDevices(
 
     const ensure = await ensureAlloySnmpApplied(undefined, forceAlloyReload || inventoryChanged);
 
-    const parts: string[] = [];
-    if (httpCode === 304) parts.push("Inventory unchanged (304)");
-    else if (!inventoryChanged) parts.push("Inventory content identical");
-    else parts.push(`Synced ${deviceCount} device(s)`);
-    parts.push(ensure.message);
+    let message = "Device list is already up to date.";
+    if (!ensure.reloaded && (httpCode === 304 || !inventoryChanged)) {
+      message = "Device list is already up to date.";
+    } else if (ensure.message.startsWith("Device checks were rebuilt, but")) {
+      message = ensure.message;
+    } else if (inventoryChanged) {
+      message = `Saved ${deviceCount} devices and updated the checks.`;
+    } else if (ensure.reloaded) {
+      message = "Device checks were updated.";
+    }
 
     const result: SyncResult = {
-      ok: true,
+      ok: !ensure.message.startsWith("Device checks were rebuilt, but"),
       httpCode,
-      message: parts.join(" — "),
+      message,
       deviceCount,
       changed: inventoryChanged || ensure.reloaded,
       alloyReloaded: ensure.reloaded,

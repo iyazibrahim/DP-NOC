@@ -23,7 +23,7 @@ groups:
           severity: critical
           site: "{{ $labels.site }}"
         annotations:
-          summary: "Internet down at {{ $labels.site }} (both wan_dns and wan_vps)"
+          summary: "The internet is down at {{ $labels.site }}. Both checks failed. Check the uplink and the collector."
 
       - alert: SiteWebsiteDown
         expr: |
@@ -37,7 +37,7 @@ groups:
           severity: critical
           site: "{{ $labels.site }}"
         annotations:
-          summary: "Website check failing (site={{ $labels.site }}, target={{ $labels.instance }})"
+          summary: "A website at {{ $labels.site }} is not responding. Check that the address is correct and the site is up."
 
       # Secondary: collector box offline or silent
       - alert: SiteCollectorDown
@@ -54,30 +54,50 @@ groups:
           severity: critical
           site: "{{ $labels.site }}"
         annotations:
-          summary: "Collector offline at {{ $labels.site }} (device={{ $labels.device }}, instance={{ $labels.instance }})"
+          summary: "The collector at {{ $labels.site }} is offline. Device checks are paused. Check power and the network on the collector, then open Collector Console."
 
       - alert: SiteLocalDeviceDown
-        # Prefer snmp_up; also site_snmp_if_mib scrape up (Alloy may omit snmp_up); legacy integrations/snmp last.
+        # Both SNMP and the device ping must be failing, and the collector host must still be up.
         expr: |
           (
-            (snmp_up{site=~".+"} == 0)
-            or
             (
-              absent_over_time(snmp_up{site=~".+"}[5m])
-              unless on(device) (up{job="site_snmp_if_mib"} == 1)
-              unless on(device) (up{job=~"integrations/snmp/.*"} == 1)
+              (snmp_up{site=~".+"} == 0)
+              or
+              (
+                (up{job="site_snmp_if_mib"} == 0)
+                unless on(site, device) (snmp_up == 1)
+              )
             )
-            or
+            and on(site, device)
             (
-              (up{job="site_snmp_if_mib"} == 0)
-              unless on(device) (snmp_up)
+              (probe_success{check="device_ping"} == 0)
+              or
+              absent_over_time(probe_success{check="device_ping"}[90s])
             )
-            or
+          )
+          and on(site)
+          (up{job=~"site_host|integrations/unix"} == 1)
+        for: 2m
+        labels:
+          severity: critical
+          site: "{{ $labels.site }}"
+          device: "{{ $labels.device }}"
+        annotations:
+          summary: "{{ $labels.device }} is not answering ping or SNMP. Check power and the network cable."
+
+      - alert: SiteSnmpDegraded
+        expr: |
+          (
             (
-              (up{job=~"integrations/snmp/.*"} == 0)
-              unless on(device) (snmp_up)
-              unless on(device) (up{job="site_snmp_if_mib"})
+              (snmp_up{site=~".+"} == 0)
+              or
+              (
+                (up{job="site_snmp_if_mib"} == 0)
+                unless on(site, device) (snmp_up == 1)
+              )
             )
+            and on(site, device)
+            (probe_success{check="device_ping"} == 1)
           )
         for: 2m
         labels:
@@ -85,4 +105,4 @@ groups:
           site: "{{ $labels.site }}"
           device: "{{ $labels.device }}"
         annotations:
-          summary: "Local device SNMP check failing (site={{ $labels.site }}, device={{ $labels.device }})"
+          summary: "{{ $labels.device }} is online, but SNMP is not answering. Check the SNMP community and that UDP port 161 is allowed, then use Force apply on the collector."

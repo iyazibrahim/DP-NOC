@@ -31,10 +31,20 @@ receivers:
     #     auth_password: "pass"
     #     send_resolved: true
 
-# Collector offline explains missing uplink probes — suppress symptom pages.
+# Collector offline explains missing uplink and device checks — suppress those pages.
 inhibit_rules:
   - source_matchers:
       - alertname = SiteCollectorDown
     target_matchers:
       - alertname = SiteUplinkDown
+    equal: ["site"]
+  - source_matchers:
+      - alertname = SiteCollectorDown
+    target_matchers:
+      - alertname = SiteLocalDeviceDown
+    equal: ["site"]
+  - source_matchers:
+      - alertname = SiteCollectorDown
+    target_matchers:
+      - alertname = SiteSnmpDegraded
     equal: ["site"]

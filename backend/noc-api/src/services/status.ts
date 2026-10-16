@@ -3,6 +3,7 @@ import { promQuery, parseFirstVectorValue, parseVectorToNumericValues } from "./
 import { getActiveAlerts, type Alert } from "./alertmanager";
 import { hasUnregisteredHostMetrics, siteHasCollectorMetrics } from "./deviceDiscovery";
 import { getGlobalWebsites } from "../data/globalWebsites";
+import { getFreshDeviceSnapshot, type ProbeLevel } from "../data/deviceSnapshots";
 import { env } from "../env";
 import {
   dualHostMemFresh,
@@ -165,7 +166,38 @@ function summarizeCriticalNotes(statuses: DomainStatus[]): string {
   }
   return [...counts.entries()]
     .map(([note, count]) => (count > 1 ? `${note} (${count} devices)` : note))
-    .join("; ");
+    .join(" ");
+}
+
+/**
+ * One failed device is a warning for the location. The site is down only when
+ * every local device that has reported is down.
+ */
+function aggregateLocalDevices(statuses: DomainStatus[]): DomainStatus {
+  const states = statuses.map((s) => s.state);
+  if (states.every((s) => s === "unknown")) {
+    return {
+      state: "unknown",
+      notes: statuses.find((s) => s.notes)?.notes ?? "No data yet"
+    };
+  }
+  const critical = statuses.filter((s) => s.state === "critical");
+  const reported = states.filter((s) => s !== "unknown");
+  const allReportedDown = reported.length > 0 && reported.every((s) => s === "critical");
+  if (allReportedDown && critical.length === statuses.length) {
+    return { state: "critical", notes: summarizeCriticalNotes(statuses) };
+  }
+  if (critical.length > 0) {
+    return { state: "warning", notes: summarizeCriticalNotes(critical) };
+  }
+  if (states.some((s) => s === "warning")) {
+    const note = statuses.find((s) => s.state === "warning" && s.notes)?.notes;
+    return { state: "warning", notes: note ?? "Some devices need attention." };
+  }
+  if (states.some((s) => s === "unknown")) {
+    return { state: "warning", notes: "Some devices have not reported yet." };
+  }
+  return { state: "healthy" };
 }
 
 function aggregateProbeStatuses(statuses: DomainStatus[]): DomainStatus {
@@ -180,10 +212,11 @@ function aggregateProbeStatuses(statuses: DomainStatus[]): DomainStatus {
     return { state: "critical", notes: summarizeCriticalNotes(statuses) };
   }
   if (states.some((s) => s === "warning")) {
-    return { state: "warning", notes: "Degraded" };
+    const note = statuses.find((s) => s.state === "warning" && s.notes)?.notes;
+    return { state: "warning", notes: note ?? "Some checks need attention." };
   }
   if (states.some((s) => s === "unknown")) {
-    return { state: "warning", notes: "Partial data" };
+    return { state: "warning", notes: "Some devices have not reported yet." };
   }
   return { state: "healthy" };
 }
@@ -207,20 +240,24 @@ function aggregateUplinkQuorum(wanDns: DomainStatus, wanVps: DomainStatus): Doma
   if (criticalCount >= 2) {
     return {
       state: "critical",
-      notes: [wanDns.notes, wanVps.notes].filter(Boolean).join("; ") || "Uplink down"
+      notes:
+        [wanDns.notes, wanVps.notes].filter(Boolean).join(" ") ||
+        "Both internet checks failed. Check the uplink and the collector."
     };
   }
   if (criticalCount === 1) {
     const bad = a === "critical" ? wanDns : wanVps;
     return {
       state: "warning",
-      notes: bad.notes ? `Partial: ${bad.notes}` : "One path down"
+      notes: bad.notes
+        ? `One internet path failed. ${bad.notes}`
+        : "One internet path failed. The location is still reachable on the other path."
     };
   }
   if (a === "warning" || b === "warning" || a === "unknown" || b === "unknown") {
     return {
       state: "warning",
-      notes: "Degraded"
+      notes: "The internet check is incomplete."
     };
   }
   return { state: "healthy" };
@@ -277,6 +314,101 @@ function escapePromLabel(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
+const COLLECTOR_OFFLINE_NOTE =
+  "Device checks are paused so they are not marked down. Check power and the network on the collector, then open Collector Console.";
+
+const SNMP_WARNING_NOTE = (name: string) =>
+  `${name} is online, but SNMP is not answering. Check the SNMP community and that UDP port 161 is allowed, then use Force apply on the collector.`;
+
+const BOTH_DOWN_NOTE = (name: string) =>
+  `${name} is not answering ping or SNMP. Check power and the network cable.`;
+
+type PromLevel = ProbeLevel | "stale";
+
+async function queryPromLevel(metricSelector: string): Promise<PromLevel> {
+  try {
+    const freshQ = `max(last_over_time(${metricSelector}[${METRIC_FRESH_WINDOW}]))`;
+    const fresh = parseFirstVectorValue(await promQuery(freshQ));
+    if (fresh !== null) {
+      if (fresh >= 1) return "up";
+      if (fresh === 0) return "down";
+    }
+    const histQ = `max(last_over_time(${metricSelector}[${METRIC_HISTORY_WINDOW}]))`;
+    const hist = parseFirstVectorValue(await promQuery(histQ));
+    if (hist !== null) return "stale";
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function preferFresh(prom: PromLevel, snap?: ProbeLevel): ProbeLevel {
+  if (prom === "up" || prom === "down") return prom;
+  if (snap === "up" || snap === "down") return snap;
+  if (prom === "stale") return "down";
+  return "unknown";
+}
+
+export function combineDeviceChecks(
+  name: string,
+  snmp: ProbeLevel,
+  ping: ProbeLevel
+): DomainStatus {
+  if (snmp === "up") return { state: "healthy" };
+  if (ping === "up") return { state: "warning", notes: SNMP_WARNING_NOTE(name) };
+  if (ping === "down") return { state: "critical", notes: BOTH_DOWN_NOTE(name) };
+  if (snmp === "down") {
+    return {
+      state: "warning",
+      notes: `${name} is not answering SNMP. Ping has not reported yet. Check the SNMP community and that UDP port 161 is allowed, then use Force apply on the collector.`
+    };
+  }
+  return { state: "unknown", notes: "Not checked yet." };
+}
+
+async function querySnmpLevel(siteId: string, deviceId: string, snmpIp?: string): Promise<PromLevel> {
+  const id = escapePromLabel(deviceId);
+  const selectors = [
+    `snmp_up{site="${siteId}",device="${id}"}`,
+    `up{job="site_snmp_if_mib",site="${siteId}",device="${id}"}`,
+    `up{job="site_snmp_if_mib",device="${id}"}`,
+    `up{job=~"integrations/snmp/.*",device="${id}"}`,
+    `up{job=~"integrations/snmp/.*",site="${siteId}",device="${id}"}`
+  ];
+  if (snmpIp) {
+    const ipRe = snmpIp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    selectors.push(`up{job=~"integrations/snmp/.*",instance=~".*${ipRe}.*"}`);
+  }
+  let sawStale = false;
+  for (const sel of selectors) {
+    const level = await queryPromLevel(sel);
+    if (level === "up" || level === "down") return level;
+    if (level === "stale") sawStale = true;
+  }
+  return sawStale ? "stale" : "unknown";
+}
+
+async function siteHasFreshSuccessfulPing(siteId: string): Promise<boolean> {
+  try {
+    const q = `max(last_over_time(probe_success{site="${siteId}",check="device_ping"}[${METRIC_FRESH_WINDOW}]))`;
+    const v = parseFirstVectorValue(await promQuery(q));
+    return v !== null && v >= 1;
+  } catch {
+    return false;
+  }
+}
+
+function alertForcesOverallDown(alert: Alert, snapshotFresh: boolean): boolean {
+  if (alert.status !== "firing" || isWebsiteAlert(alert)) return false;
+  const name = String(alert.labels?.alertname ?? "");
+  if (name === "SiteSnmpDegraded" || name === "SiteLocalDeviceDown") return false;
+  if (snapshotFresh && name === "SiteCollectorDown") {
+    return false;
+  }
+  const sev = String(alert.labels?.severity ?? "critical").toLowerCase();
+  return sev !== "warning" && sev !== "info";
+}
+
 /**
  * Blackbox probe for one URL, with Hetrix multi-location failover:
  * critical only if Blackbox says down AND Hetrix does not say up.
@@ -303,24 +435,24 @@ async function evaluateWebsiteTarget(
       );
       if (hist !== null) {
         state = "critical";
-        notes = `Probe silent for ${METRIC_FRESH_WINDOW}`;
+        notes = "This website has not answered recently. Check that the address is correct and the site is up.";
       } else {
         state = "unknown";
-        notes = "No probe data yet";
+        notes = "No website check yet.";
       }
     } else if (successFresh >= 1) {
       state = "healthy";
     } else {
       state = "critical";
       if (httpStatus != null && Number.isFinite(httpStatus) && httpStatus > 0) {
-        notes = `Blackbox probe failed (HTTP ${Math.round(httpStatus)})`;
+        notes = `This website returned an error (HTTP ${Math.round(httpStatus)}). Check the site.`;
       } else {
-        notes = "Blackbox probe failed";
+        notes = "This website did not respond. Check that the address is correct and the site is up.";
       }
     }
   } catch {
     state = "unknown";
-    notes = "Could not read probe metrics";
+    notes = "The NOC could not read the latest website check.";
   }
 
   try {
@@ -330,12 +462,12 @@ async function evaluateWebsiteTarget(
       if (hx) {
         if (hx.uptimeStatus === "up") {
           if (state === "critical" || state === "unknown") {
-            notes = `HetrixTools: up${notes ? ` (${notes})` : " (local probe disagreed)"}`;
+            notes = "An outside check says this website is up.";
           }
           state = "healthy";
         } else if (hx.uptimeStatus === "down") {
           state = "critical";
-          notes = "HetrixTools: down";
+          notes = "An outside check says this website is down.";
         }
       }
     }
@@ -423,9 +555,12 @@ async function collectorIdStatus(siteId: string, metricId: string): Promise<Doma
     if (await siteHasFreshSuccessfulSnmp(siteId)) {
       return { state: "healthy" };
     }
+    if (await siteHasFreshSuccessfulPing(siteId)) {
+      return { state: "healthy" };
+    }
 
     if (upFresh !== null && upFresh < 1) {
-      return { state: "critical", notes: "Offline" };
+      return { state: "critical", notes: COLLECTOR_OFFLINE_NOTE };
     }
 
     const upHist = parseFirstVectorValue(
@@ -435,7 +570,7 @@ async function collectorIdStatus(siteId: string, metricId: string): Promise<Doma
       await promQuery(dualHostMemFresh(siteId, metricId, METRIC_HISTORY_WINDOW))
     );
     if (upHist !== null || memHist !== null) {
-      return { state: "critical", notes: "Offline" };
+      return { state: "critical", notes: COLLECTOR_OFFLINE_NOTE };
     }
     return { state: "unknown", notes: "Waiting for data" };
   } catch {
@@ -517,7 +652,7 @@ function applyCollectorInhibitOnUplink(
   }
   return {
     state: "warning",
-    notes: "Collector offline"
+    notes: "The collector is offline, so the internet check is paused. Check the collector before treating this location as offline."
   };
 }
 
@@ -537,9 +672,7 @@ export async function computeSiteStatus(
     // Global is website-only — overall follows website domain (Hetrix failover applied).
     // Do not force critical from Blackbox-only SiteWebsiteDown AM alerts.
     let overall: DomainState = websites.state;
-    const nonWebsiteFiring = relevant.filter(
-      (a) => a.status === "firing" && !isWebsiteAlert(a)
-    ).length;
+    const nonWebsiteFiring = relevant.filter((a) => alertForcesOverallDown(a, false)).length;
     if (nonWebsiteFiring > 0) overall = "critical";
 
     const na = { state: "unknown" as const, notes: "Not applicable" };
@@ -569,32 +702,28 @@ export async function computeSiteStatus(
     `probe_success{site="${siteId}",check="wan_dns"}`,
     {
       silenceMeansDown: true,
-      downNotes: "No recent data"
+      downNotes: "No recent internet check from this location."
     }
   );
   const wanVpsRaw = await queryBooleanMetricState(
     `probe_success{site="${siteId}",check="wan_vps"}`,
     {
       silenceMeansDown: true,
-      downNotes: "No recent data"
+      downNotes: "No recent internet check from this location."
     }
   );
   const wanDns = {
     ...wanDnsRaw,
     notes:
       wanDnsRaw.state === "critical"
-        ? wanDnsRaw.notes === "No recent data"
-          ? "No recent data"
-          : "DNS unreachable"
+        ? "The DNS check failed."
         : wanDnsRaw.notes
   };
   const wanVps = {
     ...wanVpsRaw,
     notes:
       wanVpsRaw.state === "critical"
-        ? wanVpsRaw.notes === "No recent data"
-          ? "No recent data"
-          : "Central unreachable"
+        ? "The path to the central server failed."
         : wanVpsRaw.notes
   };
 
@@ -613,8 +742,25 @@ export async function computeSiteStatus(
 
   uplink = applyCollectorInhibitOnUplink(uplink, collectorRaw);
 
-  const collector = applyRecoveryHysteresis(`collector:${siteId}`, collectorRaw);
+  let collector = applyRecoveryHysteresis(`collector:${siteId}`, collectorRaw);
   uplink = applyRecoveryHysteresis(`uplink:${siteId}`, uplink);
+
+  const snapshot = getFreshDeviceSnapshot(siteId);
+  const snapshotByDevice = new Map((snapshot?.devices ?? []).map((d) => [d.deviceId, d]));
+  if (collector.state === "critical" && snapshot) {
+    collector = {
+      state: "warning",
+      notes: "The metrics feed is delayed. Device checks are still arriving from the collector."
+    };
+    if (uplink.state === "critical") {
+      uplink = {
+        state: "warning",
+        notes:
+          "The metrics feed is delayed, so the internet check is paused. Device checks are still arriving from the collector."
+      };
+    }
+  }
+  const collectorOffline = collector.state === "critical";
 
   let localDevices: DomainStatus = { state: "unknown", notes: "No devices configured" };
   const localDeviceStates: SiteStatus["localDeviceStates"] = [];
@@ -626,7 +772,7 @@ export async function computeSiteStatus(
       if (!d.snmpIp) {
         const st: DomainStatus = {
           state: "unknown",
-          notes: "Needs SNMP IP"
+          notes: "Needs an SNMP address"
         };
         deviceStatuses.push(st);
         localDeviceStates.push({
@@ -638,44 +784,18 @@ export async function computeSiteStatus(
         });
         continue;
       }
-      // Prefer snmp_up; then site_snmp_if_mib scrape up (Alloy may omit snmp_up); then legacy job name.
-      // Status is SNMP reachability — not ICMP ping (a device can ping and still fail SNMP).
-      let st = await queryBooleanMetricState(`snmp_up{site="${siteId}",device="${d.id}"}`);
-      if (st.state === "unknown") {
-        const fallbackSelectors = [
-          `up{job="site_snmp_if_mib",site="${siteId}",device="${d.id}"}`,
-          `up{job="site_snmp_if_mib",device="${d.id}"}`,
-          `up{job=~"integrations/snmp/.*",device="${d.id}"}`,
-          `up{job=~"integrations/snmp/.*",site="${siteId}",device="${d.id}"}`
-        ];
-        if (d.snmpIp) {
-          const ipRe = d.snmpIp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          fallbackSelectors.push(`up{job=~"integrations/snmp/.*",instance=~".*${ipRe}.*"}`);
-        }
-        for (const sel of fallbackSelectors) {
-          const fb = await queryBooleanMetricState(sel);
-          if (fb.state === "unknown") continue;
-          const viaSiteJob = sel.includes('job="site_snmp_if_mib"');
-          st = {
-            ...fb,
-            notes:
-              fb.state === "healthy"
-                ? viaSiteJob
-                  ? undefined
-                  : "Legacy SNMP job"
-                : fb.state === "critical"
-                  ? "SNMP down"
-                  : fb.notes ?? "SNMP down"
-          };
-          break;
-        }
-        if (st.state === "unknown" && !st.notes) {
-          st.notes = "Not polled yet";
-        }
-      } else if (st.state === "critical") {
+      const snmpProm = await querySnmpLevel(siteId, d.id, d.snmpIp);
+      const pingProm = await queryPromLevel(
+        `probe_success{site="${siteId}",device="${escapePromLabel(d.id)}",check="device_ping"}`
+      );
+      const snap = snapshotByDevice.get(d.id);
+      const snmp = preferFresh(snmpProm, snap?.snmp);
+      const ping = preferFresh(pingProm, snap?.ping);
+      let st = combineDeviceChecks(d.name || d.id, snmp, ping);
+      if (collectorOffline) {
         st = {
-          ...st,
-          notes: "SNMP down"
+          state: "unknown",
+          notes: `The collector at ${site.name} is offline, so device checks are paused.`
         };
       }
       deviceStatuses.push(st);
@@ -687,7 +807,7 @@ export async function computeSiteStatus(
         notes: st.notes
       });
     }
-    localDevices = aggregateProbeStatuses(deviceStatuses);
+    localDevices = aggregateLocalDevices(deviceStatuses);
   } else if (devices.length === 0 && (await hasUnregisteredHostMetrics(siteId))) {
     localDevices = {
       state: "warning",
@@ -709,8 +829,8 @@ export async function computeSiteStatus(
   }
   // Website AM alerts are reflected via websites domain (Hetrix failover); do not
   // force overall critical from Blackbox-only SiteWebsiteDown pages.
-  const nonWebsiteFiring = relevant.filter(
-    (a) => a.status === "firing" && !isWebsiteAlert(a)
+  const nonWebsiteFiring = relevant.filter((a) =>
+    alertForcesOverallDown(a, Boolean(snapshot))
   ).length;
   if (nonWebsiteFiring > 0) overall = "critical";
 

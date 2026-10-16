@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import {
@@ -11,6 +11,7 @@ import {
 import type { ActiveAlert } from "@/types";
 import { StatusPill } from "@/components/StatusPill";
 import { PageHeader } from "@/components/noc/PageHeader";
+import { TablePagination, paginateItems } from "@/components/TableControls";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -36,6 +37,9 @@ export function AlertsPage() {
   const [amAlerts, setAmAlerts] = useState<ActiveAlert[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [openPage, setOpenPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [alertPage, setAlertPage] = useState(1);
 
   async function reload() {
     if (!token) return;
@@ -79,6 +83,19 @@ export function AlertsPage() {
 
   const firingAm = amAlerts.filter((a) => a.status === "firing");
   const pendingAck = open.filter((i) => i.resolvedAt).length;
+  const openPager = useMemo(() => paginateItems(open, openPage), [open, openPage]);
+  const historyPager = useMemo(() => paginateItems(history, historyPage), [history, historyPage]);
+  const alertPager = useMemo(() => paginateItems(amAlerts, alertPage), [amAlerts, alertPage]);
+
+  useEffect(() => {
+    if (openPage !== openPager.page) setOpenPage(openPager.page);
+  }, [openPage, openPager.page]);
+  useEffect(() => {
+    if (historyPage !== historyPager.page) setHistoryPage(historyPager.page);
+  }, [historyPage, historyPager.page]);
+  useEffect(() => {
+    if (alertPage !== alertPager.page) setAlertPage(alertPager.page);
+  }, [alertPage, alertPager.page]);
 
   return (
     <div className="page">
@@ -134,7 +151,7 @@ export function AlertsPage() {
                 </td>
               </tr>
             ) : (
-              open.map((r) => (
+              openPager.slice.map((r) => (
                 <tr key={r.id}>
                   <td>{r.title}</td>
                   <td>
@@ -167,6 +184,16 @@ export function AlertsPage() {
             )}
           </tbody>
         </table>
+        {open.length > 0 ? (
+          <TablePagination
+            page={openPager.page}
+            totalPages={openPager.totalPages}
+            total={openPager.total}
+            start={openPager.start}
+            end={openPager.end}
+            onPageChange={setOpenPage}
+          />
+        ) : null}
       </div>
 
       <div className="tableCard" style={{ marginBottom: 14 }}>
@@ -193,7 +220,7 @@ export function AlertsPage() {
                 </td>
               </tr>
             ) : (
-              history.map((r) => (
+              historyPager.slice.map((r) => (
                 <tr key={r.id}>
                   <td>{r.title}</td>
                   <td>
@@ -212,6 +239,16 @@ export function AlertsPage() {
             )}
           </tbody>
         </table>
+        {history.length > 0 ? (
+          <TablePagination
+            page={historyPager.page}
+            totalPages={historyPager.totalPages}
+            total={historyPager.total}
+            start={historyPager.start}
+            end={historyPager.end}
+            onPageChange={setHistoryPage}
+          />
+        ) : null}
       </div>
 
       <div className="tableCard">
@@ -237,7 +274,7 @@ export function AlertsPage() {
                 </td>
               </tr>
             ) : (
-              amAlerts.map((a, i) => {
+              alertPager.slice.map((a, i) => {
                 const siteId = a.labels?.site ?? "";
                 return (
                   <tr key={`${a.labels?.alertname}-${siteId}-${a.startsAt ?? i}`}>
@@ -253,6 +290,16 @@ export function AlertsPage() {
             )}
           </tbody>
         </table>
+        {amAlerts.length > 0 ? (
+          <TablePagination
+            page={alertPager.page}
+            totalPages={alertPager.totalPages}
+            total={alertPager.total}
+            start={alertPager.start}
+            end={alertPager.end}
+            onPageChange={setAlertPage}
+          />
+        ) : null}
       </div>
     </div>
   );

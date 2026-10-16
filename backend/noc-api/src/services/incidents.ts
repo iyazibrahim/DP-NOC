@@ -87,7 +87,7 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
         siteName: name,
         kind: "uplink",
         title: `Internet DOWN — ${name}`,
-        detail: up.notes ?? "Uplink / internet check critical"
+        detail: up.notes ?? "Both internet checks failed. Check the uplink and the collector."
       });
     }
 
@@ -100,7 +100,7 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
         siteName: name,
         kind: "collector",
         title: `Collector offline — ${name}`,
-        detail: col.notes ?? "Collector not responding"
+        detail: col.notes ?? "Device checks are paused so they are not marked down. Check power and the network on the collector, then open Collector Console."
       });
     }
 
@@ -114,32 +114,67 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
           siteName: name,
           kind: "website",
           title: `Website DOWN — ${w.name}`,
-          detail: `${w.url} · site: ${name}${w.notes ? ` · ${w.notes}` : ""}`
+          detail: w.notes
+          ? `${w.name} at ${name} is not responding. ${w.notes}`
+          : `${w.name} at ${name} is not responding. Check that the address is correct and the site is up.`
         });
       }
     }
 
-    // Location residual: overall critical for non-uplink/non-collector reasons that are
-    // not covered solely by per-URL website incidents (e.g. local devices).
+    for (const d of st.localDeviceStates ?? []) {
+      const downKey = `device:${st.siteId}:${d.deviceId}`;
+      if (sustainedCritical(downKey, d.state === "critical")) {
+        activeKeys.add(downKey);
+        upsertOpenIncident({
+          key: downKey,
+          siteId: st.siteId,
+          siteName: name,
+          kind: "device",
+          title: `Device unreachable — ${d.name}`,
+          detail:
+            d.notes ??
+            `${d.name} is not answering ping or SNMP. Check power and the network cable.`
+        });
+      }
+      const snmpKey = `snmp:${st.siteId}:${d.deviceId}`;
+      if (sustainedCritical(snmpKey, d.state === "warning")) {
+        activeKeys.add(snmpKey);
+        upsertOpenIncident({
+          key: snmpKey,
+          siteId: st.siteId,
+          siteName: name,
+          kind: "snmp",
+          title: `SNMP not answering — ${d.name}`,
+          detail:
+            d.notes ??
+            `${d.name} is online, but SNMP is not answering. Check the SNMP community and that UDP port 161 is allowed, then use Force apply on the collector.`
+        });
+      }
+    }
+
+    // Location residual only when the outage is not already covered by uplink, collector,
+    // website, or per-device incidents.
     const locationKey = `overall:${st.siteId}`;
+    const localCritical = (st.localDevices ?? st.lan)?.state === "critical";
     const locationCritical =
       st.overall === "critical" &&
       up?.state !== "critical" &&
       col?.state !== "critical" &&
-      !isWebsitesOnlyCritical(st);
+      !isWebsitesOnlyCritical(st) &&
+      !localCritical;
 
     if (sustainedCritical(locationKey, locationCritical)) {
       activeKeys.add(locationKey);
       const causes: string[] = [];
-      const ld = st.localDevices ?? st.lan;
-      if (ld?.state === "critical") {
-        causes.push(ld.notes ?? "Local devices critical");
-      }
       if (st.websites.state === "critical") {
-        causes.push(st.websites.notes ?? "Website checks critical");
+        causes.push(st.websites.notes ?? "One or more websites are not responding.");
       }
       if (st.alerts?.firing > 0) {
-        causes.push(`${st.alerts.firing} alert(s) firing`);
+        causes.push(
+          st.alerts.firing === 1
+            ? "1 alert is still firing."
+            : `${st.alerts.firing} alerts are still firing.`
+        );
       }
       upsertOpenIncident({
         key: locationKey,
@@ -147,7 +182,7 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
         siteName: name,
         kind: "location",
         title: `Location health critical — ${name}`,
-        detail: causes.join("; ") || "Overall location health critical"
+        detail: causes.join(" ") || "This location needs attention. Open the dashboard for the failing check."
       });
     }
   }
@@ -169,7 +204,14 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
   }
   // Resolve open website incidents whose URL was removed from config
   for (const i of getOpenIncidents()) {
-    if (i.kind === "website" || i.key.startsWith("website:")) {
+    if (
+      i.kind === "website" ||
+      i.kind === "device" ||
+      i.kind === "snmp" ||
+      i.key.startsWith("website:") ||
+      i.key.startsWith("device:") ||
+      i.key.startsWith("snmp:")
+    ) {
       candidates.add(i.key);
     }
   }

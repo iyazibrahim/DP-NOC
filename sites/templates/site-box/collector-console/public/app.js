@@ -93,7 +93,7 @@ function deviceStatePill(state) {
   const s = (state || "unknown").toLowerCase();
   if (s === "healthy") return statusPill("ok", "Up");
   if (s === "critical") return statusPill("fail", "Down");
-  if (s === "warning") return statusPill("warn", "Degraded");
+  if (s === "warning") return statusPill("warn", "SNMP");
   return statusPill("unknown", "Unknown");
 }
 
@@ -241,14 +241,25 @@ async function loadDeviceStatus() {
   }
 }
 
+let devicePage = 1;
+const DEVICE_PAGE_SIZE = 20;
+
 function renderDevicesTable() {
   const body = document.getElementById("devices-body");
+  const pager = document.getElementById("devices-pager");
   if (!Array.isArray(cachedDevices) || cachedDevices.length === 0) {
     body.innerHTML =
       '<tr class="empty-row"><td colspan="6">No devices yet. Add one here, or sync to pull devices already on the NOC.</td></tr>';
+    if (pager) pager.hidden = true;
     return;
   }
-  body.innerHTML = cachedDevices
+  const total = cachedDevices.length;
+  const totalPages = Math.max(1, Math.ceil(total / DEVICE_PAGE_SIZE));
+  if (devicePage > totalPages) devicePage = totalPages;
+  if (devicePage < 1) devicePage = 1;
+  const start = (devicePage - 1) * DEVICE_PAGE_SIZE;
+  const slice = cachedDevices.slice(start, start + DEVICE_PAGE_SIZE);
+  body.innerHTML = slice
     .map((d) => {
       const st = statusById[d.id];
       const pill = deviceStatePill(st?.state);
@@ -274,6 +285,21 @@ function renderDevicesTable() {
       const id = btn.getAttribute("data-edit");
       const d = cachedDevices.find((x) => x.id === id);
       if (d) openDeviceModal(d);
+    });
+  });
+
+  if (!pager) return;
+  pager.hidden = false;
+  pager.innerHTML = `<span>Showing ${start + 1}–${start + slice.length} of ${total}</span>
+    <span class="pager-btns">
+      <button type="button" class="secondary btn-sm" data-page="prev" ${devicePage <= 1 ? "disabled" : ""}>Previous</button>
+      <button type="button" class="secondary btn-sm" data-page="next" ${devicePage >= totalPages ? "disabled" : ""}>Next</button>
+    </span>`;
+  pager.querySelectorAll("[data-page]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const dir = btn.getAttribute("data-page");
+      devicePage += dir === "next" ? 1 : -1;
+      renderDevicesTable();
     });
   });
 }
@@ -344,6 +370,21 @@ async function refreshDashboard() {
   }
 }
 
+async function runRefresh(btn) {
+  const msg = document.getElementById("sync-msg");
+  if (btn) btn.disabled = true;
+  showMsg(msg, "Checking devices…", true);
+  try {
+    const result = await api("/api/probe-now", { method: "POST", body: "{}" });
+    await refreshDashboard();
+    showMsg(msg, result.message || "Updated", result.ok !== false);
+  } catch (e) {
+    showMsg(msg, e.message || "Could not check devices. Try again in a moment.", false);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 let siteCatalog = [];
 
 async function loadCatalog() {
@@ -408,21 +449,31 @@ document.addEventListener("keydown", (e) => {
   closeModal("modal-snmp");
 });
 
-document.getElementById("btn-scan-clients").addEventListener("click", async () => {
-  const msg = document.getElementById("snmp-modal-msg");
-  const btn = document.getElementById("btn-scan-clients");
-  btn.disabled = true;
-  try {
-    const result = await api("/api/scan-clients", { method: "POST", body: "{}" });
-    showMsg(msg, result.message || "Client scan complete", result.ok !== false);
-  } catch (e) {
-    showMsg(msg, e.message, false);
-  } finally {
-    btn.disabled = false;
-  }
-});
+const scanBtn = document.getElementById("btn-scan-clients");
+if (scanBtn) {
+  scanBtn.addEventListener("click", async () => {
+    const msg = document.getElementById("snmp-modal-msg");
+    scanBtn.disabled = true;
+    try {
+      const result = await api("/api/scan-clients", { method: "POST", body: "{}" });
+      showMsg(msg, result.message || "Client scan complete", result.ok !== false);
+    } catch (e) {
+      showMsg(msg, e.message, false);
+    } finally {
+      scanBtn.disabled = false;
+    }
+  });
+}
 
-document.getElementById("btn-refresh").addEventListener("click", () => refreshDashboard());
+const dashToolbar = document.querySelector("#panel-dashboard .toolbar");
+if (dashToolbar) {
+  dashToolbar.addEventListener("click", (ev) => {
+    const origin = ev.target instanceof Element ? ev.target : null;
+    const btn = origin?.closest("#btn-refresh");
+    if (!btn || !dashToolbar.contains(btn)) return;
+    void runRefresh(btn);
+  });
+}
 document.getElementById("btn-add-device").addEventListener("click", () => openDeviceModal(null));
 
 document.getElementById("btn-sync").addEventListener("click", async () => {

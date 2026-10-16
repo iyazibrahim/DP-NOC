@@ -152,30 +152,62 @@ export function DashboardPage() {
     string,
     { uplink: DomainState; overall: DomainState; websites: DomainState }
   > | null>(null);
+  const prevDevicesRef = useRef<Record<string, DomainState> | null>(null);
 
-  // Toast when uplink / website / location health flips to critical (skip first poll baseline).
+  // Toast when uplink, website, SNMP, or a device flips to a worse state (skip first poll).
   useEffect(() => {
     const prev = prevStatusRef.current;
+    const prevDevices = prevDevicesRef.current;
     const next: Record<
       string,
       { uplink: DomainState; overall: DomainState; websites: DomainState }
     > = {};
+    const nextDevices: Record<string, DomainState> = {};
     for (const st of statuses) {
       const uplink = uplinkOf(st).state;
       next[st.siteId] = { uplink, overall: st.overall, websites: st.websites.state };
-      if (!prev) continue;
-      const before = prev[st.siteId];
-      if (!before) continue;
       const siteName =
         st.siteId === "global"
           ? "Global / Central"
           : (sites.find((s) => s.id === st.siteId)?.name ?? st.siteId);
+      for (const d of st.localDeviceStates ?? []) {
+        const key = `${st.siteId}:${d.deviceId}`;
+        nextDevices[key] = d.state;
+        if (!prevDevices || prevDevices[key] == null) continue;
+        if (d.state === "warning" && prevDevices[key] !== "warning") {
+          setToasts((t) =>
+            pushToast(t, {
+              id: `snmp-warn-${key}-${Date.now()}`,
+              title: `SNMP not answering — ${d.name}`,
+              detail:
+                d.notes ??
+                `${d.name} is online, but SNMP is not answering. Check the SNMP community and that UDP port 161 is allowed, then use Force apply on the collector.`,
+              tone: "warning"
+            })
+          );
+        } else if (d.state === "critical" && prevDevices[key] !== "critical") {
+          setToasts((t) =>
+            pushToast(t, {
+              id: `device-down-${key}-${Date.now()}`,
+              title: `Device unreachable — ${d.name}`,
+              detail:
+                d.notes ??
+                `${d.name} is not answering ping or SNMP. Check power and the network cable.`,
+              tone: "critical"
+            })
+          );
+        }
+      }
+      if (!prev) continue;
+      const before = prev[st.siteId];
+      if (!before) continue;
       if (uplink === "critical" && before.uplink !== "critical") {
         setToasts((t) =>
           pushToast(t, {
             id: `uplink-down-${st.siteId}-${Date.now()}`,
             title: `Internet DOWN — ${siteName}`,
-            detail: "Uplink / internet check went critical",
+            detail:
+              "Both internet checks failed. Check the uplink and the collector.",
             tone: "critical"
           })
         );
@@ -187,8 +219,8 @@ export function DashboardPage() {
         const downSites = (st.websiteStates ?? []).filter((w) => w.state === "critical");
         const detail =
           downSites.length > 0
-            ? downSites.map((w) => w.name).join(", ")
-            : "Website check(s) went critical";
+            ? `${downSites.map((w) => w.name).join(", ")} is not responding. Check that the address is correct and the site is up.`
+            : "A website check failed. Check that the address is correct and the site is up.";
         setToasts((t) =>
           pushToast(t, {
             id: `website-down-${st.siteId}-${Date.now()}`,
@@ -204,19 +236,21 @@ export function DashboardPage() {
         st.overall === "critical" &&
         before.overall !== "critical" &&
         uplink !== "critical" &&
-        st.websites.state !== "critical"
+        st.websites.state !== "critical" &&
+        st.localDevices?.state !== "critical"
       ) {
         setToasts((t) =>
           pushToast(t, {
             id: `location-down-${st.siteId}-${Date.now()}`,
             title: `Location health critical — ${siteName}`,
-            detail: "Location health went critical (not uplink / website)",
+            detail: "This location needs attention. Open the dashboard for the failing check.",
             tone: "critical"
           })
         );
       }
     }
     prevStatusRef.current = next;
+    prevDevicesRef.current = nextDevices;
   }, [statuses, sites]);
 
   // Measure AFTER the grid host mounts (layout ready). Stuck width=1200 caused ~70% usable area.

@@ -10,6 +10,7 @@ import {
 } from "../data/sites";
 import { computeSiteStatus } from "../services/status";
 import { saveSiteStations, type StoredStation } from "../data/siteStations";
+import { saveDeviceSnapshot, type DeviceProbe, type ProbeLevel } from "../data/deviceSnapshots";
 
 export const collectorRouter = express.Router();
 
@@ -130,6 +131,35 @@ collectorRouter.post("/:siteId/stations", (req, res) => {
   const at = typeof body.at === "string" ? body.at : undefined;
   const saved = saveSiteStations(siteId, stations, at);
   return res.json({ ok: true, count: saved.stations.length, at: saved.at });
+});
+
+/**
+ * Collector Console → ping and SNMP result per device, about every 30 seconds.
+ * Used when the metrics push is stale.
+ */
+collectorRouter.post("/:siteId/status-snapshot", (req, res) => {
+  const siteId = req.params.siteId;
+  if (!requireCollectorAuth(req, res, siteId)) return;
+
+  const body = (req.body ?? {}) as { devices?: unknown; at?: unknown };
+  if (!Array.isArray(body.devices)) {
+    return res.status(400).json({ error: "devices array required" });
+  }
+
+  const devices: DeviceProbe[] = [];
+  for (const raw of body.devices) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as Record<string, unknown>;
+    const deviceId = typeof r.deviceId === "string" ? r.deviceId.trim() : "";
+    if (!deviceId) continue;
+    const level = (v: unknown): ProbeLevel =>
+      v === "up" || v === "down" || v === "unknown" ? v : "unknown";
+    devices.push({ deviceId, ping: level(r.ping), snmp: level(r.snmp) });
+  }
+
+  const at = typeof body.at === "string" ? body.at : undefined;
+  const saved = saveDeviceSnapshot(siteId, devices, at);
+  return res.json({ ok: true, count: saved.devices.length, at: saved.at });
 });
 
 /**

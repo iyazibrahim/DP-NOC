@@ -318,7 +318,7 @@ export async function scanAllStations(): Promise<{
     ok: true,
     stations,
     scannedAps: scanned,
-    message: `Scanned ${scanned} AP(s), found ${stations.length} station(s)`
+    message: `Checked ${scanned} access points and found ${stations.length} clients.`
   };
 }
 
@@ -327,7 +327,7 @@ export async function pushStationsToNoc(
 ): Promise<{ ok: boolean; message: string }> {
   const config = readConfig();
   if (!config.nocApiUrl || !config.siteName || !config.collectorToken) {
-    return { ok: false, message: "Missing NOC setup — cannot push stations" };
+    return { ok: false, message: "Finish Setup before scanning clients." };
   }
   const url = `${config.nocApiUrl.replace(/\/$/, "")}/api/collector/${config.siteName}/stations`;
   try {
@@ -341,11 +341,11 @@ export async function pushStationsToNoc(
       body: JSON.stringify({ stations, at: new Date().toISOString() }),
       signal: AbortSignal.timeout(20000)
     });
-    const text = await res.text();
+    await res.text();
     if (!res.ok) {
-      return { ok: false, message: `NOC rejected stations (HTTP ${res.status}): ${text.slice(0, 160)}` };
+      return { ok: false, message: "The NOC did not accept the client list. Check the collector token in Setup." };
     }
-    return { ok: true, message: `Pushed ${stations.length} station(s) to NOC` };
+    return { ok: true, message: `Sent ${stations.length} clients to the NOC.` };
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : String(err) };
   }
@@ -354,7 +354,7 @@ export async function pushStationsToNoc(
 let scanInFlight = false;
 
 export async function scanAndPushStations(): Promise<{ ok: boolean; message: string }> {
-  if (scanInFlight) return { ok: false, message: "Client scan already running" };
+  if (scanInFlight) return { ok: false, message: "A client scan is already running." };
   scanInFlight = true;
   try {
     const scan = await scanAllStations();

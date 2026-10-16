@@ -208,7 +208,7 @@ function buildPlainSummary(diag: {
   const bySite = diag.rawUpLabels
     .map((r) => `${r.site} → ${r.device}`)
     .slice(0, 5)
-    .join("; ");
+    .join(", ");
   return `Collector data found: ${bySite}${diag.rawUpLabels.length > 5 ? "…" : ""}`;
 }
 

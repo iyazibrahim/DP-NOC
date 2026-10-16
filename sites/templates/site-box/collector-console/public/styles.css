@@ -532,9 +532,9 @@ pre {
 }
 
 .pill.warn {
-  color: #f0c14a;
-  background: rgba(240, 193, 74, 0.12);
-  border-color: rgba(240, 193, 74, 0.35);
+  color: #fb923c;
+  background: rgba(251, 146, 60, 0.14);
+  border-color: rgba(251, 146, 60, 0.45);
 }
 
 .btn-sm {
@@ -547,6 +547,21 @@ pre {
   color: #8fa3b8;
   padding: 28px 16px;
   text-align: center;
+}
+
+.table-pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px 0;
+  color: #8fa3b8;
+  font-size: 0.85rem;
+}
+
+.table-pager .pager-btns {
+  display: flex;
+  gap: 8px;
 }
 
 body.modal-open {

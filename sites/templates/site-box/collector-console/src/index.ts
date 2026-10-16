@@ -33,6 +33,7 @@ import {
 } from "./sync";
 import { pushDeviceToNoc } from "./pushDevice";
 import { scanAndPushStations, startClientsScanLoop } from "./scanClients";
+import { probeAllDevices, startProbeLoop } from "./probe";
 
 const PORT = Number(process.env.PORT || "8090");
 
@@ -111,7 +112,7 @@ app.get("/api/ready", (_req, res) => {
       res.status(503).json({
         ok: false,
         ready: false,
-        message: "Waiting for config.alloy / blackbox.yml / snmp.yml on DATA_DIR volume"
+        message: "The collector is still preparing its checks."
       });
       return;
     }
@@ -164,26 +165,23 @@ app.get("/api/status", async (_req, res) => {
   const warnings: string[] = [];
   if (!metricsConfigured) {
     warnings.push(
-      "Alloy missing CF Access / remote_write env — NOC will show Collector/Uplink DOWN (No recent samples). Set them in Setup (or Environment on redeploy), then Save."
+      "The collector is not sending results to the NOC. Open Setup, fill in the metrics address and access keys, then Save."
     );
   }
   if (cfgHealth.configUnsafe) {
-    warnings.push(cfgHealth.configUnsafeReason || "config.alloy unsafe for Alloy v1.5.1");
+    warnings.push("The collector setup is not valid. Open Setup and Save again so it can be rebuilt.");
   }
   if (alloyText.includes("integrations/snmp") || alloyText.includes("integrations.snmp")) {
     warnings.push(
-      "config.alloy still has legacy integrations/snmp — follow CUTOVER_SITEBOX_SNMP.md (need site_snmp_if_mib + snmp_up)"
+      "This collector is still using an old device check. Use Force apply so the current check is installed."
     );
   }
   if (crashHints.length > 0) {
-    warnings.push(...crashHints);
+    warnings.push("The collector service stopped. Open Diagnostics, then use Force apply.");
   }
   const snmpStaleReason = alloySnmpStaleReason(dir);
   if (snmpStale) {
-    warnings.push(
-      snmpStaleReason?.detail ||
-        "SNMP targets in devices.json are not fully applied in config.alloy — click Force apply SNMP."
-    );
+    warnings.push("Device checks are out of date. Use Force apply, then Refresh.");
   }
 
   res.json({
@@ -409,6 +407,19 @@ app.post("/api/scan-clients", async (_req, res) => {
   }
 });
 
+app.post("/api/probe-now", async (_req, res) => {
+  try {
+    const result = await probeAllDevices();
+    res.status(result.ok ? 200 : 502).json(result);
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      message: err instanceof Error ? err.message : "Could not check devices. Try again in a moment.",
+      devices: []
+    });
+  }
+});
+
 /** Live per-device SNMP status from the NOC dashboard (same source as wallboard). */
 app.get("/api/device-status", async (_req, res) => {
   const config = readConfig();
@@ -609,6 +620,7 @@ async function boot(): Promise<void> {
     );
     startSyncLoop(dir);
     startClientsScanLoop();
+    startProbeLoop();
   });
 }
 

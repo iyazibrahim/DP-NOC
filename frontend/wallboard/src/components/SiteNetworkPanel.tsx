@@ -33,6 +33,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users } from "lucide-react";
+import { TablePagination, paginateItems } from "@/components/TableControls";
 
 type ChartRange = "1h" | "24h" | "7d" | "30d";
 
@@ -95,6 +96,89 @@ function formatBitrate(value: number | null): string {
   if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)} Gbps`;
   if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} Mbps`;
   return `${(value / 1000).toFixed(1)} Kbps`;
+}
+
+type ApRow = {
+  deviceId: string;
+  name: string;
+  nickname?: string | null;
+  vendor?: string;
+  clients?: number | null;
+  inBps?: number | null;
+  outBps?: number | null;
+  snmpUp?: number | null;
+};
+
+function ApTable({ aps }: { aps: ApRow[] }) {
+  const [page, setPage] = useState(1);
+  const pager = useMemo(() => paginateItems(aps, page), [aps, page]);
+  useEffect(() => {
+    if (page !== pager.page) setPage(pager.page);
+  }, [page, pager.page]);
+
+  return (
+    <div className="widgetInnerScroll h-full">
+      <table className="dataTable">
+        <thead>
+          <tr>
+            <th>AP</th>
+            <th>Vendor</th>
+            <th>
+              <span className="inline-flex items-center gap-1">
+                <Users className="size-3" aria-hidden />
+                Clients
+              </span>
+            </th>
+            <th>In</th>
+            <th>Out</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {aps.length === 0 ? (
+            <tr>
+              <td colSpan={6} className="muted">
+                No access points yet. Add them under Overview → Devices.
+              </td>
+            </tr>
+          ) : (
+            pager.slice.map((d) => (
+              <tr key={d.deviceId}>
+                <td>
+                  {apLabel(d)}
+                  {d.nickname ? <div className="muted">{d.name}</div> : null}
+                </td>
+                <td>{d.vendor}</td>
+                <td>{d.clients != null ? d.clients : "—"}</td>
+                <td>{formatBitrate(d.inBps ?? null)}</td>
+                <td>{formatBitrate(d.outBps ?? null)}</td>
+                <td>
+                  {d.snmpUp == null ? (
+                    "—"
+                  ) : (
+                    <StatusPill
+                      state={d.snmpUp >= 1 ? "healthy" : "critical"}
+                      notes={d.snmpUp >= 1 ? "UP" : "DOWN"}
+                    />
+                  )}
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+      {aps.length > 0 ? (
+        <TablePagination
+          page={pager.page}
+          totalPages={pager.totalPages}
+          total={pager.total}
+          start={pager.start}
+          end={pager.end}
+          onPageChange={setPage}
+        />
+      ) : null}
+    </div>
+  );
 }
 
 function formatMbps(value: number): string {
@@ -773,59 +857,7 @@ export function SiteNetworkPanel({ token, site }: Props) {
         );
 
       case "ap_table":
-        return (
-          <div className="widgetInnerScroll h-full">
-            <table className="dataTable">
-              <thead>
-                <tr>
-                  <th>AP</th>
-                  <th>Vendor</th>
-                  <th>
-                    <span className="inline-flex items-center gap-1">
-                      <Users className="size-3" aria-hidden />
-                      Clients
-                    </span>
-                  </th>
-                  <th>In</th>
-                  <th>Out</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {aps.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="muted">
-                      No access points yet. Add them under Overview → Devices.
-                    </td>
-                  </tr>
-                ) : (
-                  aps.map((d) => (
-                    <tr key={d.deviceId}>
-                      <td>
-                        {apLabel(d)}
-                        {d.nickname ? <div className="muted">{d.name}</div> : null}
-                      </td>
-                      <td>{d.vendor}</td>
-                      <td>{d.clients != null ? d.clients : "—"}</td>
-                      <td>{formatBitrate(d.inBps)}</td>
-                      <td>{formatBitrate(d.outBps)}</td>
-                      <td>
-                        {d.snmpUp == null ? (
-                          "—"
-                        ) : (
-                          <StatusPill
-                            state={d.snmpUp >= 1 ? "healthy" : "critical"}
-                            notes={d.snmpUp >= 1 ? "UP" : "DOWN"}
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        );
+        return <ApTable aps={aps} />;
 
       default:
         return null;

@@ -343,3 +343,9 @@ Collector box → Alloy → Prometheus (central)
   - View mode sizes grid rows to the visible pane (no page scroll); edit mode still scrolls
   - Layout v2: All locations board plus one saved board per location; v1 files migrate on read
   - Arrows, keyboard, and fullscreen Lock / Rotate (15s, 30s, 60s)
+- [x] **Ping backup, collector safety, and readable alerts (2026-10-16)**
+  - Each local device is pinged beside SNMP. SNMP up stays green. SNMP fail with ping up is an orange warning and a warning incident. Both failing is down, with a device incident.
+  - A silent collector pauses device alarms (unknown, one collector incident). A fresh status snapshot covers a stale metrics push.
+  - Collector Console Refresh runs a live ping and SNMP check and says Updated or a plain error. Alerts, site lists, websites, the access-point table, and the collector device table page at 20 rows.
+  - One local device failing does not mark the location down. The device stays down. The location stays up unless every local device is down.
+

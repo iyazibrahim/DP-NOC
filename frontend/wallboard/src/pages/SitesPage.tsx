@@ -42,6 +42,7 @@ export function SitesPage() {
   const navigate = useNavigate();
   const [sites, setSites] = useState<Site[]>([]);
   const [statuses, setStatuses] = useState<SiteStatus[]>([]);
+  const [sitePage, setSitePage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
     name: "",
@@ -62,6 +63,11 @@ export function SitesPage() {
   useEffect(() => {
     reload().catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
   }, [token]);
+
+  const sitePager = useMemo(() => paginateItems(sites, sitePage), [sites, sitePage]);
+  useEffect(() => {
+    if (sitePage !== sitePager.page) setSitePage(sitePager.page);
+  }, [sitePage, sitePager.page]);
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
@@ -143,7 +149,7 @@ export function SitesPage() {
           </tr>
         </thead>
         <tbody>
-          {sites.map((s) => {
+          {sitePager.slice.map((s) => {
             const st = statuses.find((x) => x.siteId === s.id);
             const up = uplinkOf(st);
             const col = collectorOf(st);
@@ -173,6 +179,16 @@ export function SitesPage() {
           })}
         </tbody>
       </table>
+      {sites.length > 0 ? (
+        <TablePagination
+          page={sitePager.page}
+          totalPages={sitePager.totalPages}
+          total={sitePager.total}
+          start={sitePager.start}
+          end={sitePager.end}
+          onPageChange={setSitePage}
+        />
+      ) : null}
     </div>
   );
 }
@@ -222,6 +238,7 @@ export function SiteDetailPage() {
   const [revealedCollectorToken, setRevealedCollectorToken] = useState<string | null>(null);
   const [deviceSearch, setDeviceSearch] = useState("");
   const [devicePage, setDevicePage] = useState(1);
+  const [websitePage, setWebsitePage] = useState(1);
   const [siteTab, setSiteTab] = useState<"overview" | "network" | "clients">("overview");
   const [websiteMetrics, setWebsiteMetrics] = useState<
     Record<string, { state: string; notes?: string; latencyMs?: number | null; uptime24h?: number | null }>
@@ -305,10 +322,17 @@ export function SiteDetailPage() {
     () => paginateItems(filteredSiteDevices, devicePage),
     [filteredSiteDevices, devicePage]
   );
+  const websitePager = useMemo(
+    () => paginateItems(site?.websiteTargets ?? [], websitePage),
+    [site?.websiteTargets, websitePage]
+  );
 
   useEffect(() => {
     if (devicePage !== devicePager.page) setDevicePage(devicePager.page);
   }, [devicePager.page, devicePage]);
+  useEffect(() => {
+    if (websitePage !== websitePager.page) setWebsitePage(websitePager.page);
+  }, [websitePager.page, websitePage]);
 
   function startEdit(d: SiteDevice) {
     setEditingId(d.id);
@@ -978,7 +1002,7 @@ export function SiteDetailPage() {
                   </td>
                 </tr>
               ) : (
-                (site.websiteTargets ?? []).map((w) => {
+                websitePager.slice.map((w) => {
                   const detailTo = `/websites/${id}?url=${encodeURIComponent(w.url)}`;
                   const m = websiteMetrics[w.url];
                   return (
@@ -1038,6 +1062,16 @@ export function SiteDetailPage() {
               )}
             </tbody>
           </table>
+          {(site.websiteTargets ?? []).length > 0 ? (
+            <TablePagination
+              page={websitePager.page}
+              totalPages={websitePager.totalPages}
+              total={websitePager.total}
+              start={websitePager.start}
+              end={websitePager.end}
+              onPageChange={setWebsitePage}
+            />
+          ) : null}
         </section>
       </div>
       )}

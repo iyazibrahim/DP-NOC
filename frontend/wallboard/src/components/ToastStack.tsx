@@ -4,13 +4,15 @@ export type ToastItem = {
   id: string;
   title: string;
   detail?: string;
-  tone?: "critical" | "info";
+  tone?: "critical" | "warning" | "info";
 };
 
 /** Compatibility helper — routes to sonner. */
 export function pushToast(prev: ToastItem[], next: ToastItem, _max = 6): ToastItem[] {
   if (next.tone === "info") {
     toast(next.title, { id: next.id, description: next.detail });
+  } else if (next.tone === "warning") {
+    toast.warning(next.title, { id: next.id, description: next.detail });
   } else {
     toast.error(next.title, { id: next.id, description: next.detail });
   }

@@ -514,7 +514,56 @@ if client_devices:
     print('    replacement  = "site_snmp_clients"')
     print("  }")
     print("}")
+
+def alloy_quote(s):
+    return json.dumps(str(s))
+
+ping_devices = []
+for d in devices:
+    if not isinstance(d, dict):
+        continue
+    did = str(d.get("id") or "").strip()
+    ip = str(d.get("snmpIp") or "").strip()
+    if did and ip:
+        ping_devices.append((did, ip))
+
+if ping_devices:
+    print()
+    print('prometheus.exporter.blackbox "device_ping" {')
+    print('  config_file = "blackbox.yml"')
+    print()
+    used_names = set()
+    for i, (did, ip) in enumerate(ping_devices):
+        name = safe(did) or f"dev_{i}"
+        if name[0].isdigit():
+            name = "d_" + name
+        base = name
+        n = 2
+        while name in used_names:
+            name = f"{base}_{n}"
+            n += 1
+        used_names.add(name)
+        print("  target {")
+        print(f"    name    = {alloy_quote(name)}")
+        print(f"    address = {alloy_quote(ip)}")
+        print('    module  = "icmp"')
+        print(
+            "    labels  = { check = \"device_ping\", site = sys.env(\"SITE_NAME\"), device = "
+            + alloy_quote(did)
+            + " }"
+        )
+        print("  }")
+        print()
+    print("}")
+    print()
+    print('prometheus.scrape "device_ping_scrape" {')
+    print("  targets         = prometheus.exporter.blackbox.device_ping.targets")
+    print("  forward_to      = [prometheus.remote_write.central.receiver]")
+    print('  job_name        = "site_device_ping"')
+    print(f'  scrape_interval = "{scrape_sec}s"')
+    print('  scrape_timeout  = "10s"')
+    print("}")
 PY
 
 validate_out
-echo "Wrote $OUT_FILE (ICMP + host + $DEVICE_COUNT SNMP device(s)); updated $SNMP_YML auths"
+echo "Wrote $OUT_FILE (ICMP + host + device ping + $DEVICE_COUNT SNMP device(s)); updated $SNMP_YML auths"

@@ -246,20 +246,19 @@ export async function getWebsiteProbeMetrics(
       );
       if (hist !== null) {
         state = "critical";
-        notes = `Probe silent for ${METRIC_FRESH_WINDOW}`;
+        notes = "This website has not answered recently. Check that the address is correct and the site is up.";
       } else {
         state = "unknown";
-        notes = "No probe data yet";
+        notes = "No website check yet.";
       }
     } else if (successFresh >= 1) {
       state = "healthy";
     } else {
       state = "critical";
       if (httpStatus != null && Number.isFinite(httpStatus) && httpStatus > 0) {
-        notes = `Blackbox probe failed (HTTP ${Math.round(httpStatus)}) — site may block datacenter IPs or return a non-success status to the probe`;
+        notes = `This website returned an error (HTTP ${Math.round(httpStatus)}). Check the site.`;
       } else {
-        notes =
-          "Blackbox probe failed (no HTTP status — TLS/DNS/connect error, often broken IPv6). Check VPS: curl -4 -I <url>";
+        notes = "This website did not respond. Check that the address is correct and the site is up.";
       }
     }
 
@@ -283,14 +282,14 @@ export async function getWebsiteProbeMetrics(
           if (hx.latencyMs != null) latencyMs = hx.latencyMs;
           if (hx.uptimeStatus === "up") {
             if (state === "critical" || state === "unknown") {
-              notes = `HetrixTools: up${notes ? ` (${notes})` : " (local probe disagreed)"}`;
+              notes = "An outside check says this website is up.";
             } else {
-              notes = notes || "HetrixTools: up";
+              notes = notes || "An outside check says this website is up.";
             }
             state = "healthy";
           } else if (hx.uptimeStatus === "down") {
             state = "critical";
-            notes = "HetrixTools: down";
+            notes = "An outside check says this website is down.";
           }
           // List path: when Prom is 0% but Hetrix is up, fill from report (same as detail)
           if (
@@ -321,7 +320,7 @@ export async function getWebsiteProbeMetrics(
       uptime24h: null,
       sparkline: [],
       state: "unknown",
-      notes: "Could not read probe metrics"
+      notes: "The NOC could not read the latest website check."
     };
   }
 }
@@ -364,8 +363,8 @@ function trendUnusable(bars: WebsiteTrendBar[]): boolean {
 }
 
 function hetrixSaysUp(notes?: string, state?: string): boolean {
-  if (state === "healthy" && /HetrixTools:\s*up/i.test(notes || "")) return true;
-  return /HetrixTools:\s*up/i.test(notes || "");
+  if (state === "healthy" && /outside check says this website is up/i.test(notes || "")) return true;
+  return /outside check says this website is up/i.test(notes || "");
 }
 
 function dailyBarsFromHetrix(
@@ -749,9 +748,9 @@ export async function getWebsiteDetailMetrics(
 
           if (usedHetrixHistory) {
             const tag = preferHetrixHistory
-              ? "History: HetrixTools (local probe unreliable)"
-              : "History: HetrixTools (local probe empty)";
-            notes = notes ? `${notes} · ${tag}` : tag;
+              ? "The chart uses an outside check because the local check is not reliable."
+              : "The chart uses an outside check.";
+            notes = notes ? `${notes} ${tag}` : tag;
             if (monitorId) void persistHetrixId(siteId, url, monitorId);
           }
 

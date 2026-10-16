@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>NOC Collector Console</title>
+  <link rel="icon" type="image/png" href="/favicon.png" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -222,7 +223,7 @@
           <div class="devices-head">
             <div class="devices-title">
               <h2>Local devices</h2>
-              <p class="hint">Up / Down is the SNMP poll from this collector. Ping can succeed while SNMP fails.</p>
+              <p class="hint">Green means SNMP is answering. Orange means the device answers ping but SNMP does not. Red means both failed.</p>
             </div>
             <button type="button" id="btn-add-device">Add device</button>
           </div>
@@ -241,6 +242,7 @@
               <tbody id="devices-body"></tbody>
             </table>
           </div>
+          <div id="devices-pager" class="table-pager" hidden></div>
         </section>
       </div>
     </div>
