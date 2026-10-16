@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { useCommandCenter } from "./commandCenter/CommandCenterContext";
+import { useDashboardDeck, type RotateSeconds } from "./commandCenter/DashboardDeckContext";
 import { AppSidebar } from "@/components/noc/AppSidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,17 +115,87 @@ function LoginScreen() {
 
 function Shell() {
   const { active, exit, clock } = useCommandCenter();
+  const { chrome, rotateSeconds, setRotateSeconds } = useDashboardDeck();
+
+  const pickRotate = (seconds: RotateSeconds) => {
+    setRotateSeconds(seconds);
+  };
 
   return (
     <div className={`flex h-full ${active ? "" : ""}`}>
       {!active ? <AppSidebar /> : null}
       <main className="mainPane min-w-0 flex-1 overflow-auto">
         {active ? (
-          <div className="sticky top-0 z-40 flex items-center gap-4 border-b border-border bg-[rgba(8,18,28,0.92)] px-4 py-2">
-            <span className="font-[family-name:var(--font-display)] text-sm font-bold tracking-wide">
+          <div className="sticky top-0 z-40 flex items-center gap-3 border-b border-border bg-[rgba(8,18,28,0.92)] px-4 py-2">
+            <span className="shrink-0 font-[family-name:var(--font-display)] text-sm font-bold tracking-wide">
               Digital Penang NOC
             </span>
-            <span className="ml-auto font-mono text-sm text-muted-foreground">{clock}</span>
+            {chrome ? (
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Previous location"
+                  disabled={chrome.count < 2}
+                  onClick={chrome.prev}
+                >
+                  <ChevronLeft />
+                </Button>
+                <span className="truncate text-sm font-semibold">{chrome.title}</span>
+                <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                  {chrome.index}/{chrome.count}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Next location"
+                  disabled={chrome.count < 2}
+                  onClick={chrome.next}
+                >
+                  <ChevronRight />
+                </Button>
+                <div className="ml-2 flex shrink-0 items-center gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={rotateSeconds == null ? "default" : "outline"}
+                    onClick={() => setRotateSeconds(null)}
+                  >
+                    Lock
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={rotateSeconds != null ? "default" : "outline"}
+                    onClick={() => setRotateSeconds(rotateSeconds ?? 30)}
+                  >
+                    Rotate
+                  </Button>
+                  {rotateSeconds != null ? (
+                    <select
+                      className="dashboardRotateSelect"
+                      aria-label="Rotate interval"
+                      value={rotateSeconds}
+                      onChange={(e) => pickRotate(Number(e.target.value) as RotateSeconds)}
+                    >
+                      <option value={15}>15s</option>
+                      <option value={30}>30s</option>
+                      <option value={60}>60s</option>
+                    </select>
+                  ) : null}
+                  {rotateSeconds != null ? (
+                    <span className="dashboardRotateTrack" aria-hidden>
+                      <span style={{ width: `${Math.round(chrome.progress * 100)}%` }} />
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <span className="flex-1" />
+            )}
+            <span className="shrink-0 font-mono text-sm text-muted-foreground">{clock}</span>
             <Button type="button" variant="outline" size="sm" onClick={() => void exit()}>
               Exit fullscreen
             </Button>

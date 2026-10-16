@@ -195,6 +195,85 @@ a[data-slot="button"]:hover {
   margin-top: auto;
 }
 
+.mainPane:has(.dashboardPage:not(.dashboardPage--editing)) {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.page.dashboardPage:not(.dashboardPage--editing),
+.page.page--commandCenter.dashboardPage:not(.dashboardPage--editing) {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 12px;
+}
+
+.dashboardPage:not(.dashboardPage--editing) .dashboardHost {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboardCarousel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dashboardCarouselTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dashboardCarouselName {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboardCarouselCount {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.dashboardRotateSelect {
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  padding: 0 6px;
+}
+
+.dashboardRotateTrack {
+  width: 48px;
+  height: 3px;
+  border-radius: 99px;
+  background: rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.dashboardRotateTrack > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
 .mainPane {
   overflow: auto;
   background:

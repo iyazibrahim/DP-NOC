@@ -30,26 +30,137 @@ export type DashboardWidget = {
   config?: Record<string, string>;
 };
 
-export type DashboardLayout = {
-  version: 1;
+export type DashboardBoard = {
+  id: string;
+  title: string;
+  /** Null is the all-locations overview. */
+  siteId: string | null;
   widgets: DashboardWidget[];
 };
 
-const DEFAULT_LAYOUT: DashboardLayout = {
-  version: 1,
-  widgets: [
-    { i: "signals", type: "site_signal_board", x: 0, y: 0, w: 5, h: 8 },
-    { i: "local", type: "local_devices_board", x: 5, y: 0, w: 4, h: 8, config: { siteId: "site-1" } },
-    { i: "uplink", type: "uplink_status", x: 9, y: 0, w: 3, h: 4, config: { siteId: "site-1" } },
-    { i: "collector", type: "collector_status", x: 9, y: 4, w: 3, h: 4, config: { siteId: "site-1" } },
-    { i: "cpu", type: "device_metric_chart", x: 0, y: 8, w: 6, h: 5, config: { siteId: "site-1", metric: "cpu_pct" } },
-    { i: "snmp_traffic", type: "device_metric_chart", x: 6, y: 8, w: 6, h: 5, config: { siteId: "site-1", metric: "if_in_bps" } },
-    { i: "mem", type: "device_stat_gauge", x: 0, y: 13, w: 3, h: 4, config: { siteId: "site-1", metric: "mem_pct" } },
-    { i: "disk", type: "device_stat_gauge", x: 3, y: 13, w: 3, h: 4, config: { siteId: "site-1", metric: "disk_pct" } },
-    { i: "map", type: "mini_map", x: 6, y: 13, w: 6, h: 6 },
-    { i: "alerts", type: "alerts_table", x: 0, y: 17, w: 6, h: 4 }
-  ]
+export type DashboardLayout = {
+  version: 2;
+  boards: DashboardBoard[];
 };
+
+const WIDGET_TYPES = new Set<WidgetType>([
+  "site_status_grid",
+  "site_signal_board",
+  "local_devices_board",
+  "snmp_device_status",
+  "device_stack",
+  "uplink_status",
+  "collector_status",
+  "alerts_table",
+  "top_devices",
+  "mini_map",
+  "website_summary",
+  "site_card",
+  "grafana_panel",
+  "device_metric_chart",
+  "device_metric_bar",
+  "device_stat_gauge",
+  "device_detail"
+]);
+
+const OVERVIEW_WIDGETS: DashboardWidget[] = [
+  { i: "signals", type: "site_signal_board", x: 0, y: 0, w: 5, h: 8 },
+  { i: "local", type: "local_devices_board", x: 5, y: 0, w: 4, h: 8, config: { siteId: "site-1" } },
+  { i: "uplink", type: "uplink_status", x: 9, y: 0, w: 3, h: 4, config: { siteId: "site-1" } },
+  { i: "collector", type: "collector_status", x: 9, y: 4, w: 3, h: 4, config: { siteId: "site-1" } },
+  { i: "cpu", type: "device_metric_chart", x: 0, y: 8, w: 6, h: 5, config: { siteId: "site-1", metric: "cpu_pct" } },
+  { i: "snmp_traffic", type: "device_metric_chart", x: 6, y: 8, w: 6, h: 5, config: { siteId: "site-1", metric: "if_in_bps" } },
+  { i: "mem", type: "device_stat_gauge", x: 0, y: 13, w: 3, h: 4, config: { siteId: "site-1", metric: "mem_pct" } },
+  { i: "disk", type: "device_stat_gauge", x: 3, y: 13, w: 3, h: 4, config: { siteId: "site-1", metric: "disk_pct" } },
+  { i: "map", type: "mini_map", x: 6, y: 13, w: 6, h: 6 },
+  { i: "alerts", type: "alerts_table", x: 0, y: 17, w: 6, h: 4 }
+];
+
+/** Keep in sync with frontend/wallboard/src/dashboardBoards.ts */
+export function siteStarterWidgets(siteId: string): DashboardWidget[] {
+  return [
+    { i: `uplink-${siteId}`, type: "uplink_status", x: 0, y: 0, w: 3, h: 5, config: { siteId } },
+    { i: `collector-${siteId}`, type: "collector_status", x: 3, y: 0, w: 3, h: 5, config: { siteId } },
+    { i: `websites-${siteId}`, type: "website_summary", x: 6, y: 0, w: 6, h: 5 },
+    { i: `local-${siteId}`, type: "local_devices_board", x: 0, y: 5, w: 6, h: 7, config: { siteId } },
+    {
+      i: `traffic-${siteId}`,
+      type: "device_metric_chart",
+      x: 6,
+      y: 5,
+      w: 6,
+      h: 7,
+      config: { siteId, metric: "if_in_bps" }
+    }
+  ];
+}
+
+export function overviewBoard(widgets?: DashboardWidget[]): DashboardBoard {
+  return {
+    id: "overview",
+    title: "All locations",
+    siteId: null,
+    widgets: structuredClone(widgets ?? OVERVIEW_WIDGETS)
+  };
+}
+
+export function siteStarterBoard(siteId: string, title: string): DashboardBoard {
+  return {
+    id: siteId,
+    title,
+    siteId,
+    widgets: siteStarterWidgets(siteId)
+  };
+}
+
+function isWidget(value: unknown): value is DashboardWidget {
+  if (!value || typeof value !== "object") return false;
+  const w = value as Partial<DashboardWidget>;
+  return (
+    typeof w.i === "string" &&
+    w.i.length > 0 &&
+    typeof w.type === "string" &&
+    WIDGET_TYPES.has(w.type) &&
+    Number.isFinite(Number(w.x)) &&
+    Number.isFinite(Number(w.y)) &&
+    Number.isFinite(Number(w.w)) &&
+    Number.isFinite(Number(w.h))
+  );
+}
+
+function normalizeBoard(value: unknown): DashboardBoard | null {
+  if (!value || typeof value !== "object") return null;
+  const b = value as Partial<DashboardBoard>;
+  if (typeof b.id !== "string" || !b.id || !Array.isArray(b.widgets)) return null;
+  const siteId = typeof b.siteId === "string" && b.siteId.trim() ? b.siteId : null;
+  const title =
+    typeof b.title === "string" && b.title.trim()
+      ? b.title.trim()
+      : siteId
+        ? siteId
+        : "All locations";
+  return {
+    id: b.id,
+    title,
+    siteId,
+    widgets: b.widgets.filter(isWidget)
+  };
+}
+
+function migrateLayout(parsed: unknown): DashboardLayout {
+  if (!parsed || typeof parsed !== "object") return getDefaultLayout();
+  const obj = parsed as { version?: number; widgets?: unknown; boards?: unknown };
+  if (obj.version === 2 && Array.isArray(obj.boards)) {
+    const boards = obj.boards.map(normalizeBoard).filter((b): b is DashboardBoard => b != null);
+    if (boards.length === 0) return getDefaultLayout();
+    return { version: 2, boards };
+  }
+  if (Array.isArray(obj.widgets)) {
+    const widgets = obj.widgets.filter(isWidget);
+    return { version: 2, boards: [overviewBoard(widgets.length > 0 ? widgets : undefined)] };
+  }
+  return getDefaultLayout();
+}
 
 function layoutsDir() {
   const candidates = [
@@ -75,7 +186,7 @@ function layoutPath(userId: string) {
 }
 
 export function getDefaultLayout(): DashboardLayout {
-  return structuredClone(DEFAULT_LAYOUT);
+  return { version: 2, boards: [overviewBoard()] };
 }
 
 export function loadLayout(userId: string): DashboardLayout {
@@ -85,11 +196,7 @@ export function loadLayout(userId: string): DashboardLayout {
   }
   try {
     const raw = fs.readFileSync(file, "utf8");
-    const parsed = JSON.parse(raw) as DashboardLayout;
-    if (!parsed?.widgets || !Array.isArray(parsed.widgets)) {
-      return getDefaultLayout();
-    }
-    return parsed;
+    return migrateLayout(JSON.parse(raw));
   } catch {
     return getDefaultLayout();
   }
@@ -100,8 +207,20 @@ export function saveLayout(userId: string, layout: DashboardLayout) {
   fs.writeFileSync(file, JSON.stringify(layout, null, 2), "utf8");
 }
 
-export function resetLayout(userId: string) {
-  const layout = getDefaultLayout();
+/** Full reset restores the overview board. A boardId resets only that slide. */
+export function resetLayout(userId: string, boardId?: string) {
+  if (!boardId) {
+    const layout = getDefaultLayout();
+    saveLayout(userId, layout);
+    return layout;
+  }
+  const current = loadLayout(userId);
+  const boards = current.boards.map((b) => {
+    if (b.id !== boardId) return b;
+    if (!b.siteId) return overviewBoard();
+    return siteStarterBoard(b.siteId, b.title);
+  });
+  const layout: DashboardLayout = { version: 2, boards };
   saveLayout(userId, layout);
   return layout;
 }

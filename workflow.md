@@ -339,3 +339,7 @@ Collector box → Alloy → Prometheus (central)
   - Frontend only caches tile URLs that include `?key=` so a keyless first response cannot stick
 - [x] **Line use Today = calendar day (2026-10-15)**
   - `collectUtilWindows` “1d” uses midnight→now in `NOC_TZ` (default `Asia/Kuala_Lumpur`), not rolling 24h; 7d/30d unchanged
+- [x] **Fit-to-screen dashboard + location carousel (2026-10-16)**
+  - View mode sizes grid rows to the visible pane (no page scroll); edit mode still scrolls
+  - Layout v2: All locations board plus one saved board per location; v1 files migrate on read
+  - Arrows, keyboard, and fullscreen Lock / Rotate (15s, 30s, 60s)

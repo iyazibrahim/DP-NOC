@@ -47,9 +47,19 @@ const widgetSchema = z.object({
   config: z.record(z.string()).optional()
 });
 
-const layoutSchema = z.object({
-  version: z.literal(1),
+const boardSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  siteId: z.preprocess(
+    (v) => (v == null || v === "" ? null : v),
+    z.string().min(1).nullable()
+  ),
   widgets: z.array(widgetSchema)
+});
+
+const layoutSchema = z.object({
+  version: z.literal(2),
+  boards: z.array(boardSchema).min(1)
 });
 
 dashboardsRouter.get(
@@ -80,7 +90,9 @@ dashboardsRouter.post(
   requireJwt(["operator", "wallboard"]),
   (req: AuthenticatedRequest, res: Response) => {
     const userId = req.auth?.sub ?? "anonymous";
-    const layout = resetLayout(userId);
+    const raw = req.body?.boardId;
+    const boardId = typeof raw === "string" && raw.trim() ? raw.trim() : undefined;
+    const layout = resetLayout(userId, boardId);
     return res.json({ layout });
   }
 );

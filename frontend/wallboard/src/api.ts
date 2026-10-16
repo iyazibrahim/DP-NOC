@@ -522,10 +522,11 @@ export async function saveDashboardLayout(token: string, layout: DashboardLayout
   });
 }
 
-export async function resetDashboardLayout(token: string) {
+export async function resetDashboardLayout(token: string, boardId?: string) {
   return fetchJson<{ layout: DashboardLayout }>("/api/dashboards/me/reset", {
     method: "POST",
-    headers: authHeaders(token)
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify(boardId ? { boardId } : {})
   });
 }
 

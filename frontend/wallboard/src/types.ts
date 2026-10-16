@@ -123,9 +123,17 @@ export type DashboardWidget = {
   config?: Record<string, string>;
 };
 
-export type DashboardLayout = {
-  version: 1;
+export type DashboardBoard = {
+  id: string;
+  title: string;
+  /** Null is the all-locations overview. */
+  siteId: string | null;
   widgets: DashboardWidget[];
+};
+
+export type DashboardLayout = {
+  version: 2;
+  boards: DashboardBoard[];
 };
 
 export type SiteNetworkWidgetType =

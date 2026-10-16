@@ -8,6 +8,7 @@ import "./index.css";
 import "./styles.css";
 import { AuthProvider } from "./auth/AuthContext";
 import { CommandCenterProvider } from "./commandCenter/CommandCenterContext";
+import { DashboardDeckProvider } from "./commandCenter/DashboardDeckContext";
 import { App } from "./App";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -15,7 +16,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <AuthProvider>
         <CommandCenterProvider>
-          <App />
+          <DashboardDeckProvider>
+            <App />
+          </DashboardDeckProvider>
         </CommandCenterProvider>
       </AuthProvider>
     </BrowserRouter>
