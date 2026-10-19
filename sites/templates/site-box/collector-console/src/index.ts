@@ -185,8 +185,8 @@ app.get("/api/status", async (_req, res) => {
     warnings.push("The collector service stopped. Open Diagnostics, then use Force apply.");
   }
   const snmpStaleReason = alloySnmpStaleReason(dir);
-  if (snmpStale) {
-    warnings.push("Device checks are out of date. Use Force apply, then Refresh.");
+  if (snmpStaleReason) {
+    warnings.push(snmpStaleReason.detail);
   }
 
   res.json({
@@ -506,7 +506,12 @@ app.get("/api/diagnostics", async (_req, res) => {
   if (logLower.includes("502") || logLower.includes("503")) {
     remoteWriteHints.push("Alloy logs show 502/503 — metrics tunnel/Prometheus origin down");
   }
-  if (logLower.includes("remote_write") && (logLower.includes("error") || logLower.includes("failed"))) {
+  // "exited without error" contains both words and is a clean restart, not a push failure.
+  const logForErrors = logLower.replace(/without error/g, "");
+  if (
+    logForErrors.includes("remote_write") &&
+    (/\berror\b/.test(logForErrors) || logForErrors.includes("failed"))
+  ) {
     remoteWriteHints.push("Alloy logs mention remote_write errors — open Settings → View Alloy logs");
   }
   if (logLower.includes("out of order sample")) {
@@ -519,6 +524,7 @@ app.get("/api/diagnostics", async (_req, res) => {
   }
   const crashHints = alloyLogCrashHints(logs);
   const cfgHealth = inspectConfigAlloyHealth();
+  const snmpStaleReason = alloySnmpStaleReason(dir);
 
   let hint: string;
   if (!metricsOk) {
@@ -530,6 +536,8 @@ app.get("/api/diagnostics", async (_req, res) => {
       .join(" | ");
   } else if (remoteWriteHints.length > 0) {
     hint = remoteWriteHints.join(" | ");
+  } else if (snmpStaleReason) {
+    hint = snmpStaleReason.detail;
   } else if (missingInAlloy.length > 0 || (devices.length > 0 && !hasSnmpBlock)) {
     hint = "SNMP targets missing in Alloy — click Force apply SNMP";
   } else {
@@ -551,8 +559,8 @@ app.get("/api/diagnostics", async (_req, res) => {
     deviceCount: devices.length,
     devices,
     hasSnmpBlock,
-    snmpConfigStale: alloySnmpConfigStale(dir),
-    snmpStaleReason: alloySnmpStaleReason(dir),
+    snmpConfigStale: snmpStaleReason != null,
+    snmpStaleReason,
     missingDeviceLabelsInAlloy: missingInAlloy,
     siteName: readConfig().siteName,
     hint,

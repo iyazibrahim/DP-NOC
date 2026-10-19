@@ -60,9 +60,17 @@ export const SNMP_MODULE_MARKERS = [
   "noc-snmp-no-lookups"
 ] as const;
 
+/** Marker checks use the modules block only. Header comments are stripped on regenerate. */
+function modulesSection(text: string): string {
+  const idx = text.search(/(^|\n)modules:/);
+  return idx === -1 ? text : text.slice(text.indexOf("modules:", idx));
+}
+
 export function snmpModulesNewerInBundled(bundled: string, live: string): string | null {
+  const bundledModules = modulesSection(bundled);
+  const liveModules = modulesSection(live);
   for (const m of SNMP_MODULE_MARKERS) {
-    if (bundled.includes(m) && !live.includes(m)) return m;
+    if (bundledModules.includes(m) && !liveModules.includes(m)) return m;
   }
   return null;
 }
@@ -173,8 +181,7 @@ export async function ensureAlloySnmpApplied(
   if (still) {
     return {
       reloaded: true,
-      message:
-        "Device checks were rebuilt, but they still do not match the list. Use Force apply again. If it stays stuck, open Diagnostics."
+      message: `Device checks were rebuilt, but they are still out of date: ${still.detail}`
     };
   }
   return {
