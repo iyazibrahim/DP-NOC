@@ -331,6 +331,7 @@ app.post("/api/config", async (req, res) => {
     assign("hostDeviceId", body.hostDeviceId);
     assign("pingTarget1", body.pingTarget1);
     assign("pingTarget2", body.pingTarget2);
+    assign("pingTarget3", body.pingTarget3);
     assign("nocApiUrl", body.nocApiUrl);
     if (
       typeof body.collectorToken === "string" &&
@@ -358,6 +359,7 @@ app.post("/api/config", async (req, res) => {
             patch.hostDeviceId ||
             patch.pingTarget1 ||
             patch.pingTarget2 ||
+            patch.pingTarget3 ||
             patch.scrapeIntervalSec
         );
         regenMsg = await regenerateAlloyConfig();

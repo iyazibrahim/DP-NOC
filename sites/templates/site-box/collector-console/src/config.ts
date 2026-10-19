@@ -9,6 +9,7 @@ export type CollectorConfig = {
   hostDeviceId: string;
   pingTarget1: string;
   pingTarget2: string;
+  pingTarget3: string;
   nocApiUrl: string;
   collectorToken: string;
   scrapeIntervalSec: string;
@@ -24,6 +25,7 @@ const CONFIG_TO_ENV: Record<keyof Omit<CollectorConfig, "snmpCommunity">, string
   hostDeviceId: "HOST_DEVICE_ID",
   pingTarget1: "PING_TARGET_1",
   pingTarget2: "PING_TARGET_2",
+  pingTarget3: "PING_TARGET_3",
   nocApiUrl: "NOC_API_URL",
   collectorToken: "COLLECTOR_TOKEN",
   scrapeIntervalSec: "SCRAPE_INTERVAL_SEC",
@@ -376,6 +378,7 @@ export function readConfig(): CollectorConfig {
     hostDeviceId: env.HOST_DEVICE_ID || (siteName ? `${siteName}-nuc` : ""),
     pingTarget1: env.PING_TARGET_1 || "1.1.1.1",
     pingTarget2: env.PING_TARGET_2 || "139.99.88.174",
+    pingTarget3: env.PING_TARGET_3 || "8.8.8.8",
     nocApiUrl: env.NOC_API_URL || "",
     collectorToken: env.COLLECTOR_TOKEN || "",
     scrapeIntervalSec: env.SCRAPE_INTERVAL_SEC || "15",
@@ -466,6 +469,7 @@ export function alloyReloadNeeded(
     "hostDeviceId",
     "pingTarget1",
     "pingTarget2",
+    "pingTarget3",
     "scrapeIntervalSec",
     "snmpCommunity"
   ];

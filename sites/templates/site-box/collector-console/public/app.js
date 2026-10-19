@@ -415,6 +415,7 @@ async function loadConfigForm() {
   set("cfAccessClientId", cfg.cfAccessClientId);
   set("pingTarget1", cfg.pingTarget1);
   set("pingTarget2", cfg.pingTarget2);
+  set("pingTarget3", cfg.pingTarget3);
   set("snmpCommunity", cfg.snmpCommunity);
   set("syncIntervalSec", cfg.syncIntervalSec);
   set("hostDeviceId", cfg.hostDeviceId);
@@ -657,6 +658,7 @@ function prefillWizard() {
   document.getElementById("wiz-cf-id").value = take("cfAccessClientId", cfg.cfAccessClientId);
   document.getElementById("wiz-ping1").value = take("pingTarget1", cfg.pingTarget1, "1.1.1.1");
   document.getElementById("wiz-ping2").value = take("pingTarget2", cfg.pingTarget2, "139.99.88.174");
+  document.getElementById("wiz-ping3").value = take("pingTarget3", cfg.pingTarget3, "8.8.8.8");
   document.getElementById("wiz-community").value = take("snmpCommunity", cfg.snmpCommunity, "public");
   const typedToken = document.getElementById("collectorToken").value.trim();
   if (typedToken) document.getElementById("wiz-token").value = typedToken;
@@ -693,6 +695,7 @@ function copyWizardToSetupForm() {
   copy("wiz-cf-secret", "cfAccessClientSecret");
   copy("wiz-ping1", "pingTarget1");
   copy("wiz-ping2", "pingTarget2");
+  copy("wiz-ping3", "pingTarget3");
   copy("wiz-community", "snmpCommunity");
 }
 
@@ -745,7 +748,7 @@ function renderWizardReview() {
     ["Token", token ? "Will be saved" : savedConfig?.collectorToken ? "Keep saved token" : "Missing"],
     ["Metrics URL", document.getElementById("wiz-rw").value.trim() || "—"],
     ["Cloudflare Access", cfId || cfSecret ? "Will be saved" : savedConfig?.cfAccessClientId ? "Keep saved credentials" : "Not used"],
-    ["Ping targets", `${document.getElementById("wiz-ping1").value.trim()} and ${document.getElementById("wiz-ping2").value.trim()}`],
+    ["Ping targets", `${document.getElementById("wiz-ping1").value.trim()}, ${document.getElementById("wiz-ping3").value.trim()}, and ${document.getElementById("wiz-ping2").value.trim()}`],
     ["SNMP community", document.getElementById("wiz-community").value.trim() || "—"],
     ["Host id", hostField || (site ? `${site}-nuc` : "—")]
   ];
@@ -854,6 +857,7 @@ async function wizardNext() {
       cfAccessClientSecret: document.getElementById("wiz-cf-secret").value.trim(),
       pingTarget1: document.getElementById("wiz-ping1").value.trim(),
       pingTarget2: document.getElementById("wiz-ping2").value.trim(),
+      pingTarget3: document.getElementById("wiz-ping3").value.trim(),
       snmpCommunity: document.getElementById("wiz-community").value.trim()
     };
     const result = await api("/api/config", { method: "POST", body: JSON.stringify(body) });

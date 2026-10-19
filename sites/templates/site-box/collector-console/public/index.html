@@ -90,6 +90,11 @@
             </div>
           </div>
           <div class="field">
+            <label for="wiz-ping3">Ping target 3 (second DNS)</label>
+            <input id="wiz-ping3" value="8.8.8.8" />
+            <p class="hint">Internet stays up when either DNS answers.</p>
+          </div>
+          <div class="field">
             <label for="wiz-community">Default SNMP community (v2c)</label>
             <input id="wiz-community" value="public" autocomplete="off" />
             <p class="hint">Used only when a device does not have its own community.</p>
@@ -184,6 +189,11 @@
                     <label for="pingTarget2">Ping target 2 (WAN VPS)</label>
                     <input id="pingTarget2" name="pingTarget2" value="139.99.88.174" />
                   </div>
+                </div>
+                <div class="field">
+                  <label for="pingTarget3">Ping target 3 (second DNS)</label>
+                  <input id="pingTarget3" name="pingTarget3" value="8.8.8.8" />
+                  <p class="hint">Internet stays up when either DNS answers. Default is 8.8.8.8.</p>
                 </div>
                 <div class="field">
                   <label for="snmpCommunity">Default SNMP community (v2c)</label>
