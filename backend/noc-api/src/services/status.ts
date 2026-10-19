@@ -225,6 +225,31 @@ function aggregateProbeStatuses(statuses: DomainStatus[]): DomainStatus {
   return { state: "healthy" };
 }
 
+/** DNS is up when either server answers. Both must fail before DNS is down. */
+function aggregateDns(primary: DomainStatus, secondary: DomainStatus): DomainStatus {
+  if (primary.state === "healthy" || secondary.state === "healthy") {
+    if (primary.state === "critical" || secondary.state === "critical") {
+      return {
+        state: "healthy",
+        notes: "One DNS server did not answer. The other did."
+      };
+    }
+    return { state: "healthy" };
+  }
+  if (primary.state === "critical" && secondary.state === "critical") {
+    return {
+      state: "critical",
+      notes: "Both DNS checks failed."
+    };
+  }
+  if (primary.state === "critical" && secondary.state === "unknown") return primary;
+  if (secondary.state === "critical" && primary.state === "unknown") return secondary;
+  if (primary.state === "unknown" && secondary.state === "unknown") {
+    return { state: "unknown", notes: primary.notes ?? secondary.notes ?? "No DNS check yet" };
+  }
+  return primary.state === "unknown" ? secondary : primary;
+}
+
 /** Critical only when both WAN paths fail; single-path failure = warning. */
 function aggregateUplinkQuorum(wanDns: DomainStatus, wanVps: DomainStatus): DomainStatus {
   const a = wanDns.state;
@@ -734,12 +759,20 @@ export async function computeSiteStatus(
       downNotes: "No recent internet check from this location."
     }
   );
+  const wanDns2Raw = await queryBooleanMetricState(
+    `probe_success{site="${siteId}",check="wan_dns2"}`,
+    {
+      silenceMeansDown: true,
+      downNotes: "No recent check of the second DNS server."
+    }
+  );
+  const wanDnsCombined = aggregateDns(wanDnsRaw, wanDns2Raw);
   const wanDns = {
-    ...wanDnsRaw,
+    ...wanDnsCombined,
     notes:
-      wanDnsRaw.state === "critical"
-        ? "The DNS check failed."
-        : wanDnsRaw.notes
+      wanDnsCombined.state === "critical"
+        ? wanDnsCombined.notes ?? "The DNS check failed."
+        : wanDnsCombined.notes
   };
   const wanVps = {
     ...wanVpsRaw,

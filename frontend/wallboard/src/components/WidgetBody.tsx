@@ -21,6 +21,7 @@ import {
 import { WebsiteSummaryWidget } from "./WebsiteSummaryWidget";
 import { AlertsIncidentsWidget } from "./AlertsIncidentsWidget";
 import { ApClusterCard, DeviceHealthCard } from "./InsightWidgets";
+import { DashboardNetworkCard, type NetworkGlance } from "./DashboardNetworkCard";
 
 export type WidgetCatalogEntry = {
   type: WidgetType;
@@ -115,6 +116,34 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
     defaultH: 5
   },
   {
+    type: "net_line_use",
+    label: "Line use",
+    description: "Download and upload volume, same as Network",
+    defaultW: 4,
+    defaultH: 4
+  },
+  {
+    type: "net_bandwidth",
+    label: "Download / upload",
+    description: "WAN speed over time, same as Network",
+    defaultW: 8,
+    defaultH: 5
+  },
+  {
+    type: "net_ap_traffic",
+    label: "AP traffic",
+    description: "Traffic per access point, same as Network",
+    defaultW: 6,
+    defaultH: 5
+  },
+  {
+    type: "net_speedtest",
+    label: "Speed test",
+    description: "Speed test history, same as Network",
+    defaultW: 8,
+    defaultH: 5
+  },
+  {
     type: "grafana_panel",
     label: "Grafana panel",
     description: "Embed a panel",
@@ -154,7 +183,17 @@ export const WIDGET_GROUPS: Array<{ label: string; widgets: WidgetCatalogEntry[]
   {
     label: "Charts",
     widgets: WIDGET_CATALOG.filter((w) =>
-      ["device_metric_chart", "device_metric_bar", "device_stat_gauge", "device_health", "grafana_panel"].includes(w.type)
+      [
+        "device_metric_chart",
+        "device_metric_bar",
+        "device_stat_gauge",
+        "device_health",
+        "net_line_use",
+        "net_bandwidth",
+        "net_ap_traffic",
+        "net_speedtest",
+        "grafana_panel"
+      ].includes(w.type)
     )
   },
   {
@@ -370,6 +409,21 @@ export function WidgetBody({
     return (
       <div className="widgetInner">
         <DeviceHealthCard siteId={siteId} deviceId={deviceId} color={config?.color} />
+      </div>
+    );
+  }
+
+  if (
+    type === "net_line_use" ||
+    type === "net_bandwidth" ||
+    type === "net_speedtest" ||
+    type === "net_ap_traffic"
+  ) {
+    const view: NetworkGlance =
+      type === "net_bandwidth" ? "bandwidth" : type === "net_speedtest" ? "speed" : type === "net_ap_traffic" ? "ap" : "line";
+    return (
+      <div className="widgetInner">
+        <DashboardNetworkCard siteId={siteId} view={view} />
       </div>
     );
   }

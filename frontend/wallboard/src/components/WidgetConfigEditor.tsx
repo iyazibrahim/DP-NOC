@@ -310,6 +310,27 @@ export function WidgetConfigEditor({
     );
   }
 
+  if (
+    widget.type === "net_line_use" ||
+    widget.type === "net_bandwidth" ||
+    widget.type === "net_speedtest" ||
+    widget.type === "net_ap_traffic"
+  ) {
+    return (
+      <div className="widgetConfig">
+        <TitleField config={config} onChange={onChange} />
+        <label className="label">Site</label>
+        <select value={siteId} onChange={(e) => onChange({ ...config, siteId: e.target.value })}>
+          {sites.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
   if (widget.type === "ap_cluster") {
     const selected = new Set(
       (config.deviceIds ?? "")

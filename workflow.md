@@ -365,6 +365,10 @@ Collector box → Alloy → Prometheus (central)
   - Collector diagnostics: `pduValueAsString` / `indexesToLabels` in snmp_exporter v0.26.0. A text lookup (MAC, name, volume label) panics the Alloy process, so internet pings, interface counters, and speed test never arrive.
   - Removed those lookups from `snmp.yml` (`noc-snmp-no-lookups`). Client names still come from the console walk. Force apply after the site-box image is rebuilt so the volume file is replaced.
   - Follow-up: the marker sat above `modules:`, which regenerate strips, so Force apply stayed Stale forever. Marker now lives inside `modules:`. Diagnostics no longer treats `exited without error` as a remote_write failure. The stuck banner includes the real reason.
+- [x] **Dashboard network widgets and a second DNS ping (2026-10-19)**
+  - Dashboard widgets Line use, Download / upload, AP traffic, and Speed test use the same site network API as the Network tab.
+  - Internet DNS is up when either DNS server answers. The second ping is 8.8.8.8 (`PING_TARGET_3`, check `wan_dns2`) beside 1.1.1.1. The central-server ping is unchanged.
+  - The second ping starts after the site-box image is rebuilt and Force apply runs. Until then, a failed first DNS still marks DNS down.
 - [x] **Uplink follows probe data only (2026-10-19)**
   - Reverted treating “collector reached the NOC” as a healthy uplink. DNS and internet checks are `probe_success` only: no sample stays unknown, `1` is up, `0` or silence is down.
   - A location is not marked healthy while those probes have never reported. Critical collector, website, or local-device state can still mark it down.

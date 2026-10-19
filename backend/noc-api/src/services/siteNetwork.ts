@@ -83,6 +83,7 @@ export type SiteNetworkSummary = {
   wanDeviceName: string | null;
   uplink: {
     dns: number | null;
+    dns2: number | null;
     vps: number | null;
   };
   traffic: {
@@ -319,9 +320,11 @@ export async function getSiteNetworkSummary(
     : null;
 
   let dns: number | null = null;
+  let dns2: number | null = null;
   let vps: number | null = null;
   try {
     dns = parseFirstVectorValue(await promQuery(probeSuccessFresh(siteId, "wan_dns", METRIC_FRESH_WINDOW)));
+    dns2 = parseFirstVectorValue(await promQuery(probeSuccessFresh(siteId, "wan_dns2", METRIC_FRESH_WINDOW)));
     vps = parseFirstVectorValue(await promQuery(probeSuccessFresh(siteId, "wan_vps", METRIC_FRESH_WINDOW)));
   } catch {
     /* ignore */
@@ -410,7 +413,7 @@ export async function getSiteNetworkSummary(
     siteId,
     wanUplink,
     wanDeviceName: wanDevice?.name ?? null,
-    uplink: { dns, vps },
+    uplink: { dns, dns2, vps },
     traffic,
     trafficSeries: { inBps: inSeries, outBps: outSeries },
     clients: {

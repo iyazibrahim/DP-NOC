@@ -105,6 +105,10 @@ function widgetHasConfig(type: DashboardWidget["type"]) {
     type === "device_stat_gauge" ||
     type === "device_health" ||
     type === "ap_cluster" ||
+    type === "net_line_use" ||
+    type === "net_bandwidth" ||
+    type === "net_speedtest" ||
+    type === "net_ap_traffic" ||
     type === "device_detail" ||
     type === "uplink_status" ||
     type === "collector_status" ||
@@ -433,6 +437,10 @@ export function DashboardPage() {
           w.type === "device_stat_gauge" ||
           w.type === "device_health" ||
           w.type === "ap_cluster" ||
+          w.type === "net_line_use" ||
+          w.type === "net_bandwidth" ||
+          w.type === "net_speedtest" ||
+          w.type === "net_ap_traffic" ||
           w.type === "snmp_device_status" ||
           w.type === "device_stack" ||
           w.type === "uplink_status" ||
@@ -541,6 +549,13 @@ export function DashboardPage() {
         siteId: firstSite?.id ?? "",
         deviceId: firstNet?.id ?? ""
       };
+    } else if (
+      type === "net_line_use" ||
+      type === "net_bandwidth" ||
+      type === "net_speedtest" ||
+      type === "net_ap_traffic"
+    ) {
+      config = { siteId: firstSite?.id ?? "" };
     } else if (type === "ap_cluster") {
       config = { siteId: firstSite?.id ?? "", deviceIds: "" };
     } else if (type === "device_stack") {

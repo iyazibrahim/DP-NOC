@@ -20,6 +20,10 @@ export type WidgetType =
   | "device_stat_gauge"
   | "device_health"
   | "ap_cluster"
+  | "net_line_use"
+  | "net_bandwidth"
+  | "net_speedtest"
+  | "net_ap_traffic"
   | "device_detail";
 
 export type DashboardWidget = {
@@ -64,6 +68,10 @@ const WIDGET_TYPES = new Set<WidgetType>([
   "device_stat_gauge",
   "device_health",
   "ap_cluster",
+  "net_line_use",
+  "net_bandwidth",
+  "net_speedtest",
+  "net_ap_traffic",
   "device_detail"
 ]);
 

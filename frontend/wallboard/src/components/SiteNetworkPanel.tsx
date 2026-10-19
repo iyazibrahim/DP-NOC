@@ -414,6 +414,7 @@ export function SiteNetworkPanel({ token, site }: Props) {
   );
 
   const dns = uplinkLabel(network?.uplink.dns ?? null);
+  const dns2 = uplinkLabel(network?.uplink.dns2 ?? null);
   const vps = uplinkLabel(network?.uplink.vps ?? null);
   const st = network?.speedtest;
 
@@ -534,6 +535,10 @@ export function SiteNetworkPanel({ token, site }: Props) {
             <div className="healthChip">
               <span className="healthChipLabel">DNS check</span>
               <StatusPill state={dns.state} notes={dns.label} />
+            </div>
+            <div className="healthChip">
+              <span className="healthChipLabel">DNS 2</span>
+              <StatusPill state={dns2.state} notes={dns2.label} />
             </div>
             <div className="healthChip">
               <span className="healthChipLabel">Internet check</span>
