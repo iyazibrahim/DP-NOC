@@ -351,6 +351,9 @@ Collector box → Alloy → Prometheus (central)
 - [x] **Collector unknown while LAN checks are up (2026-10-19)**
   - Root cause: collector health waited on host `up` / memory in Prometheus. A fresh Collector Console report (or per-device SNMP/ping) could mark local devices HEALTHY while the collector card stayed UNKNOWN (“Waiting for data”).
   - Fix: if that report or those device checks show SNMP or ping up, the collector and its Devices-page row are healthy. A silent collector with no successful LAN check still pauses device alarms.
+- [x] **Client hostname / MAC / IP missing (2026-10-19)**
+  - Prometheus client rows only have SNR and byte rates after the lookup panic fix. The page ignored the collector walk whenever those rows existed, so hostname, MAC, and IP stayed blank.
+  - A fresh walk that has identity is now the client list. Live SNR and rates still overlay when the walk sends `clientIndex`.
 - [x] **SNMP exporter panic stops all metrics (2026-10-19)**
   - Collector diagnostics: `pduValueAsString` / `indexesToLabels` in snmp_exporter v0.26.0. A text lookup (MAC, name, volume label) panics the Alloy process, so internet pings, interface counters, and speed test never arrive.
   - Removed those lookups from `snmp.yml` (`noc-snmp-no-lookups`). Client names still come from the console walk. Force apply after the site-box image is rebuilt so the volume file is replaced.

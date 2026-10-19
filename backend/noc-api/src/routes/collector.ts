@@ -124,7 +124,8 @@ collectorRouter.post("/:siteId/stations", (req, res) => {
       inBps: numOrNull(r.inBps),
       outBps: numOrNull(r.outBps),
       clientOs: strOrNull(r.clientOs),
-      hwMode: strOrNull(r.hwMode)
+      hwMode: strOrNull(r.hwMode),
+      clientIndex: strOrNull(r.clientIndex)
     });
   }
 

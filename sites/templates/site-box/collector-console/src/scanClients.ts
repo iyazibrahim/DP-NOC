@@ -20,6 +20,7 @@ export type ScannedStation = {
   outBps: number | null;
   clientOs: string | null;
   hwMode: string | null;
+  clientIndex: string | null;
 };
 
 type LocalDevice = {
@@ -262,6 +263,7 @@ async function scanDevice(
         outBps: null,
         clientOs: cols["6"]?.trim() || null,
         hwMode: cols["7"]?.trim() || null,
+        clientIndex: idx,
         _txBytes: Number.isFinite(txBytes) ? txBytes : undefined,
         _rxBytes: Number.isFinite(rxBytes) ? rxBytes : undefined,
         _idx: idx
@@ -285,6 +287,7 @@ async function scanDevice(
         outBps: null,
         clientOs: null,
         hwMode: null,
+        clientIndex: idx,
         _idx: idx
       });
     }

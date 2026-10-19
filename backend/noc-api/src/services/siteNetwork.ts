@@ -835,46 +835,46 @@ async function collectStations(siteId: string, site: Site): Promise<SiteNetworkS
 
   let stations: SiteNetworkStation[] = [...byKey.values()].map(({ clientIndex: _ci, ...rest }) => rest);
 
-  // Fallback: collector-console snmpwalk push (Prom station series often empty on E-series).
-  if (stations.length === 0) {
-    const stored = loadSiteStations(siteId);
-    if (stored?.stations?.length) {
-      // Overlay live Prom rates by MAC when available.
-      const rateByMac = new Map<string, { inBps: number | null; outBps: number | null }>();
-      for (const row of rxBpsRows) {
-        const mac = formatMacLabel(row.metric.mac);
-        if (!mac) continue;
-        const cur = rateByMac.get(mac) ?? { inBps: null, outBps: null };
-        cur.inBps = Number.isFinite(row.value) ? row.value : cur.inBps;
-        rateByMac.set(mac, cur);
-      }
-      for (const row of txBpsRows) {
-        const mac = formatMacLabel(row.metric.mac);
-        if (!mac) continue;
-        const cur = rateByMac.get(mac) ?? { inBps: null, outBps: null };
-        cur.outBps = Number.isFinite(row.value) ? row.value : cur.outBps;
-        rateByMac.set(mac, cur);
-      }
-
-      stations = stored.stations.map((st) => {
-        const rates = st.mac ? rateByMac.get(st.mac.toLowerCase()) : undefined;
-        return {
-          deviceId: st.deviceId,
-          apLabel: st.apLabel || apLabelById.get(st.deviceId)?.label || st.deviceId,
-          vendor: st.vendor || apLabelById.get(st.deviceId)?.vendor || "generic",
-          mac: st.mac,
-          hostname: st.hostname,
-          ip: st.ip,
-          ssid: st.ssid,
-          snr: st.snr,
-          txRate: st.txRate,
-          inBps: rates?.inBps ?? st.inBps,
-          outBps: rates?.outBps ?? st.outBps,
-          clientOs: st.clientOs,
-          hwMode: st.hwMode
-        };
+  // Prometheus rows carry SNR and byte rates, but not hostname/MAC/IP (those lookups
+  // crash snmp_exporter). The collector walk is the identity source and must win
+  // even when Prometheus already has a row per client index.
+  const stored = loadSiteStations(siteId);
+  const storedAt = stored ? Date.parse(stored.at) : NaN;
+  const storedFresh = Number.isFinite(storedAt) && Date.now() - storedAt < 10 * 60 * 1000;
+  const identified = (stored?.stations ?? []).filter((st) => st.mac || st.hostname || st.ip);
+  if (storedFresh && identified.length > 0) {
+    const promByIdx = new Map<
+      string,
+      { snr: number | null; inBps: number | null; outBps: number | null }
+    >();
+    for (const row of byKey.values()) {
+      const idx = (row.clientIndex || "").trim();
+      if (!idx) continue;
+      promByIdx.set(`${row.deviceId}|${idx}`, {
+        snr: row.snr,
+        inBps: row.inBps,
+        outBps: row.outBps
       });
     }
+    stations = identified.map((st) => {
+      const idx = (st.clientIndex || "").trim();
+      const live = idx ? promByIdx.get(`${st.deviceId}|${idx}`) : undefined;
+      return {
+        deviceId: st.deviceId,
+        apLabel: st.apLabel || apLabelById.get(st.deviceId)?.label || st.deviceId,
+        vendor: st.vendor || apLabelById.get(st.deviceId)?.vendor || "generic",
+        mac: st.mac,
+        hostname: st.hostname,
+        ip: st.ip,
+        ssid: st.ssid,
+        snr: live?.snr ?? st.snr,
+        txRate: st.txRate,
+        inBps: live?.inBps ?? st.inBps,
+        outBps: live?.outBps ?? st.outBps,
+        clientOs: st.clientOs,
+        hwMode: st.hwMode
+      };
+    });
   }
 
   stations.sort((a, b) => {

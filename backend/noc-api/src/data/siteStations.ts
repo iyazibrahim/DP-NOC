@@ -15,6 +15,8 @@ export type StoredStation = {
   outBps: number | null;
   clientOs: string | null;
   hwMode: string | null;
+  /** SNMP table index, used to attach this walk to the matching Prometheus row. */
+  clientIndex?: string | null;
 };
 
 export type SiteStationsPayload = {
