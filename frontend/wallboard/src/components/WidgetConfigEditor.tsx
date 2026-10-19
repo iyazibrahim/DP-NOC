@@ -1,4 +1,58 @@
-import type { DashboardWidget, MetricPreset, Site } from "../types";
+import type { DashboardWidget, MetricPreset, Site, SiteDevice } from "../types";
+import { WIDGET_COLORS } from "../widgetColors";
+
+const TYPE_LABEL: Record<string, string> = {
+  ap: "Access point",
+  accesspoint: "Access point",
+  wifi: "Access point",
+  wireless: "Access point",
+  firewall: "Firewall",
+  switch: "Switch",
+  nas: "NAS",
+  storage: "NAS",
+  router: "Router",
+  server: "Collector"
+};
+
+function deviceTypeKey(type: string | undefined): string {
+  const t = (type ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (t === "ap" || t === "accesspoint" || t === "wifi" || t === "wireless") return "ap";
+  if (t === "nas" || t === "storage") return "nas";
+  return t;
+}
+
+function deviceOptionLabel(d: SiteDevice): string {
+  const kind =
+    d.kind === "server" ? "Collector" : TYPE_LABEL[deviceTypeKey(d.type)] || d.type || "Device";
+  return `${d.name} · ${kind}`;
+}
+
+function ColorField({
+  config,
+  onChange
+}: {
+  config: Record<string, string>;
+  onChange: (config: Record<string, string>) => void;
+}) {
+  const current = config.color || "teal";
+  return (
+    <>
+      <label className="label">Color</label>
+      <div className="colorSwatches">
+        {WIDGET_COLORS.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            title={c.label}
+            className={current === c.id ? "colorSwatch on" : "colorSwatch"}
+            style={{ background: c.hex }}
+            onClick={() => onChange({ ...config, color: c.id })}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
 
 function TitleField({
   config,
@@ -70,6 +124,7 @@ export function WidgetConfigEditor({
     widget.type === "device_metric_chart" ||
     widget.type === "device_metric_bar" ||
     widget.type === "device_stat_gauge" ||
+    widget.type === "device_health" ||
     widget.type === "device_detail";
 
   if (
@@ -255,6 +310,53 @@ export function WidgetConfigEditor({
     );
   }
 
+  if (widget.type === "ap_cluster") {
+    const selected = new Set(
+      (config.deviceIds ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    );
+    const aps = devices.filter((d) => deviceTypeKey(d.type) === "ap" && d.kind !== "server");
+    function toggleAp(id: string) {
+      const next = new Set(selected);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      onChange({ ...config, siteId, deviceIds: [...next].join(",") });
+    }
+    return (
+      <div className="widgetConfig">
+        <TitleField config={config} onChange={onChange} placeholder="e.g. DP office Wi-Fi" />
+        <label className="label">Site</label>
+        <select
+          value={siteId}
+          onChange={(e) => onChange({ ...config, siteId: e.target.value, deviceIds: "" })}
+        >
+          {sites.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        <label className="label">Access points</label>
+        <p className="muted fieldHint">Leave empty to include every access point on this site.</p>
+        <div className="deviceStackPicker">
+          {aps.length === 0 ? (
+            <p className="muted">No access points on this site.</p>
+          ) : (
+            aps.map((d) => (
+              <label key={d.id} className="deviceStackPickerRow">
+                <input type="checkbox" checked={selected.has(d.id)} onChange={() => toggleAp(d.id)} />
+                <span>{d.name}</span>
+              </label>
+            ))
+          )}
+        </div>
+        <ColorField config={config} onChange={onChange} />
+      </div>
+    );
+  }
+
   if (!needsDevicePicker) return null;
 
   const selectedDevice = devices.find((d) => d.id === deviceId);
@@ -264,14 +366,14 @@ export function WidgetConfigEditor({
   }
 
   function presetMatchesDevice(p: MetricPreset) {
-    if (p.kind === "any" || p.id === "wan_dns" || p.id === "wan_vps") return true;
-    if (!selectedDevice) return true;
+    if (p.kind === "any") return false;
+    if (!selectedDevice) return false;
     const deviceKind = selectedDevice.kind ?? "network";
     if (p.kind !== deviceKind) return false;
     if (deviceKind === "server") return true;
     if (p.deviceTypes?.length) {
-      const dtype = (selectedDevice.type ?? "").toLowerCase();
-      if (!p.deviceTypes.some((t) => t.toLowerCase() === dtype)) return false;
+      const dtype = deviceTypeKey(selectedDevice.type);
+      if (!p.deviceTypes.some((t) => deviceTypeKey(t) === dtype)) return false;
     }
     if (p.vendors?.length) {
       const v = normalizeVendor(selectedDevice.vendor);
@@ -296,6 +398,13 @@ export function WidgetConfigEditor({
   }
 
   const filteredPresets = presets.filter(presetMatchesDevice);
+  const metricGroups: Array<{ id: NonNullable<MetricPreset["group"]>; label: string }> = [
+    { id: "health", label: "Health" },
+    { id: "traffic", label: "Traffic" },
+    { id: "ports", label: "Ports" },
+    { id: "signal", label: "Signal" }
+  ];
+  const showMetric = widget.type !== "device_detail" && widget.type !== "device_health";
 
   return (
     <div className="widgetConfig">
@@ -307,7 +416,9 @@ export function WidgetConfigEditor({
             ? "e.g. DP Nuc CPU Usage"
             : widget.type === "device_stat_gauge"
               ? "e.g. DP Nuc Disk Free"
-              : "e.g. Custom widget name"
+              : widget.type === "device_health"
+                ? "e.g. DP Firewall"
+                : "e.g. Custom widget name"
         }
       />
       <label className="label">Site</label>
@@ -327,7 +438,7 @@ export function WidgetConfigEditor({
           </option>
         ))}
       </select>
-      <label className="label">Collector / SNMP device</label>
+      <label className="label">Device</label>
       <select
         value={deviceId}
         onChange={(e) => onChange({ ...config, siteId, deviceId: e.target.value })}
@@ -339,35 +450,53 @@ export function WidgetConfigEditor({
             .sort((a, b) => {
               const as = (a.kind ?? "") === "server" ? 0 : 1;
               const bs = (b.kind ?? "") === "server" ? 0 : 1;
-              return as - bs;
+              if (as !== bs) return as - bs;
+              return a.name.localeCompare(b.name);
             })
             .map((d) => (
               <option key={d.id} value={d.id}>
-                {d.name}
-                {d.kind === "server" ? " (collector)" : " (SNMP)"}
+                {deviceOptionLabel(d)}
               </option>
             ))
         )}
       </select>
-      {widget.type !== "device_detail" ? (
+      {showMetric ? (
         <>
           <label className="label">Metric</label>
           <select
             value={metric}
             onChange={(e) => onChange({ ...config, siteId, deviceId, metric: e.target.value })}
           >
-            {filteredPresets.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
+            {!filteredPresets.some((p) => p.id === metric) && metric ? (
+              <option value={metric}>
+                {presets.find((p) => p.id === metric)?.label ?? metric}
               </option>
-            ))}
+            ) : null}
+            {filteredPresets.length === 0 ? (
+              <option value="">No metrics for this device</option>
+            ) : (
+              metricGroups.map((group) => {
+                const items = filteredPresets.filter((p) => (p.group ?? "health") === group.id);
+                if (items.length === 0) return null;
+                return (
+                  <optgroup key={group.id} label={group.label}>
+                    {items.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                );
+              })
+            )}
           </select>
-          <p className="muted fieldHint">
-            SNMP: traffic, bandwidth utilization, capacity, errors. Firewall / switch / AP / NAS
-            health presets appear when device type and vendor match (Fortinet, Maipu, Cambium,
-            Omada, Synology). Collectors use CPU / memory / disk.
-          </p>
         </>
+      ) : null}
+      {widget.type === "device_metric_chart" ||
+      widget.type === "device_metric_bar" ||
+      widget.type === "device_stat_gauge" ||
+      widget.type === "device_health" ? (
+        <ColorField config={config} onChange={onChange} />
       ) : null}
     </div>
   );

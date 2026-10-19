@@ -18,6 +18,8 @@ export type WidgetType =
   | "device_metric_chart"
   | "device_metric_bar"
   | "device_stat_gauge"
+  | "device_health"
+  | "ap_cluster"
   | "device_detail";
 
 export type DashboardWidget = {
@@ -60,6 +62,8 @@ const WIDGET_TYPES = new Set<WidgetType>([
   "device_metric_chart",
   "device_metric_bar",
   "device_stat_gauge",
+  "device_health",
+  "ap_cluster",
   "device_detail"
 ]);
 

@@ -8,6 +8,8 @@ import {
   probeSuccessFresh
 } from "./promLabels";
 
+export type MetricGroup = "health" | "traffic" | "ports" | "signal";
+
 export type MetricPreset = {
   id: string;
   label: string;
@@ -18,6 +20,7 @@ export type MetricPreset = {
   deviceTypes?: string[];
   /** When set, only offer when device.vendor normalizes to one of these. */
   vendors?: string[];
+  group?: MetricGroup;
 };
 
 /**
@@ -29,6 +32,7 @@ export const METRIC_PRESETS: MetricPreset[] = [
     id: "cpu_pct",
     label: "CPU usage",
     kind: "server",
+    group: "health",
     unit: "%",
     query: `CPU_PLACEHOLDER`
   },
@@ -36,6 +40,7 @@ export const METRIC_PRESETS: MetricPreset[] = [
     id: "mem_pct",
     label: "Memory free",
     kind: "server",
+    group: "health",
     unit: "%",
     query: `MEM_PLACEHOLDER`
   },
@@ -43,6 +48,7 @@ export const METRIC_PRESETS: MetricPreset[] = [
     id: "disk_pct",
     label: "Disk free",
     kind: "server",
+    group: "health",
     unit: "%",
     query: `DISK_PLACEHOLDER`
   },
@@ -50,26 +56,32 @@ export const METRIC_PRESETS: MetricPreset[] = [
     id: "host_up",
     label: "Collector online",
     kind: "server",
+    group: "health",
     query: `UP_PLACEHOLDER`
   },
   {
     id: "snmp_up",
-    label: "Device online (SNMP)",
+    label: "Device online",
     kind: "network",
+    group: "health",
     query: `snmp_up{site="{{site}}",device="{{device}}"}`
   },
   {
     id: "if_in_bps",
-    label: "Traffic in (rate)",
+    label: "Busiest port in",
     kind: "network",
+    group: "traffic",
     unit: "bps",
+    deviceTypes: ["firewall", "switch", "ap", "router"],
     query: `IF_IN_PLACEHOLDER`
   },
   {
     id: "if_out_bps",
-    label: "Traffic out (rate)",
+    label: "Busiest port out",
     kind: "network",
+    group: "traffic",
     unit: "bps",
+    deviceTypes: ["firewall", "switch", "ap", "router"],
     query: `IF_OUT_PLACEHOLDER`
   },
   {
@@ -102,30 +114,38 @@ export const METRIC_PRESETS: MetricPreset[] = [
   },
   {
     id: "if_up_count",
-    label: "Interfaces up",
+    label: "Ports up",
     kind: "network",
+    group: "ports",
     unit: "count",
+    deviceTypes: ["switch"],
     query: `IF_UP_COUNT_PLACEHOLDER`
   },
   {
     id: "if_down_count",
-    label: "Interfaces down",
+    label: "Ports down",
     kind: "network",
+    group: "ports",
     unit: "count",
+    deviceTypes: ["switch"],
     query: `IF_DOWN_COUNT_PLACEHOLDER`
   },
   {
     id: "if_errors_in_rate",
-    label: "Errors in (per sec)",
+    label: "Errors in",
     kind: "network",
+    group: "ports",
     unit: "count",
+    deviceTypes: ["switch"],
     query: `IF_ERR_IN_PLACEHOLDER`
   },
   {
     id: "if_errors_out_rate",
-    label: "Errors out (per sec)",
+    label: "Errors out",
     kind: "network",
+    group: "ports",
     unit: "count",
+    deviceTypes: ["switch"],
     query: `IF_ERR_OUT_PLACEHOLDER`
   },
   {
@@ -144,8 +164,9 @@ export const METRIC_PRESETS: MetricPreset[] = [
   },
   {
     id: "fw_cpu_pct",
-    label: "Firewall CPU %",
+    label: "Firewall CPU",
     kind: "network",
+    group: "health",
     unit: "%",
     deviceTypes: ["firewall"],
     vendors: ["fortinet", "fortigate"],
@@ -153,8 +174,9 @@ export const METRIC_PRESETS: MetricPreset[] = [
   },
   {
     id: "fw_mem_pct",
-    label: "Firewall memory %",
+    label: "Firewall memory",
     kind: "network",
+    group: "health",
     unit: "%",
     deviceTypes: ["firewall"],
     vendors: ["fortinet", "fortigate"],
@@ -164,6 +186,7 @@ export const METRIC_PRESETS: MetricPreset[] = [
     id: "fw_sessions",
     label: "Firewall sessions",
     kind: "network",
+    group: "health",
     unit: "count",
     deviceTypes: ["firewall"],
     vendors: ["fortinet", "fortigate"],
@@ -171,8 +194,9 @@ export const METRIC_PRESETS: MetricPreset[] = [
   },
   {
     id: "sw_cpu_pct",
-    label: "Switch CPU %",
+    label: "Switch CPU",
     kind: "network",
+    group: "health",
     unit: "%",
     deviceTypes: ["switch"],
     vendors: ["maipu"],
@@ -180,8 +204,9 @@ export const METRIC_PRESETS: MetricPreset[] = [
   },
   {
     id: "sw_mem_pct",
-    label: "Switch memory %",
+    label: "Switch memory",
     kind: "network",
+    group: "health",
     unit: "%",
     deviceTypes: ["switch"],
     vendors: ["maipu"],
@@ -189,8 +214,9 @@ export const METRIC_PRESETS: MetricPreset[] = [
   },
   {
     id: "ap_cpu_pct",
-    label: "AP CPU %",
+    label: "AP CPU",
     kind: "network",
+    group: "health",
     unit: "%",
     deviceTypes: ["ap"],
     vendors: ["cambium"],
@@ -200,6 +226,7 @@ export const METRIC_PRESETS: MetricPreset[] = [
     id: "ap_clients",
     label: "AP clients",
     kind: "network",
+    group: "health",
     unit: "count",
     deviceTypes: ["ap"],
     vendors: ["cambium"],
@@ -207,17 +234,59 @@ export const METRIC_PRESETS: MetricPreset[] = [
   },
   {
     id: "ap_clients_omada",
-    label: "AP clients (Omada)",
+    label: "AP clients",
     kind: "network",
+    group: "health",
     unit: "count",
     deviceTypes: ["ap"],
     vendors: ["omada", "tplink", "tp-link"],
     query: `OMADA_CLIENTS_PLACEHOLDER`
   },
   {
-    id: "nas_cpu_pct",
-    label: "NAS CPU %",
+    id: "ap_snr_avg",
+    label: "Average client SNR",
     kind: "network",
+    group: "signal",
+    unit: "dB",
+    deviceTypes: ["ap"],
+    vendors: ["cambium"],
+    query: `AP_SNR_AVG_PLACEHOLDER`
+  },
+  {
+    id: "ap_snr_min",
+    label: "Lowest client SNR",
+    kind: "network",
+    group: "signal",
+    unit: "dB",
+    deviceTypes: ["ap"],
+    vendors: ["cambium"],
+    query: `AP_SNR_MIN_PLACEHOLDER`
+  },
+  {
+    id: "ap_radio_in_bps",
+    label: "Radio traffic in",
+    kind: "network",
+    group: "traffic",
+    unit: "bps",
+    deviceTypes: ["ap"],
+    vendors: ["cambium"],
+    query: `AP_RADIO_IN_PLACEHOLDER`
+  },
+  {
+    id: "ap_radio_out_bps",
+    label: "Radio traffic out",
+    kind: "network",
+    group: "traffic",
+    unit: "bps",
+    deviceTypes: ["ap"],
+    vendors: ["cambium"],
+    query: `AP_RADIO_OUT_PLACEHOLDER`
+  },
+  {
+    id: "nas_cpu_pct",
+    label: "NAS CPU",
+    kind: "network",
+    group: "health",
     unit: "%",
     deviceTypes: ["nas"],
     vendors: ["synology", "syno"],
@@ -227,6 +296,7 @@ export const METRIC_PRESETS: MetricPreset[] = [
     id: "nas_mem_pct",
     label: "NAS memory %",
     kind: "network",
+    group: "health",
     unit: "%",
     deviceTypes: ["nas"],
     vendors: ["synology", "syno"],
@@ -242,9 +312,30 @@ export const METRIC_PRESETS: MetricPreset[] = [
     query: `NAS_VOL_PLACEHOLDER`
   },
   {
+    id: "nas_mem_used_gb",
+    label: "Memory used",
+    kind: "network",
+    group: "health",
+    unit: "GB",
+    deviceTypes: ["nas"],
+    vendors: ["synology", "syno"],
+    query: `NAS_MEM_GB_PLACEHOLDER`
+  },
+  {
+    id: "nas_vol_free_gb",
+    label: "Volume free",
+    kind: "network",
+    group: "health",
+    unit: "GB",
+    deviceTypes: ["nas"],
+    vendors: ["synology", "syno"],
+    query: `NAS_VOL_GB_PLACEHOLDER`
+  },
+  {
     id: "nas_temp_c",
     label: "NAS temperature",
     kind: "network",
+    group: "health",
     unit: "C",
     deviceTypes: ["nas"],
     vendors: ["synology", "syno"],
@@ -254,6 +345,7 @@ export const METRIC_PRESETS: MetricPreset[] = [
     id: "nas_disk_temp_max_c",
     label: "NAS hottest disk",
     kind: "network",
+    group: "health",
     unit: "C",
     deviceTypes: ["nas"],
     vendors: ["synology", "syno"],
@@ -263,6 +355,7 @@ export const METRIC_PRESETS: MetricPreset[] = [
     id: "nas_raid_ok",
     label: "NAS RAID",
     kind: "network",
+    group: "health",
     deviceTypes: ["nas"],
     vendors: ["synology", "syno"],
     query: `NAS_RAID_PLACEHOLDER`
@@ -271,6 +364,7 @@ export const METRIC_PRESETS: MetricPreset[] = [
     id: "nas_disk_failed",
     label: "NAS disks failed",
     kind: "network",
+    group: "health",
     unit: "count",
     deviceTypes: ["nas"],
     vendors: ["synology", "syno"],
@@ -315,6 +409,31 @@ export function buildIfUtilQuery(
   /
   ${buildCapacityDenom(siteId, deviceId)}
 ) * 100`;
+}
+
+/** Busiest single interface, so VLANs are not added on top of the physical port. */
+export function buildBusiestIfQuery(
+  direction: "in" | "out",
+  siteId: string,
+  deviceId: string
+): string {
+  const octets = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
+  return `max(rate(${octets}{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
+}
+
+function buildRadioQuery(direction: "in" | "out", siteId: string, deviceId: string): string {
+  const metric = direction === "in" ? "cambiumClientRxDataBytes" : "cambiumClientTxDataBytes";
+  return `sum(rate(${metric}{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
+}
+
+function buildNasMemUsedGbQuery(siteId: string, deviceId: string): string {
+  const sel = nasSel(siteId, deviceId);
+  // UCD mem*Real is kilobytes.
+  return `(memTotalReal{${sel}} - memAvailReal{${sel}}) / 1048576`;
+}
+
+function buildNasVolFreeGbQuery(siteId: string, deviceId: string): string {
+  return `sum(synoRaidFreeSize{${nasSel(siteId, deviceId)}}) / 1073741824`;
 }
 
 /** Peak of device-summed in/out bitrates (Mbps-scale chart), not % of capacity. */
@@ -447,13 +566,23 @@ export function buildQuery(presetId: string, siteId: string, deviceId: string): 
     case "snmp_up":
       return dualSnmpUpFresh(siteId, deviceId, METRIC_FRESH_WINDOW);
     case "if_in_bps":
-      return `sum(rate(ifHCInOctets{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
-    case "if_out_bps":
-      return `sum(rate(ifHCOutOctets{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
     case "if_util_in_pct":
-      return buildIfUtilQuery("in", siteId, deviceId);
+      return buildBusiestIfQuery("in", siteId, deviceId);
+    case "if_out_bps":
     case "if_util_out_pct":
-      return buildIfUtilQuery("out", siteId, deviceId);
+      return buildBusiestIfQuery("out", siteId, deviceId);
+    case "ap_snr_avg":
+      return `avg(cambiumClientSNR{site="${siteId}",device="${deviceId}"})`;
+    case "ap_snr_min":
+      return `min(cambiumClientSNR{site="${siteId}",device="${deviceId}"})`;
+    case "ap_radio_in_bps":
+      return buildRadioQuery("in", siteId, deviceId);
+    case "ap_radio_out_bps":
+      return buildRadioQuery("out", siteId, deviceId);
+    case "nas_mem_used_gb":
+      return buildNasMemUsedGbQuery(siteId, deviceId);
+    case "nas_vol_free_gb":
+      return buildNasVolFreeGbQuery(siteId, deviceId);
     case "if_util_max_pct":
       return buildIfUtilMaxQuery(siteId, deviceId);
     case "if_capacity_bps":
@@ -505,9 +634,22 @@ export function buildQuery(presetId: string, siteId: string, deviceId: string): 
   }
 }
 
+const HIDDEN_FROM_PICKER = new Set([
+  "if_util_in_pct",
+  "if_util_out_pct",
+  "if_util_max_pct",
+  "if_capacity_bps",
+  "if_discards_in_rate",
+  "if_discards_out_rate",
+  "wan_dns",
+  "wan_vps",
+  "nas_mem_pct",
+  "nas_vol_free_pct"
+]);
+
 /** Public preset list with illustrative query templates (for UI display). */
 export function listPresetsForApi(): MetricPreset[] {
-  return METRIC_PRESETS.map((p) => {
+  return METRIC_PRESETS.filter((p) => !HIDDEN_FROM_PICKER.has(p.id)).map((p) => {
     if (p.id === "cpu_pct") {
       return {
         ...p,
@@ -538,17 +680,8 @@ export function listPresetsForApi(): MetricPreset[] {
         query: `last_over_time(probe_success{check}[${METRIC_FRESH_WINDOW}])`
       };
     }
-    if (p.id === "if_in_bps") {
-      return {
-        ...p,
-        query: `sum(rate(ifHCInOctets{site,device}[5m]) * 8)`
-      };
-    }
-    if (p.id === "if_out_bps") {
-      return {
-        ...p,
-        query: `sum(rate(ifHCOutOctets{site,device}[5m]) * 8)`
-      };
+    if (p.id === "if_in_bps" || p.id === "if_out_bps") {
+      return { ...p, query: "max(rate(ifHC*Octets[5m])*8)" };
     }
     if (p.id === "if_util_in_pct" || p.id === "if_util_out_pct") {
       return {
@@ -592,6 +725,18 @@ export function listPresetsForApi(): MetricPreset[] {
         query: "Omada/TP-Link EAP client count (verify OID on model/firmware)"
       };
     }
+    if (p.id === "ap_snr_avg" || p.id === "ap_snr_min") {
+      return { ...p, query: "cambiumClientSNR" };
+    }
+    if (p.id === "ap_radio_in_bps" || p.id === "ap_radio_out_bps") {
+      return { ...p, query: "sum(rate(cambiumClient*DataBytes[5m])*8)" };
+    }
+    if (p.id === "nas_mem_used_gb") {
+      return { ...p, query: "(memTotalReal - memAvailReal) / 1048576" };
+    }
+    if (p.id === "nas_vol_free_gb") {
+      return { ...p, query: "sum(synoRaidFreeSize) / 1073741824" };
+    }
     if (
       p.id === "nas_cpu_pct" ||
       p.id === "nas_mem_pct" ||
@@ -612,6 +757,42 @@ export function listPresetsForApi(): MetricPreset[] {
 
 export async function queryInstant(query: string) {
   return promQuery(query);
+}
+
+function normDeviceType(type: string): string {
+  const t = type.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (t === "ap" || t === "accesspoint" || t === "wifi" || t === "wireless") return "ap";
+  if (t === "nas" || t === "storage") return "nas";
+  return t;
+}
+
+function normVendor(vendor: string): string {
+  return vendor.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/** The few numbers a health card shows for this device. Online is separate. */
+export function healthCardPresetIds(device: {
+  kind?: string;
+  type?: string;
+  vendor?: string;
+}): string[] {
+  if ((device.kind ?? "network") === "server") return ["cpu_pct", "mem_pct", "disk_pct"];
+  const type = normDeviceType(device.type ?? "");
+  const vendor = normVendor(device.vendor ?? "");
+  if (type === "firewall" || vendor.includes("fortinet") || vendor.includes("fortigate")) {
+    return ["fw_cpu_pct", "fw_sessions", "if_in_bps"];
+  }
+  if (type === "switch" || vendor.includes("maipu")) return ["if_up_count", "if_in_bps"];
+  if (type === "nas" || vendor.includes("synology") || vendor.includes("syno")) {
+    return ["nas_vol_free_gb", "nas_temp_c", "nas_raid_ok"];
+  }
+  if (vendor.includes("omada") || vendor.includes("tplink")) return ["ap_clients_omada", "if_in_bps"];
+  if (type === "ap" || vendor.includes("cambium")) return ["ap_clients", "ap_snr_avg", "ap_radio_in_bps"];
+  return ["snmp_up"];
+}
+
+export function onlinePresetId(device: { kind?: string }): string {
+  return (device.kind ?? "network") === "server" ? "host_up" : "snmp_up";
 }
 
 export async function queryRange(query: string, hours = 1, step = "60s") {

@@ -103,6 +103,8 @@ function widgetHasConfig(type: DashboardWidget["type"]) {
     type === "device_metric_chart" ||
     type === "device_metric_bar" ||
     type === "device_stat_gauge" ||
+    type === "device_health" ||
+    type === "ap_cluster" ||
     type === "device_detail" ||
     type === "uplink_status" ||
     type === "collector_status" ||
@@ -429,6 +431,8 @@ export function DashboardPage() {
       widgets.map((w) => {
         const narrowOk =
           w.type === "device_stat_gauge" ||
+          w.type === "device_health" ||
+          w.type === "ap_cluster" ||
           w.type === "snmp_device_status" ||
           w.type === "device_stack" ||
           w.type === "uplink_status" ||
@@ -517,6 +521,7 @@ export function DashboardPage() {
       type === "device_metric_chart" ||
       type === "device_metric_bar" ||
       type === "device_stat_gauge" ||
+      type === "device_health" ||
       type === "device_detail"
     ) {
       config = {
@@ -536,6 +541,8 @@ export function DashboardPage() {
         siteId: firstSite?.id ?? "",
         deviceId: firstNet?.id ?? ""
       };
+    } else if (type === "ap_cluster") {
+      config = { siteId: firstSite?.id ?? "", deviceIds: "" };
     } else if (type === "device_stack") {
       const aps = (firstSite?.devices ?? []).filter(
         (d) => d.type === "ap" && (d.kind ?? "network") !== "server"
@@ -891,6 +898,16 @@ export function DashboardPage() {
                     </button>
                   )}
                 </div>
+                <WidgetBody
+                  type={w.type}
+                  config={w.config}
+                  sites={sites}
+                  statuses={statuses}
+                  alerts={alerts}
+                  devices={devices}
+                  grafanaUrl={grafanaUrl}
+                  compact={compact || w.config?.compact === "1"}
+                />
                 {showConfig ? (
                   <div className="widgetConfigPanel">
                     <WidgetConfigEditor
@@ -908,18 +925,7 @@ export function DashboardPage() {
                       Done
                     </button>
                   </div>
-                ) : (
-                  <WidgetBody
-                    type={w.type}
-                    config={w.config}
-                    sites={sites}
-                    statuses={statuses}
-                    alerts={alerts}
-                    devices={devices}
-                    grafanaUrl={grafanaUrl}
-                    compact={compact || w.config?.compact === "1"}
-                  />
-                )}
+                ) : null}
               </div>
             );
           })}

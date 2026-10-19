@@ -25,6 +25,8 @@ const widgetSchema = z.object({
     "device_metric_chart",
     "device_metric_bar",
     "device_stat_gauge",
+    "device_health",
+    "ap_cluster",
     "device_detail"
   ]),
   // RGL / JSON may send null for Infinity/NaN — coerce before int checks

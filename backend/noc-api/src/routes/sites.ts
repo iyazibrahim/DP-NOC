@@ -29,7 +29,7 @@ import { computeSiteStatus, computeAllSitesStatus } from "../services/status";
 import { applyWebsiteProbes } from "../services/websiteProbes";
 import { discoverDevicesForSite } from "../services/deviceDiscovery";
 import { addGlobalWebsite, removeGlobalWebsite, updateGlobalWebsite, getGlobalWebsites } from "../data/globalWebsites";
-import { getSiteNetworkSummary, listDeviceInterfaces } from "../services/siteNetwork";
+import { getSiteNetworkSummary, getWirelessClusterSummary, listDeviceInterfaces } from "../services/siteNetwork";
 import {
   getDefaultSiteNetworkLayout,
   loadSiteNetworkLayout,
@@ -157,6 +157,27 @@ sitesRouter.get("/:id/discovered-devices", requireJwt(["operator", "wallboard"])
   } catch (e) {
     return res.status(502).json({
       error: e instanceof Error ? e.message : "Discovery failed"
+    });
+  }
+});
+
+sitesRouter.get("/:id/wireless-summary", requireJwt(["operator", "wallboard"]), async (req, res) => {
+  const siteId = req.params.id;
+  if (!getSiteById(siteId)) {
+    return res.status(404).json({ error: "Site not found" });
+  }
+  const raw = typeof req.query.deviceIds === "string" ? req.query.deviceIds : "";
+  const deviceIds = raw
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  try {
+    const summary = await getWirelessClusterSummary(siteId, deviceIds);
+    if (!summary) return res.status(404).json({ error: "Site not found" });
+    return res.json({ summary });
+  } catch (e) {
+    return res.status(502).json({
+      error: e instanceof Error ? e.message : "Wireless summary failed"
     });
   }
 });

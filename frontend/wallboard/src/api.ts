@@ -16,8 +16,10 @@ import type {
   StatusTimingInfo,
   DeviceKind,
   DeviceTypeDef,
+  DeviceSummary,
   DiscoveredDevice,
-  DiscoveryDiagnostics
+  DiscoveryDiagnostics,
+  WirelessClusterSummary
 } from "./types";
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL?.toString() ?? "").replace(/\/$/, "");
@@ -563,6 +565,21 @@ export async function getMetricPresets(token: string) {
   return fetchJson<{ presets: MetricPreset[] }>("/api/metrics/presets", {
     headers: authHeaders(token)
   });
+}
+
+export async function getDeviceSummary(token: string, siteId: string, deviceId: string) {
+  const q = new URLSearchParams({ siteId, deviceId });
+  return fetchJson<DeviceSummary>(`/api/metrics/device-summary?${q}`, {
+    headers: authHeaders(token)
+  });
+}
+
+export async function getWirelessSummary(token: string, siteId: string, deviceIds: string) {
+  const q = new URLSearchParams({ deviceIds });
+  return fetchJson<{ summary: WirelessClusterSummary }>(
+    `/api/sites/${encodeURIComponent(siteId)}/wireless-summary?${q}`,
+    { headers: authHeaders(token) }
+  );
 }
 
 export async function getMetricInstant(

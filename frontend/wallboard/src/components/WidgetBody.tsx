@@ -20,6 +20,7 @@ import {
 } from "./StatusVisualWidgets";
 import { WebsiteSummaryWidget } from "./WebsiteSummaryWidget";
 import { AlertsIncidentsWidget } from "./AlertsIncidentsWidget";
+import { ApClusterCard, DeviceHealthCard } from "./InsightWidgets";
 
 export type WidgetCatalogEntry = {
   type: WidgetType;
@@ -100,6 +101,20 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
     defaultH: 3
   },
   {
+    type: "device_health",
+    label: "Device health",
+    description: "The useful numbers for one device",
+    defaultW: 4,
+    defaultH: 4
+  },
+  {
+    type: "ap_cluster",
+    label: "AP cluster",
+    description: "Clients, traffic, and signal for a group of APs",
+    defaultW: 6,
+    defaultH: 5
+  },
+  {
     type: "grafana_panel",
     label: "Grafana panel",
     description: "Embed a panel",
@@ -133,13 +148,13 @@ export const WIDGET_GROUPS: Array<{ label: string; widgets: WidgetCatalogEntry[]
   {
     label: "SNMP / local devices",
     widgets: WIDGET_CATALOG.filter((w) =>
-      ["local_devices_board", "snmp_device_status", "device_stack"].includes(w.type)
+      ["local_devices_board", "snmp_device_status", "device_stack", "ap_cluster"].includes(w.type)
     )
   },
   {
     label: "Charts",
     widgets: WIDGET_CATALOG.filter((w) =>
-      ["device_metric_chart", "device_metric_bar", "device_stat_gauge", "grafana_panel"].includes(w.type)
+      ["device_metric_chart", "device_metric_bar", "device_stat_gauge", "device_health", "grafana_panel"].includes(w.type)
     )
   },
   {
@@ -314,6 +329,7 @@ export function WidgetBody({
           metric={metric}
           presets={presets}
           title={config?.title}
+          color={config?.color}
         />
       </div>
     );
@@ -328,6 +344,7 @@ export function WidgetBody({
           metric={metric}
           presets={presets}
           title={config?.title}
+          color={config?.color}
         />
       </div>
     );
@@ -343,7 +360,24 @@ export function WidgetBody({
           presets={presets}
           siteName={site?.name}
           title={config?.title}
+          color={config?.color}
         />
+      </div>
+    );
+  }
+
+  if (type === "device_health") {
+    return (
+      <div className="widgetInner">
+        <DeviceHealthCard siteId={siteId} deviceId={deviceId} color={config?.color} />
+      </div>
+    );
+  }
+
+  if (type === "ap_cluster") {
+    return (
+      <div className="widgetInner widgetInnerScroll">
+        <ApClusterCard siteId={siteId} deviceIds={config?.deviceIds ?? ""} color={config?.color} />
       </div>
     );
   }

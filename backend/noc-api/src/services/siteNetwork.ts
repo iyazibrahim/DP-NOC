@@ -949,3 +949,61 @@ async function collectSpeedtest(
     return empty;
   }
 }
+
+export type WirelessClusterSummary = {
+  selected: number;
+  reporting: number;
+  clients: number | null;
+  radioInBps: number | null;
+  radioOutBps: number | null;
+  snrAvg: number | null;
+  snrMin: number | null;
+  byAp: Array<{ deviceId: string; label: string; clients: number | null }>;
+};
+
+/** One glance for a site or a chosen set of access points. Missing APs stay out of the sums. */
+export async function getWirelessClusterSummary(
+  siteId: string,
+  deviceIds: string[]
+): Promise<WirelessClusterSummary | null> {
+  const site = getSiteById(siteId);
+  if (!site) return null;
+  const wanted = new Set(deviceIds.map((id) => id.trim()).filter(Boolean));
+  const [aps, stations] = await Promise.all([
+    collectApRows(siteId, site),
+    collectStations(siteId, site)
+  ]);
+  const selected = aps.filter((ap) => (wanted.size === 0 ? true : wanted.has(ap.deviceId)));
+  let clients: number | null = null;
+  let reporting = 0;
+  for (const ap of selected) {
+    if (ap.clients == null) continue;
+    reporting += 1;
+    clients = (clients ?? 0) + ap.clients;
+  }
+  const selectedIds = new Set(selected.map((ap) => ap.deviceId));
+  const rows = stations.filter((st) => selectedIds.has(st.deviceId));
+  const snrs = rows
+    .map((st) => st.snr)
+    .filter((n): n is number => n != null && Number.isFinite(n));
+  let radioInBps: number | null = null;
+  let radioOutBps: number | null = null;
+  for (const st of rows) {
+    if (st.inBps != null && Number.isFinite(st.inBps)) radioInBps = (radioInBps ?? 0) + st.inBps;
+    if (st.outBps != null && Number.isFinite(st.outBps)) radioOutBps = (radioOutBps ?? 0) + st.outBps;
+  }
+  return {
+    selected: selected.length,
+    reporting,
+    clients,
+    radioInBps,
+    radioOutBps,
+    snrAvg: snrs.length ? Math.round((snrs.reduce((sum, n) => sum + n, 0) / snrs.length) * 10) / 10 : null,
+    snrMin: snrs.length ? Math.round(Math.min(...snrs) * 10) / 10 : null,
+    byAp: selected.map((ap) => ({
+      deviceId: ap.deviceId,
+      label: ap.label,
+      clients: ap.clients
+    }))
+  };
+}

@@ -1,6 +1,16 @@
 import express from "express";
 import { requireJwt } from "../middleware/auth";
-import { listPresetsForApi, buildQuery, queryInstant, queryRange } from "../services/metrics";
+import { getSiteById } from "../data/sites";
+import { parseFirstVectorValue } from "../services/prometheus";
+import {
+  listPresetsForApi,
+  buildQuery,
+  queryInstant,
+  queryRange,
+  healthCardPresetIds,
+  onlinePresetId,
+  METRIC_PRESETS
+} from "../services/metrics";
 
 export const metricsRouter = express.Router();
 
@@ -39,6 +49,52 @@ metricsRouter.get("/query_range", requireJwt(["operator", "wallboard"]), async (
     return res.json({ data, query });
   } catch (e) {
     return res.status(502).json({ error: e instanceof Error ? e.message : "Query failed" });
+  }
+});
+
+metricsRouter.get("/device-summary", requireJwt(["operator", "wallboard"]), async (req, res) => {
+  const siteId = typeof req.query.siteId === "string" ? req.query.siteId : "";
+  const deviceId = typeof req.query.deviceId === "string" ? req.query.deviceId : "";
+  if (!siteId || !deviceId) {
+    return res.status(400).json({ error: "siteId and deviceId required" });
+  }
+  const site = getSiteById(siteId);
+  const device = site?.devices.find((d) => d.id === deviceId);
+  if (!site || !device) return res.status(404).json({ error: "Device not found" });
+
+  const onlineId = onlinePresetId(device);
+  const ids = [onlineId, ...healthCardPresetIds(device).filter((id) => id !== onlineId)];
+
+  try {
+    const stats = await Promise.all(
+      ids.map(async (id) => {
+        const preset = METRIC_PRESETS.find((p) => p.id === id);
+        const query = buildQuery(id, siteId, deviceId);
+        let value: number | null = null;
+        if (query) {
+          try {
+            value = parseFirstVectorValue(await queryInstant(query));
+          } catch {
+            value = null;
+          }
+        }
+        return {
+          id,
+          label: preset?.label ?? id,
+          value,
+          unit: preset?.unit
+        };
+      })
+    );
+    const online = stats.find((s) => s.id === onlineId) ?? null;
+    return res.json({
+      deviceId,
+      siteId,
+      online,
+      stats: stats.filter((s) => s.id !== onlineId)
+    });
+  } catch (e) {
+    return res.status(502).json({ error: e instanceof Error ? e.message : "Summary failed" });
   }
 });
 

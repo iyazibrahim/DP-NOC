@@ -110,6 +110,8 @@ export type WidgetType =
   | "device_metric_chart"
   | "device_metric_bar"
   | "device_stat_gauge"
+  | "device_health"
+  | "ap_cluster"
   | "device_detail";
 
 export type DashboardWidget = {
@@ -180,6 +182,32 @@ export type MetricPreset = {
   deviceTypes?: string[];
   /** When set, only offer when device.vendor matches (normalized). */
   vendors?: string[];
+  group?: "health" | "traffic" | "ports" | "signal";
+};
+
+export type DeviceSummaryStat = {
+  id: string;
+  label: string;
+  value: number | null;
+  unit?: string;
+};
+
+export type DeviceSummary = {
+  deviceId: string;
+  siteId: string;
+  online: DeviceSummaryStat | null;
+  stats: DeviceSummaryStat[];
+};
+
+export type WirelessClusterSummary = {
+  selected: number;
+  reporting: number;
+  clients: number | null;
+  radioInBps: number | null;
+  radioOutBps: number | null;
+  snrAvg: number | null;
+  snrMin: number | null;
+  byAp: Array<{ deviceId: string; label: string; clients: number | null }>;
 };
 
 export type RetentionConfig = {

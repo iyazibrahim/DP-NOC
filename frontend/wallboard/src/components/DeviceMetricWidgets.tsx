@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { useAuth } from "@/auth/AuthContext";
 import { getMetricInstant, getMetricRange, getMetricPresets } from "@/api";
+import { resolveWidgetColor } from "@/widgetColors";
 import type { MetricPreset, PromQueryResult, Site } from "@/types";
 import { darkTooltipProps } from "@/components/noc/MetricChart";
 
@@ -76,9 +77,21 @@ function toScaledBitrate(value: number, scale: "Gbps" | "Mbps" | "Kbps"): number
   return value / 1000;
 }
 
+const BITRATE_METRIC_IDS = new Set([
+  "if_util_max_pct",
+  "if_util_in_pct",
+  "if_util_out_pct",
+  "if_capacity_bps",
+  "if_max_bps",
+  "if_in_bps",
+  "if_out_bps",
+  "ap_radio_in_bps",
+  "ap_radio_out_bps"
+]);
+
 /** Overall bandwidth preset used to be %; always treat as bitrate. */
 function resolveMetricUnit(metricId: string, presetUnit: string | undefined, values: number[]): string {
-  if (metricId === "if_util_max_pct" || metricId === "if_max_bps") return "bps";
+  if (BITRATE_METRIC_IDS.has(metricId)) return "bps";
   const unit = presetUnit ?? "";
   // Stale API still saying "%" while series is raw bps (e.g. 9e7)
   if (unit === "%" && values.some((v) => Number.isFinite(v) && Math.abs(v) > 1000)) {
@@ -87,14 +100,19 @@ function resolveMetricUnit(metricId: string, presetUnit: string | undefined, val
   return unit;
 }
 
-function formatMetricValue(value: number, unit?: string): string {
+export function formatMetricValue(value: number, unit?: string): string {
   if (!Number.isFinite(value)) return "—";
   if (unit === "bps") {
     const { text, unitLabel } = formatBitrate(value);
     return `${text} ${unitLabel}`;
   }
+  if (unit === "GB") {
+    if (Math.abs(value) >= 1024) return `${(value / 1024).toFixed(2)} TB`;
+    return `${value.toFixed(1)} GB`;
+  }
   if (unit === "%") return `${value.toFixed(1)}%`;
   if (unit === "C") return `${Math.round(value)}°C`;
+  if (unit === "dB") return `${Math.round(value)} dB`;
   if (unit === "count") return `${Math.round(value)}`;
   return `${value.toFixed(2)}${unit ?? ""}`;
 }
@@ -164,13 +182,15 @@ export function DeviceMetricChart({
   deviceId,
   metric,
   presets,
-  title
+  title,
+  color
 }: {
   siteId: string;
   deviceId: string;
   metric: string;
   presets: MetricPreset[];
   title?: string;
+  color?: string;
 }) {
   const { token } = useAuth();
   const [points, setPoints] = useState<Array<{ t: string; v: number; ts: number }>>([]);
@@ -193,6 +213,7 @@ export function DeviceMetricChart({
   const unitBadge = chartUnitBadge(unit, bitrateScale);
   const chartMargin = { top: 8, right: 16, left: 4, bottom: 4 };
   const yAxisWidth = unit === "bps" ? 52 : 48;
+  const stroke = resolveWidgetColor(color);
 
   useEffect(() => {
     if (!token || !siteId || !deviceId || !metric) return;
@@ -266,7 +287,7 @@ export function DeviceMetricChart({
                 tickFormatter={(v) => formatYAxisTick(v, unit, bitrateScale)}
               />
               <Tooltip content={<ChartTooltip unit={unit} />} />
-              <Area type="monotone" dataKey="v" stroke="#2dd4bf" fill="#2dd4bf33" strokeWidth={2} />
+              <Area type="monotone" dataKey="v" stroke={stroke} fill={`${stroke}33`} strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -280,13 +301,15 @@ export function DeviceMetricBar({
   deviceId,
   metric,
   presets,
-  title
+  title,
+  color
 }: {
   siteId: string;
   deviceId: string;
   metric: string;
   presets: MetricPreset[];
   title?: string;
+  color?: string;
 }) {
   const { token } = useAuth();
   const [points, setPoints] = useState<Array<{ t: string; v: number; ts: number }>>([]);
@@ -308,6 +331,7 @@ export function DeviceMetricBar({
   const unitBadge = chartUnitBadge(unit, bitrateScale);
   const chartMargin = { top: 8, right: 16, left: 4, bottom: 4 };
   const yAxisWidth = unit === "bps" ? 52 : 48;
+  const stroke = resolveWidgetColor(color);
 
   useEffect(() => {
     if (!token || !siteId || !deviceId || !metric) return;
@@ -381,7 +405,7 @@ export function DeviceMetricBar({
                 tickFormatter={(v) => formatYAxisTick(v, unit, bitrateScale)}
               />
               <Tooltip content={<ChartTooltip unit={unit} />} />
-              <Bar dataKey="v" fill="#2dd4bf" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="v" fill={stroke} radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -398,7 +422,8 @@ export function DeviceStatGauge({
   metric,
   presets,
   siteName,
-  title
+  title,
+  color
 }: {
   siteId: string;
   deviceId: string;
@@ -406,6 +431,7 @@ export function DeviceStatGauge({
   presets: MetricPreset[];
   siteName?: string;
   title?: string;
+  color?: string;
 }) {
   const { token } = useAuth();
   const [value, setValue] = useState<number | null>(null);
@@ -472,12 +498,13 @@ export function DeviceStatGauge({
     );
   }
 
+  const accent = resolveWidgetColor(color);
   const pct = value != null && unit === "%" ? Math.max(0, Math.min(100, value)) : null;
   const pieData =
     pct != null
       ? [
-          { name: "used", value: Math.max(0, 100 - pct) },
-          { name: "free", value: pct }
+          { name: "rest", value: Math.max(0, 100 - pct) },
+          { name: "value", value: pct }
         ]
       : null;
 
@@ -488,9 +515,10 @@ export function DeviceStatGauge({
         <div className="chartSkeleton gaugeSkeleton" aria-hidden />
       ) : (
         <>
-          <div className="gaugeValue">
+          <div className="gaugeValue" style={{ color: accent }}>
             {value != null ? formatMetricValue(value, unit) : "—"}
           </div>
+          {value == null ? <div className="muted">No data</div> : null}
           {pieData ? (
             <div className="pieWrap">
               <ResponsiveContainer width="100%" height="100%">
@@ -506,15 +534,11 @@ export function DeviceStatGauge({
                     endAngle={-270}
                     stroke="none"
                   >
-                    <Cell fill="rgba(45, 212, 191, 0.85)" />
                     <Cell fill="rgba(148, 163, 184, 0.25)" />
+                    <Cell fill={accent} />
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
-            </div>
-          ) : pct != null ? (
-            <div className="gaugeBar">
-              <div className="gaugeFill" style={{ width: `${pct}%` }} />
             </div>
           ) : null}
         </>
