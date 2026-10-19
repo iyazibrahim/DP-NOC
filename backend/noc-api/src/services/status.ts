@@ -870,6 +870,18 @@ export async function computeSiteStatus(
   const firing = relevant.filter((a) => a.status === "firing").length;
   const resolved = relevant.filter((a) => a.status === "resolved").length;
 
+  // ICMP uplink probes have never been stored, but a healthy collector means this
+  // box just reached the NOC (status report or metrics). That path is the uplink.
+  // A later failed or silent probe still wins — this only fills the never-seen case.
+  if (
+    collector.state === "healthy" &&
+    uplink.state === "unknown" &&
+    wanDns.state === "unknown" &&
+    wanVps.state === "unknown"
+  ) {
+    uplink = { state: "healthy" };
+  }
+
   // Uplink is primary: critical uplink always forces overall DOWN.
   let overall: DomainState = uplink.state;
   if (uplink.state !== "critical") {

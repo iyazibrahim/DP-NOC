@@ -351,4 +351,7 @@ Collector box → Alloy → Prometheus (central)
 - [x] **Collector unknown while LAN checks are up (2026-10-19)**
   - Root cause: collector health waited on host `up` / memory in Prometheus. A fresh Collector Console report (or per-device SNMP/ping) could mark local devices HEALTHY while the collector card stayed UNKNOWN (“Waiting for data”).
   - Fix: if that report or those device checks show SNMP or ping up, the collector and its Devices-page row are healthy. A silent collector with no successful LAN check still pauses device alarms.
+- [x] **Uplink unknown while collector is already up (2026-10-19)**
+  - Root cause: uplink waited on `probe_success` wan_dns / wan_vps. Those series have never arrived, so the card stayed “No data yet” even after the collector proved it can reach the NOC.
+  - Fix: when both internet probes are still unseen and the collector is healthy, uplink is healthy. A real probe failure or silence still overrides that.
 
