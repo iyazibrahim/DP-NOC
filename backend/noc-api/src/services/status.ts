@@ -3,7 +3,11 @@ import { promQuery, parseFirstVectorValue, parseVectorToNumericValues } from "./
 import { getActiveAlerts, type Alert } from "./alertmanager";
 import { hasUnregisteredHostMetrics, siteHasCollectorMetrics } from "./deviceDiscovery";
 import { getGlobalWebsites } from "../data/globalWebsites";
-import { getFreshDeviceSnapshot, type ProbeLevel } from "../data/deviceSnapshots";
+import {
+  getFreshDeviceSnapshot,
+  type DeviceSnapshot,
+  type ProbeLevel
+} from "../data/deviceSnapshots";
 import { env } from "../env";
 import {
   dualHostMemFresh,
@@ -639,6 +643,33 @@ async function computeCollectorStatus(siteId: string): Promise<{
   };
 }
 
+/** Collector Console is posting live LAN checks, so the box is up even if host series are missing. */
+function snapshotShowsLanUp(snapshot: DeviceSnapshot | null): boolean {
+  if (!snapshot) return false;
+  return snapshot.devices.some((d) => d.snmp === "up" || d.ping === "up");
+}
+
+/**
+ * Host heartbeat can be absent while Alloy is still polling the LAN and posting results.
+ * That report is enough to show the collector up, including on the Devices row.
+ */
+function markCollectorAliveFromProbes(
+  devices: SiteStatus["collectorDeviceStates"]
+): DomainStatus {
+  for (const row of devices) {
+    if (row.state === "unknown" || row.state === "critical") {
+      row.state = "healthy";
+      row.notes = undefined;
+    }
+  }
+  if (devices.length > 0 && !devices.some((d) => d.live)) {
+    const preferred =
+      devices.find((x) => /-(nuc|collector)$/i.test(x.deviceId)) ?? devices[0];
+    preferred.live = true;
+  }
+  return { state: "healthy" };
+}
+
 /**
  * When the collector is offline, missing uplink probes are a symptom of the metrics path —
  * demote uplink critical → warning so we do not open a second "Internet DOWN" incident.
@@ -747,7 +778,14 @@ export async function computeSiteStatus(
 
   const snapshot = getFreshDeviceSnapshot(siteId);
   const snapshotByDevice = new Map((snapshot?.devices ?? []).map((d) => [d.deviceId, d]));
-  if (collector.state === "critical" && snapshot) {
+  // Host series can be missing ("Waiting for data") while the collector is still
+  // polling SNMP and ping and posting that report. That report means the box is up.
+  if (
+    snapshotShowsLanUp(snapshot) &&
+    (collector.state === "unknown" || collector.state === "critical")
+  ) {
+    collector = markCollectorAliveFromProbes(collectorDeviceStates);
+  } else if (collector.state === "critical" && snapshot) {
     collector = {
       state: "warning",
       notes: "The metrics feed is delayed. Device checks are still arriving from the collector."
@@ -760,14 +798,13 @@ export async function computeSiteStatus(
       };
     }
   }
-  const collectorOffline = collector.state === "critical";
-
   let localDevices: DomainStatus = { state: "unknown", notes: "No devices configured" };
   const localDeviceStates: SiteStatus["localDeviceStates"] = [];
   const devices = site.devices ?? [];
   const networkOrAll = devices.filter((d) => (d.kind ?? "network") === "network");
   if (networkOrAll.length > 0) {
     const deviceStatuses: DomainStatus[] = [];
+    let lanProvesCollector = snapshotShowsLanUp(snapshot);
     for (const d of networkOrAll) {
       if (!d.snmpIp) {
         const st: DomainStatus = {
@@ -791,13 +828,8 @@ export async function computeSiteStatus(
       const snap = snapshotByDevice.get(d.id);
       const snmp = preferFresh(snmpProm, snap?.snmp);
       const ping = preferFresh(pingProm, snap?.ping);
-      let st = combineDeviceChecks(d.name || d.id, snmp, ping);
-      if (collectorOffline) {
-        st = {
-          state: "unknown",
-          notes: `The collector at ${site.name} is offline, so device checks are paused.`
-        };
-      }
+      const st = combineDeviceChecks(d.name || d.id, snmp, ping);
+      if (st.state === "healthy" || st.state === "warning") lanProvesCollector = true;
       deviceStatuses.push(st);
       localDeviceStates.push({
         deviceId: d.id,
@@ -806,6 +838,24 @@ export async function computeSiteStatus(
         state: st.state,
         notes: st.notes
       });
+    }
+    if (
+      lanProvesCollector &&
+      (collector.state === "unknown" || collector.state === "critical")
+    ) {
+      collector = markCollectorAliveFromProbes(collectorDeviceStates);
+    }
+    if (collector.state === "critical") {
+      const paused = `The collector at ${site.name} is offline, so device checks are paused.`;
+      for (let i = 0; i < deviceStatuses.length; i++) {
+        if (!localDeviceStates[i].snmpIp) continue;
+        deviceStatuses[i] = { state: "unknown", notes: paused };
+        localDeviceStates[i] = {
+          ...localDeviceStates[i],
+          state: "unknown",
+          notes: paused
+        };
+      }
     }
     localDevices = aggregateLocalDevices(deviceStatuses);
   } else if (devices.length === 0 && (await hasUnregisteredHostMetrics(siteId))) {

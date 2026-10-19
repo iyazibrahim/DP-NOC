@@ -348,4 +348,7 @@ Collector box → Alloy → Prometheus (central)
   - A silent collector pauses device alarms (unknown, one collector incident). A fresh status snapshot covers a stale metrics push.
   - Collector Console Refresh runs a live ping and SNMP check and says Updated or a plain error. Alerts, site lists, websites, the access-point table, and the collector device table page at 20 rows.
   - One local device failing does not mark the location down. The device stays down. The location stays up unless every local device is down.
+- [x] **Collector unknown while LAN checks are up (2026-10-19)**
+  - Root cause: collector health waited on host `up` / memory in Prometheus. A fresh Collector Console report (or per-device SNMP/ping) could mark local devices HEALTHY while the collector card stayed UNKNOWN (“Waiting for data”).
+  - Fix: if that report or those device checks show SNMP or ping up, the collector and its Devices-page row are healthy. A silent collector with no successful LAN check still pauses device alarms.
 
