@@ -56,7 +56,8 @@ export const SNMP_MODULE_MARKERS = [
   "cambiumClientInfo",
   "cambiumClientSNR",
   "cambiumClientTxDataBytes",
-  "omadaClientInfo"
+  "omadaClientInfo",
+  "noc-snmp-no-lookups"
 ] as const;
 
 export function snmpModulesNewerInBundled(bundled: string, live: string): string | null {

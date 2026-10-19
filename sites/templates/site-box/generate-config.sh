@@ -230,6 +230,7 @@ MODULE_MARKERS = (
     "cambiumClientSNR",
     "cambiumClientTxDataBytes",
     "omadaClientInfo",
+    "noc-snmp-no-lookups",
 )
 
 def extract_modules(path):

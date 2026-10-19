@@ -96,6 +96,11 @@ function alloyLogCrashHints(logs: string): string[] {
   if (logLower.includes("could not perform the initial load")) {
     hints.push("Alloy could not load config — SNMP scrape will not run until config is fixed");
   }
+  if (logLower.includes("pduvalueasstring") || logLower.includes("snmp_exporter/collector")) {
+    hints.push(
+      "SNMP collector crashed (pduValueAsString). Use Force apply so the current snmp.yml is installed, then restart Alloy."
+    );
+  }
   if (logLower.includes("integrations/snmp")) {
     hints.push(
       "Legacy integrations/snmp job names in logs — ensure generate-config relabels to site_snmp_if_mib (CUTOVER_SITEBOX_SNMP.md)"
