@@ -655,6 +655,17 @@ textarea {
   font: inherit;
 }
 
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  padding: 0;
+  margin: 0;
+  border-radius: 4px;
+  flex: 0 0 16px;
+  accent-color: #00b5e2;
+}
+
 select {
   appearance: none;
   cursor: pointer;
@@ -952,11 +963,13 @@ textarea {
 }
 
 .dashWidgetConfigOpen {
+  height: auto !important;
   overflow: visible;
   z-index: 40;
 }
 
 .react-grid-item:has(.dashWidgetConfigOpen) {
+  height: auto !important;
   overflow: visible !important;
   z-index: 40 !important;
 }
@@ -1184,10 +1197,18 @@ textarea {
 
 .deviceStackPickerRow {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: flex-start;
   gap: 8px;
   font-size: 13px;
   cursor: pointer;
+}
+
+.deviceStackPickerRow span {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .signalBoardCompact {
@@ -1396,21 +1417,16 @@ textarea {
 }
 
 .widgetConfigPanel {
-  position: absolute;
-  top: 40px;
-  left: 8px;
-  right: 8px;
-  z-index: 50;
-  max-height: min(68vh, 480px);
+  position: relative;
+  z-index: 2;
+  max-height: 420px;
   overflow: auto;
-  padding: 10px 12px 12px;
+  padding: 8px 12px 28px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  background: transparent;
+  border-top: 1px solid var(--border);
 }
 
 .dashWidget {
@@ -1434,6 +1450,14 @@ textarea {
   width: 100%;
 }
 
+.widgetConfig input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  padding: 0;
+  margin: 0;
+}
+
 /* Resize handle must sit ABOVE Leaflet (panes ~400–1000) and charts */
 .react-grid-item > .react-resizable-handle {
   z-index: 1200 !important;
@@ -1448,6 +1472,12 @@ textarea {
   bottom: 0;
   right: 0;
   cursor: se-resize;
+}
+
+.dashWidgetConfigOpen > .react-resizable-handle {
+  z-index: 3;
+  bottom: 2px;
+  right: 2px;
 }
 
 .react-grid-item > .react-resizable-handle::after {

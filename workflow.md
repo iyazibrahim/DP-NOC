@@ -348,6 +348,8 @@ Collector box → Alloy → Prometheus (central)
   - A silent collector pauses device alarms (unknown, one collector incident). A fresh status snapshot covers a stale metrics push.
   - Collector Console Refresh runs a live ping and SNMP check and says Updated or a plain error. Alerts, site lists, websites, the access-point table, and the collector device table page at 20 rows.
   - One local device failing does not mark the location down. The device stays down. The location stays up unless every local device is down.
+- [x] **Widget settings layout (2026-10-19)**
+  - Access-point checkboxes sit beside the name. The resize grip stays at the bottom-right of the open settings instead of floating over the form.
 - [x] **Device widgets: health card, AP cluster, bitrate, color (2026-10-19)**
   - Gauge settings open in a panel. Device label is Device. Metric list follows the device. Bandwidth is Kbps / Mbps / Gbps.
   - Device health card and AP cluster (merged clients, radio traffic, SNR). Per-widget color swatch.
