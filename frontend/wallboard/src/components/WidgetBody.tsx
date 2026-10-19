@@ -9,7 +9,7 @@ import {
   DeviceStatGauge,
   useMetricPresets
 } from "./DeviceMetricWidgets";
-import { localDevicesOf } from "../statusLabels";
+import { localDevicesOf, statusWord } from "../statusLabels";
 import {
   CollectorStatusCard,
   DeviceStackCard,
@@ -313,7 +313,7 @@ export function WidgetBody({
         <div className="widgetTitle">{site?.name ?? siteId ?? "Site"}</div>
         <StatusPill state={st?.overall ?? "unknown"} />
         <div className="kvList">
-          <div className={`dotLine dotLine--${loc.state}`}>Local devices: {loc.state}</div>
+          <div className={`dotLine dotLine--${loc.state}`}>Local devices: {statusWord(loc.state)}</div>
           <div>Website checks: {st?.websites.state ?? "unknown"}</div>
         </div>
       </div>

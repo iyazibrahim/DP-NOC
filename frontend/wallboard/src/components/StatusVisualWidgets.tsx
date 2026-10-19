@@ -1,5 +1,5 @@
 import type { DomainState, Site, SiteStatus } from "../types";
-import { collectorOf, uplinkOf } from "../statusLabels";
+import { collectorOf, statusWord, uplinkOf } from "../statusLabels";
 
 function stateTone(state: DomainState | string): "ok" | "bad" | "warn" | "unk" {
   if (state === "healthy") return "ok";
@@ -9,10 +9,7 @@ function stateTone(state: DomainState | string): "ok" | "bad" | "warn" | "unk" {
 }
 
 function stateLabel(state: DomainState | string): string {
-  if (state === "healthy") return "UP";
-  if (state === "critical") return "DOWN";
-  if (state === "warning") return "DEGRADED";
-  return "UNKNOWN";
+  return statusWord(state);
 }
 
 function cardClass(tone: string, compact?: boolean) {

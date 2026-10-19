@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { DomainState } from "@/types";
+import { statusWord } from "@/statusLabels";
 
 /** High-contrast status chips for dark ops UI (readable on near-black cards). */
 const stateStyles: Record<string, string> = {
@@ -26,7 +27,7 @@ export function StatusBadge({
   className?: string;
 }) {
   const s = String(state);
-  const text = label ?? (s === "critical" ? "DOWN" : s.toUpperCase());
+  const text = label ?? statusWord(s);
   return (
     <Badge
       variant="outline"

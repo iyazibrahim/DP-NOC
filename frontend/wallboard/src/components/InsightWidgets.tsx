@@ -51,7 +51,7 @@ export function DeviceHealthCard({
   if (!summary) return <div className="chartSkeleton" aria-hidden />;
 
   const online = summary.online?.value;
-  const onlineLabel = online == null ? "No data" : online >= 1 ? "Online" : "Offline";
+  const onlineLabel = online == null ? "NO DATA" : online >= 1 ? "UP" : "DOWN";
   const onlineTone = online == null ? "unknown" : online >= 1 ? "ok" : "bad";
 
   return (

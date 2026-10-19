@@ -27,7 +27,7 @@ import type { DeviceKind, DiscoveredDevice, Site, SiteDevice, SiteStatus } from 
 import { StatusPill } from "@/components/StatusPill";
 import { SiteLocationPicker } from "@/components/SiteLocationPicker";
 import { DeviceTypePicker, useDeviceTypes, type DeviceTypeOption } from "@/components/DeviceTypePicker";
-import { collectorOf, localDevicesOf, uplinkOf } from "@/statusLabels";
+import { collectorOf, localDevicesOf, statusWord, uplinkOf } from "@/statusLabels";
 import { Modal } from "@/components/Modal";
 import { SitesLeafletMap } from "@/components/SitesLeafletMap";
 import { TablePagination, TableToolbar, paginateItems } from "@/components/TableControls";
@@ -735,22 +735,22 @@ export function SiteDetailPage() {
           <div className="healthMiniGrid">
             <div className={`healthMini healthMini--${col.state}`}>
               <span className="healthMiniLabel">Collector</span>
-              <strong>{col.state}</strong>
+              <strong>{statusWord(col.state)}</strong>
               {col.notes ? <span className="muted">{col.notes}</span> : null}
             </div>
             <div className={`healthMini healthMini--${up.state}`}>
               <span className="healthMiniLabel">Uplink</span>
-              <strong>{up.state}</strong>
+              <strong>{statusWord(up.state)}</strong>
               {up.notes ? <span className="muted">{up.notes}</span> : null}
             </div>
             <div className={`healthMini healthMini--${loc.state}`}>
               <span className="healthMiniLabel">Local devices</span>
-              <strong>{loc.state}</strong>
+              <strong>{statusWord(loc.state)}</strong>
               {loc.notes ? <span className="muted">{loc.notes}</span> : null}
             </div>
             <div className={`healthMini healthMini--${web.state}`}>
               <span className="healthMiniLabel">Websites</span>
-              <strong>{web.state}</strong>
+              <strong>{statusWord(web.state)}</strong>
               {web.notes ? <span className="muted">{web.notes}</span> : null}
             </div>
           </div>

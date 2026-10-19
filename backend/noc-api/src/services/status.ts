@@ -199,7 +199,7 @@ function aggregateLocalDevices(statuses: DomainStatus[]): DomainStatus {
     return { state: "warning", notes: note ?? "Some devices need attention." };
   }
   if (states.some((s) => s === "unknown")) {
-    return { state: "warning", notes: "Some devices have not reported yet." };
+    return { state: "unknown", notes: "Some devices have not reported yet." };
   }
   return { state: "healthy" };
 }
@@ -220,7 +220,7 @@ function aggregateProbeStatuses(statuses: DomainStatus[]): DomainStatus {
     return { state: "warning", notes: note ?? "Some checks need attention." };
   }
   if (states.some((s) => s === "unknown")) {
-    return { state: "warning", notes: "Some devices have not reported yet." };
+    return { state: "unknown", notes: "Some devices have not reported yet." };
   }
   return { state: "healthy" };
 }
@@ -318,8 +318,16 @@ function escapePromLabel(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-const COLLECTOR_OFFLINE_NOTE =
-  "Device checks are paused so they are not marked down. Check power and the network on the collector, then open Collector Console.";
+const COLLECTOR_EXPLICIT_DOWN =
+  "The collector reported itself down. Check power and the network on the collector.";
+
+const COLLECTOR_SILENCE_NOTE = "The NOC is not receiving this collector.";
+
+const COLLECTOR_WAITING_ON_INTERNET =
+  "The collector stays on the local network. Data resumes when the internet is back.";
+
+const DEVICES_WAITING_ON_INTERNET =
+  "Device checks are not arriving. They resume when the internet is back.";
 
 const SNMP_WARNING_NOTE = (name: string) =>
   `${name} is online, but SNMP is not answering. Check the SNMP community and that UDP port 161 is allowed, then use Force apply on the collector.`;
@@ -564,7 +572,7 @@ async function collectorIdStatus(siteId: string, metricId: string): Promise<Doma
     }
 
     if (upFresh !== null && upFresh < 1) {
-      return { state: "critical", notes: COLLECTOR_OFFLINE_NOTE };
+      return { state: "critical", notes: COLLECTOR_EXPLICIT_DOWN };
     }
 
     const upHist = parseFirstVectorValue(
@@ -574,7 +582,7 @@ async function collectorIdStatus(siteId: string, metricId: string): Promise<Doma
       await promQuery(dualHostMemFresh(siteId, metricId, METRIC_HISTORY_WINDOW))
     );
     if (upHist !== null || memHist !== null) {
-      return { state: "critical", notes: COLLECTOR_OFFLINE_NOTE };
+      return { state: "critical", notes: COLLECTOR_SILENCE_NOTE };
     }
     return { state: "unknown", notes: "Waiting for data" };
   } catch {
@@ -670,23 +678,6 @@ function markCollectorAliveFromProbes(
   return { state: "healthy" };
 }
 
-/**
- * When the collector is offline, missing uplink probes are a symptom of the metrics path —
- * demote uplink critical → warning so we do not open a second "Internet DOWN" incident.
- */
-function applyCollectorInhibitOnUplink(
-  uplink: DomainStatus,
-  collector: DomainStatus
-): DomainStatus {
-  if (collector.state !== "critical" || uplink.state !== "critical") {
-    return uplink;
-  }
-  return {
-    state: "warning",
-    notes: "The collector is offline, so the internet check is paused. Check the collector before treating this location as offline."
-  };
-}
-
 export async function computeSiteStatus(
   siteId: string,
   activeAlerts?: Alert[]
@@ -771,8 +762,6 @@ export async function computeSiteStatus(
   const { aggregate: collectorRaw, devices: collectorDeviceStates } =
     await computeCollectorStatus(siteId);
 
-  uplink = applyCollectorInhibitOnUplink(uplink, collectorRaw);
-
   let collector = applyRecoveryHysteresis(`collector:${siteId}`, collectorRaw);
   uplink = applyRecoveryHysteresis(`uplink:${siteId}`, uplink);
 
@@ -785,17 +774,24 @@ export async function computeSiteStatus(
     (collector.state === "unknown" || collector.state === "critical")
   ) {
     collector = markCollectorAliveFromProbes(collectorDeviceStates);
-  } else if (collector.state === "critical" && snapshot) {
+  } else if (collector.state === "critical" && snapshot && uplink.state !== "critical") {
     collector = {
       state: "warning",
       notes: "The metrics feed is delayed. Device checks are still arriving from the collector."
     };
-    if (uplink.state === "critical") {
-      uplink = {
-        state: "warning",
-        notes:
-          "The metrics feed is delayed, so the internet check is paused. Device checks are still arriving from the collector."
-      };
+  } else if (
+    uplink.state === "critical" &&
+    collector.state === "critical" &&
+    collector.notes !== COLLECTOR_EXPLICIT_DOWN &&
+    !snapshot
+  ) {
+    // Probes stopped and nothing is arriving. The box can still be on the LAN.
+    collector = { state: "unknown", notes: COLLECTOR_WAITING_ON_INTERNET };
+    for (const row of collectorDeviceStates) {
+      if (row.notes === COLLECTOR_EXPLICIT_DOWN) continue;
+      row.state = "unknown";
+      row.notes = COLLECTOR_WAITING_ON_INTERNET;
+      row.live = false;
     }
   }
   let localDevices: DomainStatus = { state: "unknown", notes: "No devices configured" };
@@ -845,8 +841,11 @@ export async function computeSiteStatus(
     ) {
       collector = markCollectorAliveFromProbes(collectorDeviceStates);
     }
-    if (collector.state === "critical") {
-      const paused = `The collector at ${site.name} is offline, so device checks are paused.`;
+    const waitingOnInternet = collector.notes === COLLECTOR_WAITING_ON_INTERNET;
+    if (collector.state === "critical" || waitingOnInternet) {
+      const paused = waitingOnInternet
+        ? DEVICES_WAITING_ON_INTERNET
+        : `The collector at ${site.name} is offline, so device checks are paused.`;
       for (let i = 0; i < deviceStatuses.length; i++) {
         if (!localDeviceStates[i].snmpIp) continue;
         deviceStatuses[i] = { state: "unknown", notes: paused };

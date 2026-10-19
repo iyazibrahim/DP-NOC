@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import type { ActiveAlert, DeviceRow, Site, SiteStatus } from "../types";
-import { collectorOf, uplinkOf } from "../statusLabels";
+import { collectorOf, statusWord, uplinkOf } from "../statusLabels";
 
 function toneClass(state: string) {
   if (state === "healthy") return "ok";
@@ -10,10 +10,7 @@ function toneClass(state: string) {
 }
 
 function shortLabel(state: string) {
-  if (state === "healthy") return "UP";
-  if (state === "critical") return "DOWN";
-  if (state === "warning") return "WARN";
-  return "—";
+  return statusWord(state);
 }
 
 export function MapsOpsRail({

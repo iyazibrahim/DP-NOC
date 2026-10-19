@@ -210,7 +210,7 @@ function formatBytesUsed(bytes: number | null): string {
 }
 
 function uplinkLabel(v: number | null): { state: string; label: string } {
-  if (v == null) return { state: "unknown", label: "Unknown" };
+  if (v == null) return { state: "unknown", label: "NO DATA" };
   if (v >= 1) return { state: "healthy", label: "UP" };
   return { state: "critical", label: "DOWN" };
 }

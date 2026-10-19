@@ -13,7 +13,14 @@ export function collectorOf(st?: SiteStatus | null): DomainStatus {
   return st?.collector ?? { state: "unknown", notes: "Waiting for collector data" };
 }
 
+/** Three words on the wall: UP, DOWN, NO DATA. */
+export function statusWord(state?: string | null): string {
+  if (state === "healthy") return "UP";
+  if (state === "critical" || state === "warning") return "DOWN";
+  return "NO DATA";
+}
+
 export function formatDomainLine(label: string, d?: DomainStatus) {
-  if (!d) return `${label}: unknown`;
-  return `${label}: ${d.state}${d.notes ? ` — ${d.notes}` : ""}`;
+  if (!d) return `${label}: NO DATA`;
+  return `${label}: ${statusWord(d.state)}${d.notes ? ` — ${d.notes}` : ""}`;
 }

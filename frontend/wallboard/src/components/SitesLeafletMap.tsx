@@ -1,6 +1,7 @@
 import { MapContainer, CircleMarker, Popup, useMap, useMapEvents } from "react-leaflet";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { Site, SiteStatus } from "../types";
+import { statusWord } from "../statusLabels";
 import { CartoTileLayer } from "./CartoTileLayer";
 import "leaflet/dist/leaflet.css";
 
@@ -181,7 +182,7 @@ export function SitesLeafletMap({
             >
               <Popup>
                 <strong>{site.name}</strong>
-                <div>{status?.overall?.toUpperCase() ?? "UNKNOWN"}</div>
+                <div>{statusWord(status?.overall)}</div>
                 <div>Cluster ~{count} nearby</div>
               </Popup>
             </CircleMarker>
