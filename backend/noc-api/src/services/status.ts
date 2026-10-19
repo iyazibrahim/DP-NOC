@@ -870,21 +870,22 @@ export async function computeSiteStatus(
   const firing = relevant.filter((a) => a.status === "firing").length;
   const resolved = relevant.filter((a) => a.status === "resolved").length;
 
-  // ICMP uplink probes have never been stored, but a healthy collector means this
-  // box just reached the NOC (status report or metrics). That path is the uplink.
-  // A later failed or silent probe still wins — this only fills the never-seen case.
-  if (
-    collector.state === "healthy" &&
-    uplink.state === "unknown" &&
-    wanDns.state === "unknown" &&
-    wanVps.state === "unknown"
-  ) {
-    uplink = { state: "healthy" };
-  }
-
-  // Uplink is primary: critical uplink always forces overall DOWN.
+  // Uplink is the internet probes only. A live collector does not fill them in.
+  // Unknown uplink stays unknown so the location is not shown healthy with no network data.
+  // Critical uplink forces the location down. Healthy or warning uplink can still be
+  // worsened by the collector, websites, or local devices.
   let overall: DomainState = uplink.state;
-  if (uplink.state !== "critical") {
+  if (uplink.state === "critical") {
+    overall = "critical";
+  } else if (uplink.state === "unknown") {
+    if (
+      collector.state === "critical" ||
+      websites.state === "critical" ||
+      localDevices.state === "critical"
+    ) {
+      overall = "critical";
+    }
+  } else {
     overall = worst(overall, collector.state);
     overall = worst(overall, websites.state);
     overall = worst(overall, localDevices.state);
