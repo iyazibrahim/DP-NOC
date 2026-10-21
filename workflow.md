@@ -384,4 +384,5 @@ Collector box → Alloy → Prometheus (central)
   - Gauge, line, and bar settings use a grouped metric catalog (Health, Traffic, Ports, Storage, Signal) filtered to the device. Device health can pick its stats from that catalog; a card with no selection keeps its previous three stats.
   - Collector metrics come from the unix exporter already on the NUC. Shared interface metrics (throughput, busiest port, utilization, capacity, ports, errors, discards, bytes today) apply to firewall, switch, AP, NAS, and router. Cambium adds SNR, weak clients, busiest client, and client bytes today.
   - FortiGate and Omada extra numbers are numeric SNMP columns in `snmp.yml`. They show up only after the collector image is rebuilt and Force apply runs.
+  - Line-use card labels (Details / Daily) wrap inside the card instead of drawing past the border on a narrow tile.
 
