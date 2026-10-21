@@ -111,6 +111,13 @@ export async function updateSite(
   });
 }
 
+export type LineUseDay = {
+  date: string;
+  start: number;
+  inBytes: number | null;
+  outBytes: number | null;
+};
+
 export type SiteNetworkUtilWindow = {
   avgInPct: number | null;
   avgOutPct: number | null;
@@ -118,6 +125,8 @@ export type SiteNetworkUtilWindow = {
   peakOutPct: number | null;
   inBytes: number | null;
   outBytes: number | null;
+  /** Local calendar days, oldest first. Present on the 7-day and 30-day windows. */
+  days?: LineUseDay[];
 };
 
 export type SiteNetworkSummary = {

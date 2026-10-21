@@ -447,11 +447,69 @@ a[data-slot="button"]:hover {
 }
 
 .wanUtilCellLabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
   font-size: 11px;
   color: var(--muted);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.wanUtilCellHint {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+button.wanUtilCell {
+  appearance: none;
+  background: rgba(0, 0, 0, 0.22);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+button.wanUtilCell:hover {
+  border-color: var(--accent);
+}
+
+button.wanUtilCell:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.lineUseOverviewStats {
+  flex: none;
+}
+
+.lineUseOverviewMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.lineUseOverviewChart {
+  height: 240px;
+  min-height: 240px;
+}
+
+.lineUseOverviewTable {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.lineUseOverviewTable thead th {
+  position: sticky;
+  top: 0;
+  background: var(--popover, var(--panel));
 }
 
 .wanUtilCellTotal {

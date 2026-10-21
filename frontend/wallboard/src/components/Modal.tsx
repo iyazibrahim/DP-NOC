@@ -13,13 +13,15 @@ export function Modal({
   title,
   onClose,
   children,
-  wide
+  wide,
+  className
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  className?: string;
 }) {
   return (
     <Dialog
@@ -29,7 +31,11 @@ export function Modal({
       }}
     >
       <DialogContent
-        className={cn("max-h-[90vh] overflow-y-auto", wide ? "sm:max-w-2xl" : "sm:max-w-lg")}
+        className={cn(
+          "max-h-[90vh] overflow-y-auto",
+          wide ? "sm:max-w-2xl" : "sm:max-w-lg",
+          className
+        )}
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>

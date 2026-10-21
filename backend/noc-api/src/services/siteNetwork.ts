@@ -8,6 +8,14 @@ import { getSiteById, type Site } from "../data/sites";
 import { loadSiteStations } from "../data/siteStations";
 import { dualSnmpUpFresh, probeSuccessFresh, METRIC_FRESH_WINDOW } from "./promLabels";
 import { env } from "../env";
+import {
+  bucketVolumeDays,
+  calendarDaySlots,
+  sumLineUseDays,
+  type LineUseDay
+} from "./lineUseWindow";
+
+export type { LineUseDay };
 
 function escapePromLabel(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -115,7 +123,10 @@ export type SiteNetworkSummary = {
     uploadSeries: SiteNetworkSeriesPoint[];
     message?: string;
   };
-  /** Period averages / peaks for the Total bandwidth card (Today / 7d / 30d). */
+  /**
+   * Line-use totals for Today / 7d / 30d.
+   * Byte totals are sums of local calendar days (see `days` on 7d and 30d).
+   */
   utilWindows?: {
     "1d": SiteNetworkUtilWindow;
     "7d": SiteNetworkUtilWindow;
@@ -132,6 +143,8 @@ export type SiteNetworkUtilWindow = {
   inBytes: number | null;
   /** Total octets uploaded (out) over the window. */
   outBytes: number | null;
+  /** Local calendar days, oldest first. Set on the 7-day and 30-day windows. */
+  days?: LineUseDay[];
 };
 
 function parseSeries(data: PromQueryResult): SiteNetworkSeriesPoint[] {
@@ -223,7 +236,10 @@ function buildIfUtilQuery(
   return `(${buildIfTrafficQuery(direction, siteId, deviceId, ifName)} / ${cap}) * 100`;
 }
 
-/** Total octets transferred over `range` (e.g. 24h, 7d, 30d) on the tagged WAN if. */
+/**
+ * Octets transferred over `range` on the tagged WAN interface.
+ * `max by (ifIndex)` keeps one counter when the same interface is written twice.
+ */
 function buildIfVolumeQuery(
   direction: "in" | "out",
   siteId: string,
@@ -235,14 +251,10 @@ function buildIfVolumeQuery(
   const s = escapePromLabel(siteId);
   const d = escapePromLabel(deviceId);
   const indexOnly = /^ifIndex:(\d+)$/i.exec(ifName.trim());
-  if (indexOnly) {
-    return `sum(increase(${octets}{site="${s}",device="${d}",ifIndex="${indexOnly[1]}"}[${range}]))`;
-  }
-  const join = ifNameJoinMatcher(siteId, deviceId, ifName);
-  return `sum(
-  increase(${octets}{site="${s}",device="${d}"}[${range}])
-  and on(ifIndex) ${join}
-)`;
+  const increaseExpr = indexOnly
+    ? `increase(${octets}{site="${s}",device="${d}",ifIndex="${indexOnly[1]}"}[${range}])`
+    : `increase(${octets}{site="${s}",device="${d}"}[${range}]) and on(ifIndex) ${ifNameJoinMatcher(siteId, deviceId, ifName)}`;
+  return `sum(max by (ifIndex) (${increaseExpr}))`;
 }
 
 function collectInterfacesFromProm(
@@ -432,6 +444,79 @@ export async function getSiteNetworkSummary(
   };
 }
 
+const LINE_USE_DAYS = 30;
+const LINE_USE_HOUR = 3600;
+
+function parseVolumeMatrix(data: PromQueryResult): Array<{ ts: number; value: number }> {
+  if (data.resultType !== "matrix" || !Array.isArray(data.result)) return [];
+  const out: Array<{ ts: number; value: number }> = [];
+  for (const row of data.result as Array<{ values?: [number, string][] }>) {
+    for (const [ts, raw] of row.values ?? []) {
+      const n = Number(raw);
+      if (!Number.isFinite(ts) || !Number.isFinite(n) || n < 0) continue;
+      out.push({ ts, value: n });
+    }
+  }
+  return out;
+}
+
+/**
+ * Hourly counter increases from the start of the oldest calendar day through now,
+ * plus the unfinished current hour (query_range only lands on the hour).
+ */
+async function loadHourlyVolume(
+  direction: "in" | "out",
+  siteId: string,
+  deviceId: string,
+  ifName: string,
+  windowStart: number,
+  nowSec: number
+): Promise<Array<{ ts: number; value: number }>> {
+  const series = parseVolumeMatrix(
+    await promQueryRange(
+      buildIfVolumeQuery(direction, siteId, deviceId, ifName, "1h"),
+      windowStart,
+      nowSec,
+      String(LINE_USE_HOUR)
+    )
+  ).filter((point) => point.ts > windowStart && point.ts <= nowSec + 1);
+
+  const last = series.reduce((max, point) => Math.max(max, point.ts), 0);
+  const gap = last > 0 ? nowSec - last : 0;
+  if (last > 0 && gap >= 30 && gap < LINE_USE_HOUR) {
+    try {
+      const extra = parseFirstVectorValue(
+        await promQuery(
+          buildIfVolumeQuery(direction, siteId, deviceId, ifName, `${Math.round(gap)}s`),
+          nowSec
+        )
+      );
+      if (extra != null && Number.isFinite(extra) && extra >= 0) {
+        series.push({ ts: nowSec, value: extra });
+      }
+    } catch {
+      /* Completed hours still count when the current partial hour cannot be read. */
+    }
+  }
+  return series;
+}
+
+async function collectLineUseDays(
+  siteId: string,
+  deviceId: string,
+  ifName: string,
+  now = new Date()
+): Promise<LineUseDay[]> {
+  const slots = calendarDaySlots(env.NOC_TZ, now, LINE_USE_DAYS);
+  const windowStart = slots[0]?.start ?? Math.floor(now.getTime() / 1000);
+  const nowSec = Math.floor(now.getTime() / 1000);
+  const [inbound, outbound] = await Promise.all([
+    loadHourlyVolume("in", siteId, deviceId, ifName, windowStart, nowSec),
+    loadHourlyVolume("out", siteId, deviceId, ifName, windowStart, nowSec)
+  ]);
+  return bucketVolumeDays(slots, inbound, outbound, nowSec);
+}
+
 async function collectUtilWindows(
   siteId: string,
   deviceId: string,
@@ -446,55 +531,77 @@ async function collectUtilWindows(
   const roundBytes = (v: number | null) =>
     v != null && Number.isFinite(v) && v >= 0 ? Math.round(v) : null;
 
-  const emptyWindow = (): SiteNetworkUtilWindow => ({
-    avgInPct: null,
-    avgOutPct: null,
-    peakInPct: null,
-    peakOutPct: null,
-    inBytes: null,
-    outBytes: null
+  const emptyPercents = () => ({
+    avgInPct: null as number | null,
+    avgOutPct: null as number | null,
+    peakInPct: null as number | null,
+    peakOutPct: null as number | null
   });
 
-  const queryWindow = async (
-    utilRange: string,
-    volumeRange: string
-  ): Promise<SiteNetworkUtilWindow> => {
+  const queryPercents = async (utilRange: string) => {
     try {
-      // Subquery step: 1h for multi-day windows; 5m for calendar Today (often < 1h early morning).
       const step = utilRange.endsWith("s") || utilRange.endsWith("m") ? "5m" : "1h";
-      const [avgIn, avgOut, peakIn, peakOut, inBytes, outBytes] = await Promise.all([
+      const [avgIn, avgOut, peakIn, peakOut] = await Promise.all([
         parseFirstVectorValue(await promQuery(`avg_over_time((${utilIn})[${utilRange}:${step}])`)),
         parseFirstVectorValue(await promQuery(`avg_over_time((${utilOut})[${utilRange}:${step}])`)),
         parseFirstVectorValue(await promQuery(`max_over_time((${utilIn})[${utilRange}:${step}])`)),
-        parseFirstVectorValue(await promQuery(`max_over_time((${utilOut})[${utilRange}:${step}])`)),
-        parseFirstVectorValue(
-          await promQuery(buildIfVolumeQuery("in", siteId, deviceId, ifName, volumeRange))
-        ),
-        parseFirstVectorValue(
-          await promQuery(buildIfVolumeQuery("out", siteId, deviceId, ifName, volumeRange))
-        )
+        parseFirstVectorValue(await promQuery(`max_over_time((${utilOut})[${utilRange}:${step}])`))
       ]);
       return {
         avgInPct: roundPct(avgIn),
         avgOutPct: roundPct(avgOut),
         peakInPct: roundPct(peakIn),
-        peakOutPct: roundPct(peakOut),
-        inBytes: roundBytes(inBytes),
-        outBytes: roundBytes(outBytes)
+        peakOutPct: roundPct(peakOut)
       };
     } catch {
-      return emptyWindow();
+      return emptyPercents();
     }
   };
 
-  // Today = calendar day in NOC_TZ (midnight → now); 7d / 30d stay rolling.
+  const queryRawVolume = async (range: string) => {
+    try {
+      const [inBytes, outBytes] = await Promise.all([
+        parseFirstVectorValue(await promQuery(buildIfVolumeQuery("in", siteId, deviceId, ifName, range))),
+        parseFirstVectorValue(await promQuery(buildIfVolumeQuery("out", siteId, deviceId, ifName, range)))
+      ]);
+      return { inBytes: roundBytes(inBytes), outBytes: roundBytes(outBytes) };
+    } catch {
+      return { inBytes: null, outBytes: null };
+    }
+  };
+
+  // Today, 7 days, and 30 days are local calendar days (midnight in NOC_TZ).
+  // Card totals are the sum of those days, so the popup adds up to the card.
   const todayRange = calendarTodayPromRange();
-  const [d1, d7, d30] = await Promise.all([
-    queryWindow(todayRange, todayRange),
-    queryWindow("7d", "7d"),
-    queryWindow("30d", "30d")
+  const [p1, p7, p30, days] = await Promise.all([
+    queryPercents(todayRange),
+    queryPercents("7d"),
+    queryPercents("30d"),
+    collectLineUseDays(siteId, deviceId, ifName).catch(() => null)
   ]);
-  return { "1d": d1, "7d": d7, "30d": d30 };
+
+  let b1: { inBytes: number | null; outBytes: number | null };
+  let b7: { inBytes: number | null; outBytes: number | null };
+  let b30: { inBytes: number | null; outBytes: number | null };
+  let dayRows: LineUseDay[] | undefined;
+  if (days) {
+    dayRows = days;
+    b1 = sumLineUseDays(days.slice(-1));
+    b7 = sumLineUseDays(days.slice(-7));
+    b30 = sumLineUseDays(days);
+  } else {
+    [b1, b7, b30] = await Promise.all([
+      queryRawVolume(todayRange),
+      queryRawVolume("7d"),
+      queryRawVolume("30d")
+    ]);
+  }
+
+  return {
+    "1d": { ...p1, ...b1 },
+    "7d": { ...p7, ...b7, days: dayRows?.slice(-7) },
+    "30d": { ...p30, ...b30, days: dayRows }
+  };
 }
 
 function isApLikeDevice(d: { type: string; kind: string; vendor: string }): boolean {

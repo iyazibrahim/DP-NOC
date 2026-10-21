@@ -26,8 +26,10 @@ async function promFetch(path: string, params: Record<string, string>) {
   return json.data;
 }
 
-export async function promQuery(query: string) {
-  return promFetch("/api/v1/query", { query });
+export async function promQuery(query: string, time?: number) {
+  const params: Record<string, string> = { query };
+  if (time != null && Number.isFinite(time)) params.time = String(time);
+  return promFetch("/api/v1/query", params);
 }
 
 export async function promQueryRange(query: string, start: number, end: number, step: string) {

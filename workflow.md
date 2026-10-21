@@ -374,4 +374,8 @@ Collector box → Alloy → Prometheus (central)
 - [x] **Uplink follows probe data only (2026-10-19)**
   - Reverted treating “collector reached the NOC” as a healthy uplink. DNS and internet checks are `probe_success` only: no sample stays unknown, `1` is up, `0` or silence is down.
   - A location is not marked healthy while those probes have never reported. Critical collector, website, or local-device state can still mark it down.
+- [x] **Line use totals match the daily breakdown (2026-10-21)**
+  - Today, 7 days, and 30 days are calendar days in `NOC_TZ` (midnight, Malaysia). Each total is the sum of hourly WAN counter increases for those days, so a missing day stays empty instead of being smeared across the range.
+  - The same interface written twice is counted once (`max by (ifIndex)`).
+  - 7-day and 30-day cards open a popup: daily download, upload, total, average full day, and busiest day. The popup total is the card total.
 

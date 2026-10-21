@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { getSiteNetwork, STATUS_POLL_MS, type SiteNetworkSummary } from "@/api";
 import { useAuth } from "@/auth/AuthContext";
+import { LineUseCards } from "@/components/LineUseCards";
 import { darkTooltipProps } from "@/components/noc/MetricChart";
 import { RangeToggle } from "@/components/noc/RangeToggle";
 
@@ -25,17 +26,6 @@ function hoursForRange(range: ChartRange): number {
   if (range === "30d") return 720;
   if (range === "7d") return 168;
   return 24;
-}
-
-function formatBytes(bytes: number | null): string {
-  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return "—";
-  const tb = 1_000_000_000_000;
-  const gb = 1_000_000_000;
-  const mb = 1_000_000;
-  if (bytes >= tb) return `${(bytes / tb).toFixed(2)} TB`;
-  if (bytes >= gb) return `${(bytes / gb).toFixed(bytes >= 10 * gb ? 1 : 2)} GB`;
-  if (bytes >= mb) return `${(bytes / mb).toFixed(1)} MB`;
-  return `${Math.round(bytes)} B`;
 }
 
 function formatMbps(value: number): string {
@@ -82,40 +72,10 @@ export function DashboardNetworkCard({
   if (error) return <div className="muted">{error}</div>;
   if (!network) return <div className="chartSkeleton" aria-hidden />;
 
-  if (view === "line") return <LineUse network={network} />;
+  if (view === "line") return <LineUseCards network={network} />;
   if (view === "bandwidth") return <Bandwidth network={network} range={range} setRange={setRange} />;
   if (view === "speed") return <SpeedTest network={network} range={range} setRange={setRange} />;
   return <ApTraffic network={network} />;
-}
-
-function LineUse({ network }: { network: SiteNetworkSummary }) {
-  const windows = [
-    { key: "1d" as const, label: "Today" },
-    { key: "7d" as const, label: "7 days" },
-    { key: "30d" as const, label: "30 days" }
-  ];
-  return (
-    <div className="wanUtilSummary">
-      <div className="wanUtilSummaryGrid">
-        {windows.map(({ key, label }) => {
-          const win = network.utilWindows?.[key];
-          const inB = win?.inBytes ?? null;
-          const outB = win?.outBytes ?? null;
-          const total = inB != null || outB != null ? (inB ?? 0) + (outB ?? 0) : null;
-          return (
-            <div key={key} className="wanUtilCell">
-              <div className="wanUtilCellLabel">{label}</div>
-              <div className="wanUtilCellTotal">{formatBytes(total)}</div>
-              <div className="wanUtilCellSplit">
-                <span>↓ {formatBytes(inB)}</span>
-                <span>↑ {formatBytes(outB)}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 function Bandwidth({

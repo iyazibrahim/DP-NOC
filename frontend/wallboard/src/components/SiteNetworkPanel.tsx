@@ -26,6 +26,7 @@ import {
   type SiteNetworkSummary
 } from "@/api";
 import type { Site, SiteNetworkLayout, SiteNetworkWidget, SiteNetworkWidgetType } from "@/types";
+import { LineUseCards } from "@/components/LineUseCards";
 import { StatusPill } from "@/components/StatusPill";
 import { darkTooltipProps } from "@/components/noc/MetricChart";
 import { RangeToggle } from "@/components/noc/RangeToggle";
@@ -194,19 +195,6 @@ function formatAge(tsSec: number | null): string {
   if (age < 60) return `${age}s ago`;
   if (age < 3600) return `${Math.floor(age / 60)}m ago`;
   return `${Math.floor(age / 3600)}h ago`;
-}
-
-/** Format transferred octets as human volume (GB used, etc.). */
-function formatBytesUsed(bytes: number | null): string {
-  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return "—";
-  const tb = 1_000_000_000_000;
-  const gb = 1_000_000_000;
-  const mb = 1_000_000;
-  if (bytes >= tb) return `${(bytes / tb).toFixed(bytes >= 10 * tb ? 1 : 2)} TB`;
-  if (bytes >= gb) return `${(bytes / gb).toFixed(bytes >= 10 * gb ? 1 : 2)} GB`;
-  if (bytes >= mb) return `${(bytes / mb).toFixed(bytes >= 100 * mb ? 0 : 1)} MB`;
-  if (bytes >= 1000) return `${(bytes / 1000).toFixed(0)} KB`;
-  return `${Math.round(bytes)} B`;
 }
 
 function uplinkLabel(v: number | null): { state: string; label: string } {
@@ -603,36 +591,8 @@ export function SiteNetworkPanel({ token, site }: Props) {
           </p>
         );
 
-      case "wan_util_summary": {
-        const windows = [
-          { key: "1d" as const, label: "Today" },
-          { key: "7d" as const, label: "7 days" },
-          { key: "30d" as const, label: "30 days" }
-        ];
-        return (
-          <div className="wanUtilSummary">
-            <div className="wanUtilSummaryGrid">
-              {windows.map(({ key, label }) => {
-                const win = network?.utilWindows?.[key];
-                const inB = win?.inBytes ?? null;
-                const outB = win?.outBytes ?? null;
-                const total =
-                  inB != null || outB != null ? (inB ?? 0) + (outB ?? 0) : null;
-                return (
-                  <div key={key} className="wanUtilCell">
-                    <div className="wanUtilCellLabel">{label}</div>
-                    <div className="wanUtilCellTotal">{formatBytesUsed(total)}</div>
-                    <div className="wanUtilCellSplit">
-                      <span title="Download">↓ {formatBytesUsed(inB)}</span>
-                      <span title="Upload">↑ {formatBytesUsed(outB)}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      }
+      case "wan_util_summary":
+        return <LineUseCards network={network} />;
 
       case "wan_bandwidth_chart":
         return (
