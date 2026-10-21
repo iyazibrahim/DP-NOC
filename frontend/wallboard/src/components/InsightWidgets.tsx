@@ -13,11 +13,13 @@ function formatBitrate(value: number | null): string {
 export function DeviceHealthCard({
   siteId,
   deviceId,
-  color
+  color,
+  metrics
 }: {
   siteId: string;
   deviceId: string;
   color?: string;
+  metrics?: string;
 }) {
   const { token } = useAuth();
   const [summary, setSummary] = useState<DeviceSummary | null>(null);
@@ -29,7 +31,7 @@ export function DeviceHealthCard({
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await getDeviceSummary(token, siteId, deviceId);
+        const res = await getDeviceSummary(token, siteId, deviceId, metrics);
         if (!cancelled) {
           setSummary(res);
           setError(null);
@@ -44,7 +46,7 @@ export function DeviceHealthCard({
       cancelled = true;
       clearInterval(t);
     };
-  }, [token, siteId, deviceId]);
+  }, [token, siteId, deviceId, metrics]);
 
   if (!siteId || !deviceId) return <div className="muted">Pick a device in settings.</div>;
   if (error) return <div className="muted">{error}</div>;

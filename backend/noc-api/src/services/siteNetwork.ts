@@ -12,6 +12,7 @@ import {
   bucketVolumeDays,
   calendarDaySlots,
   sumLineUseDays,
+  zonedDayStartUnix,
   type LineUseDay
 } from "./lineUseWindow";
 
@@ -132,6 +133,8 @@ export type SiteNetworkSummary = {
     "7d": SiteNetworkUtilWindow;
     "30d": SiteNetworkUtilWindow;
   };
+  /** Access-point volume since midnight, and the busiest client. */
+  todayBreakdown?: TodayLineBreakdown;
 };
 
 export type SiteNetworkUtilWindow = {
@@ -145,6 +148,34 @@ export type SiteNetworkUtilWindow = {
   outBytes: number | null;
   /** Local calendar days, oldest first. Set on the 7-day and 30-day windows. */
   days?: LineUseDay[];
+  /** Hourly octets for the calendar day. Set on the Today window. */
+  hours?: TodayLineHour[];
+};
+
+export type TodayLineHour = { ts: number; inBytes: number; outBytes: number };
+
+export type TodayApUse = {
+  deviceId: string;
+  label: string;
+  clients: number | null;
+  inBytes: number | null;
+  outBytes: number | null;
+};
+
+export type TodayTopClient = {
+  label: string;
+  apLabel: string;
+  inBytes: number | null;
+  outBytes: number | null;
+  inBps: number | null;
+  outBps: number | null;
+  /** True when the row is a live rate because the client has no byte counter. */
+  live: boolean;
+};
+
+export type TodayLineBreakdown = {
+  aps: TodayApUse[];
+  topClient: TodayTopClient | null;
 };
 
 function parseSeries(data: PromQueryResult): SiteNetworkSeriesPoint[] {
@@ -440,7 +471,8 @@ export async function getSiteNetworkSummary(
     aps,
     stations,
     speedtest,
-    utilWindows
+    utilWindows,
+    todayBreakdown: await collectTodayBreakdown(siteId, aps, stations).catch(() => undefined)
   };
 }
 
@@ -506,15 +538,46 @@ async function collectLineUseDays(
   deviceId: string,
   ifName: string,
   now = new Date()
-): Promise<LineUseDay[]> {
+): Promise<{ days: LineUseDay[]; todayHours: TodayLineHour[] }> {
   const slots = calendarDaySlots(env.NOC_TZ, now, LINE_USE_DAYS);
   const windowStart = slots[0]?.start ?? Math.floor(now.getTime() / 1000);
   const nowSec = Math.floor(now.getTime() / 1000);
+  const todayStart = zonedDayStartUnix(env.NOC_TZ, now, 0);
   const [inbound, outbound] = await Promise.all([
     loadHourlyVolume("in", siteId, deviceId, ifName, windowStart, nowSec),
     loadHourlyVolume("out", siteId, deviceId, ifName, windowStart, nowSec)
   ]);
-  return bucketVolumeDays(slots, inbound, outbound, nowSec);
+  return {
+    days: bucketVolumeDays(slots, inbound, outbound, nowSec),
+    todayHours: hoursFromSamples(inbound, outbound, todayStart, nowSec)
+  };
+}
+
+function hoursFromSamples(
+  inbound: Array<{ ts: number; value: number }>,
+  outbound: Array<{ ts: number; value: number }>,
+  todayStart: number,
+  nowSec: number
+): TodayLineHour[] {
+  const byTs = new Map<number, { inBytes: number; outBytes: number }>();
+  const add = (samples: Array<{ ts: number; value: number }>, dir: "in" | "out") => {
+    for (const sample of samples) {
+      if (sample.ts <= todayStart || sample.ts > nowSec + 1) continue;
+      const row = byTs.get(sample.ts) ?? { inBytes: 0, outBytes: 0 };
+      if (dir === "in") row.inBytes += sample.value;
+      else row.outBytes += sample.value;
+      byTs.set(sample.ts, row);
+    }
+  };
+  add(inbound, "in");
+  add(outbound, "out");
+  return [...byTs.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([ts, row]) => ({
+      ts,
+      inBytes: Math.round(row.inBytes),
+      outBytes: Math.round(row.outBytes)
+    }));
 }
 
 async function collectUtilWindows(
@@ -573,7 +636,7 @@ async function collectUtilWindows(
   // Today, 7 days, and 30 days are local calendar days (midnight in NOC_TZ).
   // Card totals are the sum of those days, so the popup adds up to the card.
   const todayRange = calendarTodayPromRange();
-  const [p1, p7, p30, days] = await Promise.all([
+  const [p1, p7, p30, collected] = await Promise.all([
     queryPercents(todayRange),
     queryPercents("7d"),
     queryPercents("30d"),
@@ -584,11 +647,13 @@ async function collectUtilWindows(
   let b7: { inBytes: number | null; outBytes: number | null };
   let b30: { inBytes: number | null; outBytes: number | null };
   let dayRows: LineUseDay[] | undefined;
-  if (days) {
-    dayRows = days;
-    b1 = sumLineUseDays(days.slice(-1));
-    b7 = sumLineUseDays(days.slice(-7));
-    b30 = sumLineUseDays(days);
+  let todayHours: TodayLineHour[] | undefined;
+  if (collected) {
+    dayRows = collected.days;
+    todayHours = collected.todayHours;
+    b1 = sumLineUseDays(collected.days.slice(-1));
+    b7 = sumLineUseDays(collected.days.slice(-7));
+    b30 = sumLineUseDays(collected.days);
   } else {
     [b1, b7, b30] = await Promise.all([
       queryRawVolume(todayRange),
@@ -598,10 +663,117 @@ async function collectUtilWindows(
   }
 
   return {
-    "1d": { ...p1, ...b1 },
+    "1d": { ...p1, ...b1, hours: todayHours },
     "7d": { ...p7, ...b7, days: dayRows?.slice(-7) },
     "30d": { ...p30, ...b30, days: dayRows }
   };
+}
+
+async function collectTodayBreakdown(
+  siteId: string,
+  aps: SiteNetworkApRow[],
+  stations: SiteNetworkStation[]
+): Promise<TodayLineBreakdown> {
+  const range = calendarTodayPromRange();
+  const s = escapePromLabel(siteId);
+  const apIds = new Set(aps.map((ap) => ap.deviceId));
+  const [inRows, outRows, rxRows, txRows] = await Promise.all([
+    readPromDeviceValues(
+      `sum by (device) (max by (device, ifIndex) (increase(ifHCInOctets{site="${s}"}[${range}])))`
+    ),
+    readPromDeviceValues(
+      `sum by (device) (max by (device, ifIndex) (increase(ifHCOutOctets{site="${s}"}[${range}])))`
+    ),
+    readPromLabeledValues(
+      `max by (device, clientIndex) (increase(cambiumClientRxDataBytes{site="${s}"}[${range}]))`
+    ),
+    readPromLabeledValues(
+      `max by (device, clientIndex) (increase(cambiumClientTxDataBytes{site="${s}"}[${range}]))`
+    )
+  ]);
+  const inByDevice = new Map(inRows.map((row) => [row.deviceId, row.value]));
+  const outByDevice = new Map(outRows.map((row) => [row.deviceId, row.value]));
+  const apUses: TodayApUse[] = aps
+    .map((ap) => {
+      const inbound = inByDevice.get(ap.deviceId);
+      const outbound = outByDevice.get(ap.deviceId);
+      return {
+        deviceId: ap.deviceId,
+        label: ap.label,
+        clients: ap.clients,
+        inBytes: inbound != null && inbound >= 0 ? Math.round(inbound) : null,
+        outBytes: outbound != null && outbound >= 0 ? Math.round(outbound) : null
+      };
+    })
+    .sort((a, b) => (b.inBytes ?? 0) + (b.outBytes ?? 0) - ((a.inBytes ?? 0) + (a.outBytes ?? 0)));
+
+  const identity = new Map<string, { label: string; apLabel: string }>();
+  for (const st of loadSiteStations(siteId)?.stations ?? []) {
+    const idx = (st.clientIndex || "").trim();
+    if (!st.deviceId || !idx) continue;
+    identity.set(`${st.deviceId}|${idx}`, {
+      label: st.hostname || st.mac || `Client ${idx}`,
+      apLabel: st.apLabel || aps.find((ap) => ap.deviceId === st.deviceId)?.label || st.deviceId
+    });
+  }
+
+  const clients = new Map<
+    string,
+    { deviceId: string; clientIndex: string; inBytes: number; outBytes: number }
+  >();
+  const addClient = (rows: PromLabeledRow[], dir: "in" | "out") => {
+    for (const row of rows) {
+      const deviceId = (row.metric.device || "").trim();
+      const clientIndex = (row.metric.clientIndex || "").trim();
+      if (!deviceId || !clientIndex || !apIds.has(deviceId)) continue;
+      if (!Number.isFinite(row.value) || row.value < 0) continue;
+      const key = `${deviceId}|${clientIndex}`;
+      const acc = clients.get(key) ?? { deviceId, clientIndex, inBytes: 0, outBytes: 0 };
+      if (dir === "in") acc.inBytes += row.value;
+      else acc.outBytes += row.value;
+      clients.set(key, acc);
+    }
+  };
+  addClient(rxRows, "in");
+  addClient(txRows, "out");
+
+  let topClient: TodayTopClient | null = null;
+  let best = -1;
+  for (const acc of clients.values()) {
+    const total = acc.inBytes + acc.outBytes;
+    if (total <= best) continue;
+    best = total;
+    const who = identity.get(`${acc.deviceId}|${acc.clientIndex}`);
+    const ap = aps.find((row) => row.deviceId === acc.deviceId);
+    topClient = {
+      label: who?.label || `Client ${acc.clientIndex}`,
+      apLabel: who?.apLabel || ap?.label || acc.deviceId,
+      inBytes: Math.round(acc.inBytes),
+      outBytes: Math.round(acc.outBytes),
+      inBps: null,
+      outBps: null,
+      live: false
+    };
+  }
+
+  if (!topClient) {
+    const live = [...stations].sort(
+      (a, b) => (b.inBps ?? 0) + (b.outBps ?? 0) - ((a.inBps ?? 0) + (a.outBps ?? 0))
+    )[0];
+    if (live && ((live.inBps ?? 0) > 0 || (live.outBps ?? 0) > 0)) {
+      topClient = {
+        label: live.hostname || live.mac || "Client",
+        apLabel: live.apLabel,
+        inBytes: null,
+        outBytes: null,
+        inBps: live.inBps,
+        outBps: live.outBps,
+        live: true
+      };
+    }
+  }
+
+  return { aps: apUses, topClient };
 }
 
 function isApLikeDevice(d: { type: string; kind: string; vendor: string }): boolean {

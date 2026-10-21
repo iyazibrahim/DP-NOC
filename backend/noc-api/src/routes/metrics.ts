@@ -63,7 +63,15 @@ metricsRouter.get("/device-summary", requireJwt(["operator", "wallboard"]), asyn
   if (!site || !device) return res.status(404).json({ error: "Device not found" });
 
   const onlineId = onlinePresetId(device);
-  const ids = [onlineId, ...healthCardPresetIds(device).filter((id) => id !== onlineId)];
+  const requested =
+    typeof req.query.metrics === "string"
+      ? req.query.metrics
+          .split(",")
+          .map((id) => id.trim())
+          .filter((id) => METRIC_PRESETS.some((p) => p.id === id))
+      : [];
+  const statIds = requested.length > 0 ? requested : healthCardPresetIds(device);
+  const ids = [onlineId, ...statIds.filter((id) => id !== onlineId)];
 
   try {
     const stats = await Promise.all(

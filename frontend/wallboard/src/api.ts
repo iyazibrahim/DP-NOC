@@ -127,6 +127,8 @@ export type SiteNetworkUtilWindow = {
   outBytes: number | null;
   /** Local calendar days, oldest first. Present on the 7-day and 30-day windows. */
   days?: LineUseDay[];
+  /** Hourly octets for today. Present on the Today window. */
+  hours?: Array<{ ts: number; inBytes: number; outBytes: number }>;
 };
 
 export type SiteNetworkSummary = {
@@ -189,6 +191,24 @@ export type SiteNetworkSummary = {
     "1d": SiteNetworkUtilWindow;
     "7d": SiteNetworkUtilWindow;
     "30d": SiteNetworkUtilWindow;
+  };
+  todayBreakdown?: {
+    aps: Array<{
+      deviceId: string;
+      label: string;
+      clients: number | null;
+      inBytes: number | null;
+      outBytes: number | null;
+    }>;
+    topClient: {
+      label: string;
+      apLabel: string;
+      inBytes: number | null;
+      outBytes: number | null;
+      inBps: number | null;
+      outBps: number | null;
+      live: boolean;
+    } | null;
   };
 };
 
@@ -576,8 +596,14 @@ export async function getMetricPresets(token: string) {
   });
 }
 
-export async function getDeviceSummary(token: string, siteId: string, deviceId: string) {
+export async function getDeviceSummary(
+  token: string,
+  siteId: string,
+  deviceId: string,
+  metrics?: string
+) {
   const q = new URLSearchParams({ siteId, deviceId });
+  if (metrics?.trim()) q.set("metrics", metrics);
   return fetchJson<DeviceSummary>(`/api/metrics/device-summary?${q}`, {
     headers: authHeaders(token)
   });

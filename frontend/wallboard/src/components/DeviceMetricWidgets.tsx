@@ -114,6 +114,29 @@ export function formatMetricValue(value: number, unit?: string): string {
   if (unit === "C") return `${Math.round(value)}°C`;
   if (unit === "dB") return `${Math.round(value)} dB`;
   if (unit === "count") return `${Math.round(value)}`;
+  if (unit === "bytes" || unit === "Bps") {
+    const abs = Math.abs(value);
+    const scaled =
+      abs >= 1099511627776
+        ? `${(value / 1099511627776).toFixed(2)} TB`
+        : abs >= 1073741824
+          ? `${(value / 1073741824).toFixed(2)} GB`
+          : abs >= 1048576
+            ? `${(value / 1048576).toFixed(1)} MB`
+            : abs >= 1024
+              ? `${(value / 1024).toFixed(1)} KB`
+              : `${Math.round(value)} B`;
+    return unit === "Bps" ? `${scaled}/s` : scaled;
+  }
+  if (unit === "s") {
+    const sec = Math.max(0, Math.round(value));
+    const days = Math.floor(sec / 86400);
+    const hours = Math.floor((sec % 86400) / 3600);
+    const minutes = Math.floor((sec % 3600) / 60);
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  }
   return `${value.toFixed(2)}${unit ?? ""}`;
 }
 

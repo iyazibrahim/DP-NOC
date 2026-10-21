@@ -42,8 +42,8 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   },
   {
     type: "local_devices_board",
-    label: "Local devices (SNMP)",
-    description: "Firewall/switch LEDs",
+    label: "Local devices",
+    description: "List, stack, card, or AP cluster",
     defaultW: 6,
     defaultH: 5
   },
@@ -176,9 +176,7 @@ export const WIDGET_GROUPS: Array<{ label: string; widgets: WidgetCatalogEntry[]
   },
   {
     label: "SNMP / local devices",
-    widgets: WIDGET_CATALOG.filter((w) =>
-      ["local_devices_board", "snmp_device_status", "device_stack", "ap_cluster"].includes(w.type)
-    )
+    widgets: WIDGET_CATALOG.filter((w) => w.type === "local_devices_board")
   },
   {
     label: "Charts",
@@ -259,6 +257,45 @@ export function WidgetBody({
   }
 
   if (type === "local_devices_board") {
+    const view = config?.view || "list";
+    const picked = (config?.deviceIds ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (view === "stack") {
+      return (
+        <div className="widgetInner flush">
+          <DeviceStackCard
+            sites={sites}
+            statuses={statuses}
+            siteId={config?.siteId || undefined}
+            deviceIds={picked}
+            title={config?.title}
+            compact={compact}
+          />
+        </div>
+      );
+    }
+    if (view === "card") {
+      return (
+        <div className="widgetInner flush">
+          <SnmpDeviceStatusCard
+            site={site}
+            status={st}
+            deviceId={config?.deviceId}
+            title={config?.title}
+            compact={compact}
+          />
+        </div>
+      );
+    }
+    if (view === "cluster") {
+      return (
+        <div className="widgetInner widgetInnerScroll">
+          <ApClusterCard siteId={siteId} deviceIds={config?.deviceIds ?? ""} color={config?.color} />
+        </div>
+      );
+    }
     return (
       <div className="widgetInner widgetInnerScroll">
         <LocalDevicesSignalBoard
@@ -408,7 +445,12 @@ export function WidgetBody({
   if (type === "device_health") {
     return (
       <div className="widgetInner">
-        <DeviceHealthCard siteId={siteId} deviceId={deviceId} color={config?.color} />
+        <DeviceHealthCard
+          siteId={siteId}
+          deviceId={deviceId}
+          color={config?.color}
+          metrics={config?.stats}
+        />
       </div>
     );
   }

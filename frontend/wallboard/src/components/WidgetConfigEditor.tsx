@@ -27,6 +27,53 @@ function deviceOptionLabel(d: SiteDevice): string {
   return `${d.name} · ${kind}`;
 }
 
+const METRIC_GROUPS: Array<{ id: NonNullable<MetricPreset["group"]>; label: string }> = [
+  { id: "health", label: "Health" },
+  { id: "traffic", label: "Traffic" },
+  { id: "ports", label: "Ports" },
+  { id: "storage", label: "Storage" },
+  { id: "signal", label: "Signal" }
+];
+
+function MetricCatalog({
+  presets,
+  selected,
+  onPick
+}: {
+  presets: MetricPreset[];
+  selected: string[];
+  onPick: (id: string) => void;
+}) {
+  if (presets.length === 0) return <p className="muted">No metrics for this device.</p>;
+  return (
+    <div className="metricCatalog">
+      {METRIC_GROUPS.map((group) => {
+        const items = presets.filter((p) => (p.group ?? "health") === group.id);
+        if (items.length === 0) return null;
+        return (
+          <div key={group.id} className="metricGroup">
+            <div className="metricGroupLabel">{group.label}</div>
+            {items.map((p) => {
+              const on = selected.includes(p.id);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={on ? "metricChoice on" : "metricChoice"}
+                  onClick={() => onPick(p.id)}
+                >
+                  <span className="metricChoiceLabel">{p.label}</span>
+                  {p.unit ? <span className="metricChoiceUnit">{p.unit}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ColorField({
   config,
   onChange
@@ -158,25 +205,104 @@ export function WidgetConfigEditor({
   }
 
   if (widget.type === "local_devices_board") {
+    const view = config.view || "list";
+    const selected = new Set(
+      (config.deviceIds ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    );
+    const networkDevices = devices.filter((d) => (d.kind ?? "network") !== "server");
+    const aps = devices.filter((d) => deviceTypeKey(d.type) === "ap" && d.kind !== "server");
+    const pool = view === "cluster" ? aps : networkDevices;
+    function toggleDevice(id: string) {
+      const next = new Set(selected);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      onChange({ ...config, siteId, deviceIds: [...next].join(",") });
+    }
     return (
       <div className="widgetConfig">
-        <TitleField
-          config={config}
-          onChange={onChange}
-          placeholder="e.g. All LAN gear"
-        />
-        <label className="label">Site filter</label>
+        <TitleField config={config} onChange={onChange} placeholder="e.g. Office gear" />
+        <label className="label">Show as</label>
+        <div className="metricCatalog">
+          {(
+            [
+              ["list", "List"],
+              ["stack", "Stack"],
+              ["card", "Card"],
+              ["cluster", "AP cluster"]
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={view === id ? "metricChoice on" : "metricChoice"}
+              onClick={() => onChange({ ...config, view: id })}
+            >
+              <span className="metricChoiceLabel">{label}</span>
+            </button>
+          ))}
+        </div>
+        <label className="label">Site</label>
         <select
-          value={config.siteId ?? ""}
-          onChange={(e) => onChange({ ...config, siteId: e.target.value })}
+          value={view === "list" ? (config.siteId ?? "") : siteId}
+          onChange={(e) => {
+            const nextSite = sites.find((s) => s.id === e.target.value);
+            const firstNet =
+              nextSite?.devices?.find((d) => (d.kind ?? "network") !== "server")?.id ?? "";
+            onChange({ ...config, siteId: e.target.value, deviceId: firstNet, deviceIds: "" });
+          }}
         >
-          <option value="">All sites</option>
+          {view === "list" ? <option value="">All sites</option> : null}
           {sites.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
             </option>
           ))}
         </select>
+        {view === "card" ? (
+          <>
+            <label className="label">Device</label>
+            <select
+              value={config.deviceId ?? networkDevices[0]?.id ?? ""}
+              onChange={(e) => onChange({ ...config, siteId, deviceId: e.target.value })}
+            >
+              {networkDevices.length === 0 ? (
+                <option value="">No SNMP devices on this site</option>
+              ) : (
+                networkDevices.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {deviceOptionLabel(d)}
+                  </option>
+                ))
+              )}
+            </select>
+          </>
+        ) : null}
+        {view === "stack" || view === "cluster" ? (
+          <>
+            <label className="label">{view === "cluster" ? "Access points" : "Devices"}</label>
+            <p className="muted fieldHint">
+              {view === "cluster"
+                ? "Leave empty to include every access point on this site."
+                : "Leave empty to include every SNMP device in the site filter."}
+            </p>
+            <div className="deviceStackPicker">
+              {pool.length === 0 ? (
+                <p className="muted">Nothing to pick on this site.</p>
+              ) : (
+                pool.map((d) => (
+                  <label key={d.id} className="deviceStackPickerRow">
+                    <input type="checkbox" checked={selected.has(d.id)} onChange={() => toggleDevice(d.id)} />
+                    <span>{deviceOptionLabel(d)}</span>
+                  </label>
+                ))
+              )}
+            </div>
+          </>
+        ) : null}
+        {view === "cluster" ? <ColorField config={config} onChange={onChange} /> : null}
         <CompactField config={config} onChange={onChange} />
       </div>
     );
@@ -419,13 +545,11 @@ export function WidgetConfigEditor({
   }
 
   const filteredPresets = presets.filter(presetMatchesDevice);
-  const metricGroups: Array<{ id: NonNullable<MetricPreset["group"]>; label: string }> = [
-    { id: "health", label: "Health" },
-    { id: "traffic", label: "Traffic" },
-    { id: "ports", label: "Ports" },
-    { id: "signal", label: "Signal" }
-  ];
   const showMetric = widget.type !== "device_detail" && widget.type !== "device_health";
+  const selectedStats = (config.stats ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   return (
     <div className="widgetConfig">
@@ -484,33 +608,27 @@ export function WidgetConfigEditor({
       {showMetric ? (
         <>
           <label className="label">Metric</label>
-          <select
-            value={metric}
-            onChange={(e) => onChange({ ...config, siteId, deviceId, metric: e.target.value })}
-          >
-            {!filteredPresets.some((p) => p.id === metric) && metric ? (
-              <option value={metric}>
-                {presets.find((p) => p.id === metric)?.label ?? metric}
-              </option>
-            ) : null}
-            {filteredPresets.length === 0 ? (
-              <option value="">No metrics for this device</option>
-            ) : (
-              metricGroups.map((group) => {
-                const items = filteredPresets.filter((p) => (p.group ?? "health") === group.id);
-                if (items.length === 0) return null;
-                return (
-                  <optgroup key={group.id} label={group.label}>
-                    {items.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                );
-              })
-            )}
-          </select>
+          <MetricCatalog
+            presets={filteredPresets}
+            selected={[metric]}
+            onPick={(id) => onChange({ ...config, siteId, deviceId, metric: id })}
+          />
+        </>
+      ) : null}
+      {widget.type === "device_health" ? (
+        <>
+          <label className="label">Stats</label>
+          <p className="muted fieldHint">Leave none selected to keep this device’s default three stats.</p>
+          <MetricCatalog
+            presets={filteredPresets}
+            selected={selectedStats}
+            onPick={(id) => {
+              const next = new Set(selectedStats);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              onChange({ ...config, siteId, deviceId, stats: [...next].join(",") });
+            }}
+          />
         </>
       ) : null}
       {widget.type === "device_metric_chart" ||

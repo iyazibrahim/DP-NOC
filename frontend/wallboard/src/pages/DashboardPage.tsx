@@ -33,7 +33,7 @@ import {
   visibleBoards,
   withMissingSiteBoards
 } from "@/dashboardBoards";
-import { WidgetBody, WIDGET_GROUPS } from "@/components/WidgetBody";
+import { WidgetBody, WIDGET_CATALOG, WIDGET_GROUPS } from "@/components/WidgetBody";
 import { WidgetConfigEditor } from "@/components/WidgetConfigEditor";
 import { useMetricPresets } from "@/components/DeviceMetricWidgets";
 import { pushToast, ToastStack, type ToastItem } from "@/components/ToastStack";
@@ -93,7 +93,7 @@ function readActiveBoardId() {
 function widgetLabel(type: DashboardWidget["type"], config?: Record<string, string>) {
   const custom = config?.title?.trim();
   if (custom) return custom;
-  return WIDGET_GROUPS.flatMap((g) => g.widgets).find((c) => c.type === type)?.label ?? type;
+  return WIDGET_CATALOG.find((c) => c.type === type)?.label ?? type;
 }
 
 function widgetHasConfig(type: DashboardWidget["type"]) {
@@ -540,7 +540,7 @@ export function DashboardPage() {
     } else if (type === "uplink_status" || type === "collector_status") {
       config = { siteId: firstSite?.id ?? "" };
     } else if (type === "local_devices_board") {
-      config = { siteId: "" };
+      config = { siteId: firstSite?.id ?? "", view: "list" };
     } else if (type === "snmp_device_status") {
       const firstNet =
         (firstSite?.devices ?? []).find((d) => (d.kind ?? "network") !== "server") ??

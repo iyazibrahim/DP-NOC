@@ -1,4 +1,5 @@
 import { promQuery, promQueryRange } from "./prometheus";
+import { calendarTodayPromRange } from "./siteNetwork";
 import {
   dualHostMetric,
   dualHostUpFresh,
@@ -8,7 +9,7 @@ import {
   probeSuccessFresh
 } from "./promLabels";
 
-export type MetricGroup = "health" | "traffic" | "ports" | "signal";
+export type MetricGroup = "health" | "traffic" | "ports" | "signal" | "storage";
 
 export type MetricPreset = {
   id: string;
@@ -72,7 +73,7 @@ export const METRIC_PRESETS: MetricPreset[] = [
     kind: "network",
     group: "traffic",
     unit: "bps",
-    deviceTypes: ["firewall", "switch", "ap", "router"],
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
     query: `IF_IN_PLACEHOLDER`
   },
   {
@@ -81,21 +82,25 @@ export const METRIC_PRESETS: MetricPreset[] = [
     kind: "network",
     group: "traffic",
     unit: "bps",
-    deviceTypes: ["firewall", "switch", "ap", "router"],
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
     query: `IF_OUT_PLACEHOLDER`
   },
   {
     id: "if_util_in_pct",
-    label: "Bandwidth utilization in (%)",
+    label: "Utilization in",
     kind: "network",
+    group: "traffic",
     unit: "%",
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
     query: `IF_UTIL_IN_PLACEHOLDER`
   },
   {
     id: "if_util_out_pct",
-    label: "Bandwidth utilization out (%)",
+    label: "Utilization out",
     kind: "network",
+    group: "traffic",
     unit: "%",
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
     query: `IF_UTIL_OUT_PLACEHOLDER`
   },
   {
@@ -109,7 +114,9 @@ export const METRIC_PRESETS: MetricPreset[] = [
     id: "if_capacity_bps",
     label: "Link capacity",
     kind: "network",
+    group: "traffic",
     unit: "bps",
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
     query: `IF_CAPACITY_PLACEHOLDER`
   },
   {
@@ -118,7 +125,7 @@ export const METRIC_PRESETS: MetricPreset[] = [
     kind: "network",
     group: "ports",
     unit: "count",
-    deviceTypes: ["switch"],
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
     query: `IF_UP_COUNT_PLACEHOLDER`
   },
   {
@@ -127,7 +134,7 @@ export const METRIC_PRESETS: MetricPreset[] = [
     kind: "network",
     group: "ports",
     unit: "count",
-    deviceTypes: ["switch"],
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
     query: `IF_DOWN_COUNT_PLACEHOLDER`
   },
   {
@@ -136,7 +143,7 @@ export const METRIC_PRESETS: MetricPreset[] = [
     kind: "network",
     group: "ports",
     unit: "count",
-    deviceTypes: ["switch"],
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
     query: `IF_ERR_IN_PLACEHOLDER`
   },
   {
@@ -145,21 +152,25 @@ export const METRIC_PRESETS: MetricPreset[] = [
     kind: "network",
     group: "ports",
     unit: "count",
-    deviceTypes: ["switch"],
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
     query: `IF_ERR_OUT_PLACEHOLDER`
   },
   {
     id: "if_discards_in_rate",
-    label: "Discards in (per sec)",
+    label: "Discards in",
     kind: "network",
+    group: "ports",
     unit: "count",
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
     query: `IF_DISC_IN_PLACEHOLDER`
   },
   {
     id: "if_discards_out_rate",
-    label: "Discards out (per sec)",
+    label: "Discards out",
     kind: "network",
+    group: "ports",
     unit: "count",
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
     query: `IF_DISC_OUT_PLACEHOLDER`
   },
   {
@@ -304,8 +315,9 @@ export const METRIC_PRESETS: MetricPreset[] = [
   },
   {
     id: "nas_vol_free_pct",
-    label: "NAS volume free",
+    label: "Volume free",
     kind: "network",
+    group: "storage",
     unit: "%",
     deviceTypes: ["nas"],
     vendors: ["synology", "syno"],
@@ -325,7 +337,7 @@ export const METRIC_PRESETS: MetricPreset[] = [
     id: "nas_vol_free_gb",
     label: "Volume free",
     kind: "network",
-    group: "health",
+    group: "storage",
     unit: "GB",
     deviceTypes: ["nas"],
     vendors: ["synology", "syno"],
@@ -369,6 +381,368 @@ export const METRIC_PRESETS: MetricPreset[] = [
     deviceTypes: ["nas"],
     vendors: ["synology", "syno"],
     query: `NAS_DISK_FAIL_PLACEHOLDER`
+  },
+  {
+    id: "if_sum_in_bps",
+    label: "Total throughput in",
+    kind: "network",
+    group: "traffic",
+    unit: "bps",
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
+    query: `IF_SUM_IN_PLACEHOLDER`
+  },
+  {
+    id: "if_sum_out_bps",
+    label: "Total throughput out",
+    kind: "network",
+    group: "traffic",
+    unit: "bps",
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
+    query: `IF_SUM_OUT_PLACEHOLDER`
+  },
+  {
+    id: "if_bytes_in_today",
+    label: "Bytes in today",
+    kind: "network",
+    group: "traffic",
+    unit: "bytes",
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
+    query: `IF_BYTES_IN_TODAY_PLACEHOLDER`
+  },
+  {
+    id: "if_bytes_out_today",
+    label: "Bytes out today",
+    kind: "network",
+    group: "traffic",
+    unit: "bytes",
+    deviceTypes: ["firewall", "switch", "ap", "router", "nas"],
+    query: `IF_BYTES_OUT_TODAY_PLACEHOLDER`
+  },
+  {
+    id: "host_load1",
+    label: "Load 1 minute",
+    kind: "server",
+    group: "health",
+    unit: "count",
+    query: `HOST_LOAD1_PLACEHOLDER`
+  },
+  {
+    id: "host_load5",
+    label: "Load 5 minutes",
+    kind: "server",
+    group: "health",
+    unit: "count",
+    query: `HOST_LOAD5_PLACEHOLDER`
+  },
+  {
+    id: "host_load15",
+    label: "Load 15 minutes",
+    kind: "server",
+    group: "health",
+    unit: "count",
+    query: `HOST_LOAD15_PLACEHOLDER`
+  },
+  {
+    id: "host_mem_used_pct",
+    label: "Memory used",
+    kind: "server",
+    group: "health",
+    unit: "%",
+    query: `HOST_MEM_USED_PCT_PLACEHOLDER`
+  },
+  {
+    id: "host_mem_used_bytes",
+    label: "Memory used",
+    kind: "server",
+    group: "health",
+    unit: "bytes",
+    query: `HOST_MEM_USED_BYTES_PLACEHOLDER`
+  },
+  {
+    id: "host_swap_used_pct",
+    label: "Swap used",
+    kind: "server",
+    group: "health",
+    unit: "%",
+    query: `HOST_SWAP_PLACEHOLDER`
+  },
+  {
+    id: "host_disk_used_pct",
+    label: "Disk used",
+    kind: "server",
+    group: "storage",
+    unit: "%",
+    query: `HOST_DISK_USED_PLACEHOLDER`
+  },
+  {
+    id: "host_disk_free_bytes",
+    label: "Disk free",
+    kind: "server",
+    group: "storage",
+    unit: "bytes",
+    query: `HOST_DISK_FREE_PLACEHOLDER`
+  },
+  {
+    id: "host_net_in_bps",
+    label: "Network in",
+    kind: "server",
+    group: "traffic",
+    unit: "bps",
+    query: `HOST_NET_IN_PLACEHOLDER`
+  },
+  {
+    id: "host_net_out_bps",
+    label: "Network out",
+    kind: "server",
+    group: "traffic",
+    unit: "bps",
+    query: `HOST_NET_OUT_PLACEHOLDER`
+  },
+  {
+    id: "host_net_errors",
+    label: "Network errors",
+    kind: "server",
+    group: "ports",
+    unit: "count",
+    query: `HOST_NET_ERR_PLACEHOLDER`
+  },
+  {
+    id: "host_net_drops",
+    label: "Network drops",
+    kind: "server",
+    group: "ports",
+    unit: "count",
+    query: `HOST_NET_DROP_PLACEHOLDER`
+  },
+  {
+    id: "host_disk_read_bps",
+    label: "Disk read",
+    kind: "server",
+    group: "storage",
+    unit: "Bps",
+    query: `HOST_DISK_READ_PLACEHOLDER`
+  },
+  {
+    id: "host_disk_write_bps",
+    label: "Disk write",
+    kind: "server",
+    group: "storage",
+    unit: "Bps",
+    query: `HOST_DISK_WRITE_PLACEHOLDER`
+  },
+  {
+    id: "host_uptime_s",
+    label: "Uptime",
+    kind: "server",
+    group: "health",
+    unit: "s",
+    query: `HOST_UPTIME_PLACEHOLDER`
+  },
+  {
+    id: "host_open_files",
+    label: "Open files",
+    kind: "server",
+    group: "health",
+    unit: "count",
+    query: `HOST_FD_PLACEHOLDER`
+  },
+  {
+    id: "host_tcp_conns",
+    label: "TCP connections",
+    kind: "server",
+    group: "health",
+    unit: "count",
+    query: `HOST_TCP_PLACEHOLDER`
+  },
+  {
+    id: "fw_cpu_max_pct",
+    label: "Hottest CPU core",
+    kind: "network",
+    group: "health",
+    unit: "%",
+    deviceTypes: ["firewall"],
+    vendors: ["fortinet", "fortigate"],
+    query: `FW_CPU_MAX_PLACEHOLDER`
+  },
+  {
+    id: "fw_mem_bytes",
+    label: "Memory size",
+    kind: "network",
+    group: "health",
+    unit: "bytes",
+    deviceTypes: ["firewall"],
+    vendors: ["fortinet", "fortigate"],
+    query: `FW_MEM_BYTES_PLACEHOLDER`
+  },
+  {
+    id: "fw_lowmem_pct",
+    label: "Low memory",
+    kind: "network",
+    group: "health",
+    unit: "%",
+    deviceTypes: ["firewall"],
+    vendors: ["fortinet", "fortigate"],
+    query: `FW_LOWMEM_PLACEHOLDER`
+  },
+  {
+    id: "fw_disk_pct",
+    label: "Disk used",
+    kind: "network",
+    group: "storage",
+    unit: "%",
+    deviceTypes: ["firewall"],
+    vendors: ["fortinet", "fortigate"],
+    query: `FW_DISK_PCT_PLACEHOLDER`
+  },
+  {
+    id: "fw_disk_bytes",
+    label: "Disk size",
+    kind: "network",
+    group: "storage",
+    unit: "bytes",
+    deviceTypes: ["firewall"],
+    vendors: ["fortinet", "fortigate"],
+    query: `FW_DISK_BYTES_PLACEHOLDER`
+  },
+  {
+    id: "fw_session_rate",
+    label: "Session rate",
+    kind: "network",
+    group: "health",
+    unit: "count",
+    deviceTypes: ["firewall"],
+    vendors: ["fortinet", "fortigate"],
+    query: `FW_SES_RATE_PLACEHOLDER`
+  },
+  {
+    id: "fw_uptime_s",
+    label: "Uptime",
+    kind: "network",
+    group: "health",
+    unit: "s",
+    deviceTypes: ["firewall"],
+    vendors: ["fortinet", "fortigate"],
+    query: `FW_UPTIME_PLACEHOLDER`
+  },
+  {
+    id: "ap_weak_clients",
+    label: "Weak clients",
+    kind: "network",
+    group: "signal",
+    unit: "count",
+    deviceTypes: ["ap"],
+    vendors: ["cambium"],
+    query: `AP_WEAK_PLACEHOLDER`
+  },
+  {
+    id: "ap_busiest_client_bps",
+    label: "Busiest client",
+    kind: "network",
+    group: "traffic",
+    unit: "bps",
+    deviceTypes: ["ap"],
+    vendors: ["cambium"],
+    query: `AP_BUSIEST_PLACEHOLDER`
+  },
+  {
+    id: "ap_client_rx_today",
+    label: "Client download today",
+    kind: "network",
+    group: "traffic",
+    unit: "bytes",
+    deviceTypes: ["ap"],
+    vendors: ["cambium"],
+    query: `AP_CLIENT_RX_TODAY_PLACEHOLDER`
+  },
+  {
+    id: "ap_client_tx_today",
+    label: "Client upload today",
+    kind: "network",
+    group: "traffic",
+    unit: "bytes",
+    deviceTypes: ["ap"],
+    vendors: ["cambium"],
+    query: `AP_CLIENT_TX_TODAY_PLACEHOLDER`
+  },
+  {
+    id: "omada_cpu_pct",
+    label: "CPU",
+    kind: "network",
+    group: "health",
+    unit: "%",
+    deviceTypes: ["ap"],
+    vendors: ["omada", "tplink", "tp-link"],
+    query: `OMADA_CPU_PLACEHOLDER`
+  },
+  {
+    id: "omada_mem_pct",
+    label: "Memory",
+    kind: "network",
+    group: "health",
+    unit: "%",
+    deviceTypes: ["ap"],
+    vendors: ["omada", "tplink", "tp-link"],
+    query: `OMADA_MEM_PLACEHOLDER`
+  },
+  {
+    id: "omada_uptime_s",
+    label: "Uptime",
+    kind: "network",
+    group: "health",
+    unit: "s",
+    deviceTypes: ["ap"],
+    vendors: ["omada", "tplink", "tp-link"],
+    query: `OMADA_UPTIME_PLACEHOLDER`
+  },
+  {
+    id: "nas_vol_used_pct",
+    label: "Volume used",
+    kind: "network",
+    group: "storage",
+    unit: "%",
+    deviceTypes: ["nas"],
+    vendors: ["synology", "syno"],
+    query: `NAS_VOL_USED_PCT_PLACEHOLDER`
+  },
+  {
+    id: "nas_vol_used_gb",
+    label: "Volume used",
+    kind: "network",
+    group: "storage",
+    unit: "GB",
+    deviceTypes: ["nas"],
+    vendors: ["synology", "syno"],
+    query: `NAS_VOL_USED_GB_PLACEHOLDER`
+  },
+  {
+    id: "nas_system_status",
+    label: "System status",
+    kind: "network",
+    group: "health",
+    unit: "count",
+    deviceTypes: ["nas"],
+    vendors: ["synology", "syno"],
+    query: `NAS_STATUS_PLACEHOLDER`
+  },
+  {
+    id: "nas_disk_count",
+    label: "Disk count",
+    kind: "network",
+    group: "storage",
+    unit: "count",
+    deviceTypes: ["nas"],
+    vendors: ["synology", "syno"],
+    query: `NAS_DISK_COUNT_PLACEHOLDER`
+  },
+  {
+    id: "nas_raid_degraded",
+    label: "Degraded volumes",
+    kind: "network",
+    group: "storage",
+    unit: "count",
+    deviceTypes: ["nas"],
+    vendors: ["synology", "syno"],
+    query: `NAS_RAID_DEG_PLACEHOLDER`
   },
   {
     id: "wan_dns",
@@ -546,6 +920,129 @@ unless
 (count(synoRaidStatus{${nasSel(siteId, deviceId)}} == 11 or synoRaidStatus{${nasSel(siteId, deviceId)}} == 12) > 0)`;
 }
 
+function buildSumIfQuery(direction: "in" | "out", siteId: string, deviceId: string): string {
+  const octets = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
+  return `sum(rate(${octets}{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
+}
+
+function buildIfBytesTodayQuery(direction: "in" | "out", siteId: string, deviceId: string): string {
+  const octets = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
+  const range = calendarTodayPromRange();
+  return `sum(max by (ifIndex) (increase(${octets}{site="${siteId}",device="${deviceId}"}[${range}])))`;
+}
+
+function dualHostSumRate(metric: string, siteId: string, deviceId: string, extra = ""): string {
+  const labels = extra ? `,${extra}` : "";
+  const a = `sum(rate(${metric}{site="${siteId}",device="${deviceId}"${labels}}[5m]))`;
+  const b = `sum(rate(${metric}{site="${siteId}",instance="${deviceId}"${labels}}[5m]))`;
+  return `(${a} or ${b})`;
+}
+
+function hostGuarded(expr: string, siteId: string, deviceId: string): string {
+  const guard = hostFreshGuard(siteId, deviceId, METRIC_FRESH_WINDOW);
+  return `(${expr}) and on() (${guard})`;
+}
+
+function buildHostMemUsedPct(siteId: string, deviceId: string): string {
+  const avail = dualHostMetric("node_memory_MemAvailable_bytes", siteId, deviceId);
+  const total = dualHostMetric("node_memory_MemTotal_bytes", siteId, deviceId);
+  return hostGuarded(`(1 - (${avail}) / (${total})) * 100`, siteId, deviceId);
+}
+
+function buildHostMemUsedBytes(siteId: string, deviceId: string): string {
+  const avail = dualHostMetric("node_memory_MemAvailable_bytes", siteId, deviceId);
+  const total = dualHostMetric("node_memory_MemTotal_bytes", siteId, deviceId);
+  return hostGuarded(`(${total}) - (${avail})`, siteId, deviceId);
+}
+
+function buildHostSwapUsedPct(siteId: string, deviceId: string): string {
+  const free = dualHostMetric("node_memory_SwapFree_bytes", siteId, deviceId);
+  const total = dualHostMetric("node_memory_SwapTotal_bytes", siteId, deviceId);
+  return hostGuarded(`((${total}) - (${free})) / clamp_min(${total}, 1) * 100`, siteId, deviceId);
+}
+
+function buildHostDiskUsedPct(siteId: string, deviceId: string): string {
+  const avail = dualHostMetric(
+    "node_filesystem_avail_bytes",
+    siteId,
+    deviceId,
+    'mountpoint="/",fstype!="rootfs"'
+  );
+  const size = dualHostMetric(
+    "node_filesystem_size_bytes",
+    siteId,
+    deviceId,
+    'mountpoint="/",fstype!="rootfs"'
+  );
+  return hostGuarded(`((${size}) - (${avail})) / clamp_min(${size}, 1) * 100`, siteId, deviceId);
+}
+
+function buildHostDiskFreeBytes(siteId: string, deviceId: string): string {
+  const avail = dualHostMetric(
+    "node_filesystem_avail_bytes",
+    siteId,
+    deviceId,
+    'mountpoint="/",fstype!="rootfs"'
+  );
+  return hostGuarded(avail, siteId, deviceId);
+}
+
+function buildHostNetBps(direction: "in" | "out", siteId: string, deviceId: string): string {
+  const metric =
+    direction === "in" ? "node_network_receive_bytes_total" : "node_network_transmit_bytes_total";
+  return hostGuarded(`${dualHostSumRate(metric, siteId, deviceId, 'exported_device!="lo"')} * 8`, siteId, deviceId);
+}
+
+function buildHostNetProblem(kind: "errs" | "drop", siteId: string, deviceId: string): string {
+  const rx = kind === "errs" ? "node_network_receive_errs_total" : "node_network_receive_drop_total";
+  const tx = kind === "errs" ? "node_network_transmit_errs_total" : "node_network_transmit_drop_total";
+  const extra = 'exported_device!="lo"';
+  return hostGuarded(
+    `${dualHostSumRate(rx, siteId, deviceId, extra)} + ${dualHostSumRate(tx, siteId, deviceId, extra)}`,
+    siteId,
+    deviceId
+  );
+}
+
+function buildHostDiskIo(direction: "read" | "write", siteId: string, deviceId: string): string {
+  const metric = direction === "read" ? "node_disk_read_bytes_total" : "node_disk_written_bytes_total";
+  return hostGuarded(dualHostSumRate(metric, siteId, deviceId), siteId, deviceId);
+}
+
+function buildHostUptime(siteId: string, deviceId: string): string {
+  return hostGuarded(`time() - ${dualHostMetric("node_boot_time_seconds", siteId, deviceId)}`, siteId, deviceId);
+}
+
+function snmpSel(siteId: string, deviceId: string): string {
+  return `site="${siteId}",device="${deviceId}"`;
+}
+
+function buildBusiestClientBps(siteId: string, deviceId: string): string {
+  const sel = snmpSel(siteId, deviceId);
+  const rx = `sum by (clientIndex) (rate(cambiumClientRxDataBytes{${sel}}[5m]))`;
+  const tx = `sum by (clientIndex) (rate(cambiumClientTxDataBytes{${sel}}[5m]))`;
+  return `max((${rx} or ${tx} * 0) * 8 + (${tx} or ${rx} * 0) * 8)`;
+}
+
+function buildClientBytesToday(direction: "rx" | "tx", siteId: string, deviceId: string): string {
+  const metric = direction === "rx" ? "cambiumClientRxDataBytes" : "cambiumClientTxDataBytes";
+  const range = calendarTodayPromRange();
+  return `sum(max by (clientIndex) (increase(${metric}{${snmpSel(siteId, deviceId)}}[${range}])))`;
+}
+
+function buildOmadaMemQuery(siteId: string, deviceId: string): string {
+  const sel = snmpSel(siteId, deviceId);
+  return `(
+  sum(hrStorageUsed{${sel}})
+  /
+  clamp_min(sum(hrStorageSize{${sel}}), 1)
+) * 100`;
+}
+
+function buildSnmpUptime(siteId: string, deviceId: string): string {
+  return `sysUpTime{${snmpSel(siteId, deviceId)}} / 100`;
+}
+
 export function buildQuery(presetId: string, siteId: string, deviceId: string): string | null {
   const preset = METRIC_PRESETS.find((p) => p.id === presetId);
   if (!preset) return null;
@@ -566,11 +1063,21 @@ export function buildQuery(presetId: string, siteId: string, deviceId: string): 
     case "snmp_up":
       return dualSnmpUpFresh(siteId, deviceId, METRIC_FRESH_WINDOW);
     case "if_in_bps":
-    case "if_util_in_pct":
       return buildBusiestIfQuery("in", siteId, deviceId);
     case "if_out_bps":
-    case "if_util_out_pct":
       return buildBusiestIfQuery("out", siteId, deviceId);
+    case "if_util_in_pct":
+      return buildIfUtilQuery("in", siteId, deviceId);
+    case "if_util_out_pct":
+      return buildIfUtilQuery("out", siteId, deviceId);
+    case "if_sum_in_bps":
+      return buildSumIfQuery("in", siteId, deviceId);
+    case "if_sum_out_bps":
+      return buildSumIfQuery("out", siteId, deviceId);
+    case "if_bytes_in_today":
+      return buildIfBytesTodayQuery("in", siteId, deviceId);
+    case "if_bytes_out_today":
+      return buildIfBytesTodayQuery("out", siteId, deviceId);
     case "ap_snr_avg":
       return `avg(cambiumClientSNR{site="${siteId}",device="${deviceId}"})`;
     case "ap_snr_min":
@@ -629,23 +1136,84 @@ export function buildQuery(presetId: string, siteId: string, deviceId: string): 
       return buildNasRaidOkQuery(siteId, deviceId);
     case "nas_disk_failed":
       return `count(synoDiskStatus{site="${siteId}",device="${deviceId}"} >= 4) or vector(0)`;
+    case "host_load1":
+      return hostGuarded(dualHostMetric("node_load1", siteId, deviceId), siteId, deviceId);
+    case "host_load5":
+      return hostGuarded(dualHostMetric("node_load5", siteId, deviceId), siteId, deviceId);
+    case "host_load15":
+      return hostGuarded(dualHostMetric("node_load15", siteId, deviceId), siteId, deviceId);
+    case "host_mem_used_pct":
+      return buildHostMemUsedPct(siteId, deviceId);
+    case "host_mem_used_bytes":
+      return buildHostMemUsedBytes(siteId, deviceId);
+    case "host_swap_used_pct":
+      return buildHostSwapUsedPct(siteId, deviceId);
+    case "host_disk_used_pct":
+      return buildHostDiskUsedPct(siteId, deviceId);
+    case "host_disk_free_bytes":
+      return buildHostDiskFreeBytes(siteId, deviceId);
+    case "host_net_in_bps":
+      return buildHostNetBps("in", siteId, deviceId);
+    case "host_net_out_bps":
+      return buildHostNetBps("out", siteId, deviceId);
+    case "host_net_errors":
+      return buildHostNetProblem("errs", siteId, deviceId);
+    case "host_net_drops":
+      return buildHostNetProblem("drop", siteId, deviceId);
+    case "host_disk_read_bps":
+      return buildHostDiskIo("read", siteId, deviceId);
+    case "host_disk_write_bps":
+      return buildHostDiskIo("write", siteId, deviceId);
+    case "host_uptime_s":
+      return buildHostUptime(siteId, deviceId);
+    case "host_open_files":
+      return hostGuarded(dualHostMetric("node_filefd_allocated", siteId, deviceId), siteId, deviceId);
+    case "host_tcp_conns":
+      return hostGuarded(dualHostMetric("node_netstat_Tcp_CurrEstab", siteId, deviceId), siteId, deviceId);
+    case "fw_cpu_max_pct":
+      return `max(fgProcessorUsage{${snmpSel(siteId, deviceId)}})`;
+    case "fw_mem_bytes":
+      return `fgSysMemCapacity{${snmpSel(siteId, deviceId)}} * 1024`;
+    case "fw_lowmem_pct":
+      return `fgSysLowMemUsage{${snmpSel(siteId, deviceId)}}`;
+    case "fw_disk_pct":
+      return `fgSysDiskUsage{${snmpSel(siteId, deviceId)}}`;
+    case "fw_disk_bytes":
+      return `fgSysDiskCapacity{${snmpSel(siteId, deviceId)}} * 1048576`;
+    case "fw_session_rate":
+      return `fgSysSesRate{${snmpSel(siteId, deviceId)}}`;
+    case "fw_uptime_s":
+      return buildSnmpUptime(siteId, deviceId);
+    case "ap_weak_clients":
+      return `count(cambiumClientSNR{${snmpSel(siteId, deviceId)}} < 20) or vector(0)`;
+    case "ap_busiest_client_bps":
+      return buildBusiestClientBps(siteId, deviceId);
+    case "ap_client_rx_today":
+      return buildClientBytesToday("rx", siteId, deviceId);
+    case "ap_client_tx_today":
+      return buildClientBytesToday("tx", siteId, deviceId);
+    case "omada_cpu_pct":
+      return buildSwitchCpuQuery(siteId, deviceId);
+    case "omada_mem_pct":
+      return buildOmadaMemQuery(siteId, deviceId);
+    case "omada_uptime_s":
+      return buildSnmpUptime(siteId, deviceId);
+    case "nas_vol_used_pct":
+      return `100 - (${buildNasVolFreeQuery(siteId, deviceId)})`;
+    case "nas_vol_used_gb":
+      return `(sum(synoRaidTotalSize{${snmpSel(siteId, deviceId)}}) - sum(synoRaidFreeSize{${snmpSel(siteId, deviceId)}})) / 1073741824`;
+    case "nas_system_status":
+      return `synoSystemStatus{${snmpSel(siteId, deviceId)}}`;
+    case "nas_disk_count":
+      return `count(synoDiskStatus{${snmpSel(siteId, deviceId)}}) or vector(0)`;
+    case "nas_raid_degraded":
+      return `count(synoRaidStatus{${snmpSel(siteId, deviceId)}} == 11 or synoRaidStatus{${snmpSel(siteId, deviceId)}} == 12) or vector(0)`;
     default:
       return preset.query.replace(/\{\{site\}\}/g, siteId).replace(/\{\{device\}\}/g, deviceId);
   }
 }
 
-const HIDDEN_FROM_PICKER = new Set([
-  "if_util_in_pct",
-  "if_util_out_pct",
-  "if_util_max_pct",
-  "if_capacity_bps",
-  "if_discards_in_rate",
-  "if_discards_out_rate",
-  "wan_dns",
-  "wan_vps",
-  "nas_mem_pct",
-  "nas_vol_free_pct"
-]);
+const HIDDEN_FROM_PICKER = new Set(["if_util_max_pct", "wan_dns", "wan_vps"]);
 
 /** Public preset list with illustrative query templates (for UI display). */
 export function listPresetsForApi(): MetricPreset[] {

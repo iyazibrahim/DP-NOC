@@ -57,7 +57,9 @@ export const SNMP_MODULE_MARKERS = [
   "cambiumClientSNR",
   "cambiumClientTxDataBytes",
   "omadaClientInfo",
-  "noc-snmp-no-lookups"
+  "noc-snmp-no-lookups",
+  "fgSysMemCapacity",
+  "omada-numeric-health"
 ] as const;
 
 /** Marker checks use the modules block only. Header comments are stripped on regenerate. */

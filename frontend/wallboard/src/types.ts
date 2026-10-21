@@ -186,7 +186,7 @@ export type MetricPreset = {
   deviceTypes?: string[];
   /** When set, only offer when device.vendor matches (normalized). */
   vendors?: string[];
-  group?: "health" | "traffic" | "ports" | "signal";
+  group?: "health" | "traffic" | "ports" | "signal" | "storage";
 };
 
 export type DeviceSummaryStat = {

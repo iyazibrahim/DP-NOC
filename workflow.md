@@ -378,4 +378,10 @@ Collector box → Alloy → Prometheus (central)
   - Today, 7 days, and 30 days are calendar days in `NOC_TZ` (midnight, Malaysia). Each total is the sum of hourly WAN counter increases for those days, so a missing day stays empty instead of being smeared across the range.
   - The same interface written twice is counted once (`max by (ifIndex)`).
   - 7-day and 30-day cards open a popup: daily download, upload, total, average full day, and busiest day. The popup total is the card total.
+- [x] **Today line use, one device widget, richer metrics (2026-10-21)**
+  - Today opens the same style of popup: WAN download, upload, and total, the hourly chart, each access point’s volume since midnight, and the highest client. Cambium client volume is counter increase since midnight. Omada has no byte counters, so that row is the live rate.
+  - The dashboard catalog offers one Local devices widget. Settings pick List, Stack, Card, or AP cluster. Boards saved as the old SNMP device, stack, or AP cluster types still render.
+  - Gauge, line, and bar settings use a grouped metric catalog (Health, Traffic, Ports, Storage, Signal) filtered to the device. Device health can pick its stats from that catalog; a card with no selection keeps its previous three stats.
+  - Collector metrics come from the unix exporter already on the NUC. Shared interface metrics (throughput, busiest port, utilization, capacity, ports, errors, discards, bytes today) apply to firewall, switch, AP, NAS, and router. Cambium adds SNR, weak clients, busiest client, and client bytes today.
+  - FortiGate and Omada extra numbers are numeric SNMP columns in `snmp.yml`. They show up only after the collector image is rebuilt and Force apply runs.
 

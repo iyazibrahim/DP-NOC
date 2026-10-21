@@ -1269,6 +1269,61 @@ textarea {
   text-overflow: ellipsis;
 }
 
+.metricCatalog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow: auto;
+  margin-bottom: 8px;
+}
+
+.metricGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metricGroupLabel {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #94a3b8);
+}
+
+.metricChoice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.metricChoice.on {
+  border-color: #00b5e2;
+  background: rgba(0, 181, 226, 0.12);
+}
+
+.metricChoiceLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metricChoiceUnit {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted, #94a3b8);
+}
+
 .signalBoardCompact {
   gap: 4px;
 }

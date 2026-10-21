@@ -128,9 +128,16 @@ modules:
   # FortiGate system health (FORTINET-FORTIGATE-MIB)
   fortigate_health:
     walk:
-      - 1.3.6.1.4.1.12356.101.4.1.3  # fgSysCpuUsage
-      - 1.3.6.1.4.1.12356.101.4.1.4  # fgSysMemUsage
-      - 1.3.6.1.4.1.12356.101.4.1.8  # fgSysSesCount
+      - 1.3.6.1.4.1.12356.101.4.1.3   # fgSysCpuUsage
+      - 1.3.6.1.4.1.12356.101.4.1.4   # fgSysMemUsage
+      - 1.3.6.1.4.1.12356.101.4.1.5   # fgSysMemCapacity (KB)
+      - 1.3.6.1.4.1.12356.101.4.1.6   # fgSysDiskUsage
+      - 1.3.6.1.4.1.12356.101.4.1.7   # fgSysDiskCapacity (MB)
+      - 1.3.6.1.4.1.12356.101.4.1.8   # fgSysSesCount
+      - 1.3.6.1.4.1.12356.101.4.1.9   # fgSysLowMemUsage
+      - 1.3.6.1.4.1.12356.101.4.1.10  # fgSysSesRate
+      - 1.3.6.1.4.1.12356.101.4.4.2.1.2  # fgProcessorUsage (integer index only)
+      - 1.3.6.1.2.1.1.3.0             # sysUpTime
     metrics:
       - name: fgSysCpuUsage
         oid: 1.3.6.1.4.1.12356.101.4.1.3
@@ -140,10 +147,41 @@ modules:
         oid: 1.3.6.1.4.1.12356.101.4.1.4
         type: gauge
         help: FortiGate memory usage percent
+      - name: fgSysMemCapacity
+        oid: 1.3.6.1.4.1.12356.101.4.1.5
+        type: gauge
+        help: FortiGate memory capacity in kilobytes
+      - name: fgSysDiskUsage
+        oid: 1.3.6.1.4.1.12356.101.4.1.6
+        type: gauge
+        help: FortiGate disk usage percent
+      - name: fgSysDiskCapacity
+        oid: 1.3.6.1.4.1.12356.101.4.1.7
+        type: gauge
+        help: FortiGate disk capacity in megabytes
       - name: fgSysSesCount
         oid: 1.3.6.1.4.1.12356.101.4.1.8
         type: gauge
         help: FortiGate active session count
+      - name: fgSysLowMemUsage
+        oid: 1.3.6.1.4.1.12356.101.4.1.9
+        type: gauge
+        help: FortiGate low-memory usage percent
+      - name: fgSysSesRate
+        oid: 1.3.6.1.4.1.12356.101.4.1.10
+        type: gauge
+        help: FortiGate session setup rate
+      - name: fgProcessorUsage
+        oid: 1.3.6.1.4.1.12356.101.4.4.2.1.2
+        type: gauge
+        help: FortiGate per-core CPU percent
+        indexes:
+          - labelname: fgProcessorIndex
+            type: gauge
+      - name: sysUpTime
+        oid: 1.3.6.1.2.1.1.3.0
+        type: gauge
+        help: SNMP sysUpTime in TimeTicks (hundredths of a second)
 
   # Maipu / portable switch health via HOST-RESOURCES-MIB
   # Enterprise Maipu OIDs vary by model — confirm with snmpwalk and extend this module.
@@ -238,15 +276,45 @@ modules:
           - labelname: clientIndex
             type: gauge
 
-  # Omada / TP-Link EAP — LIGHT client count only (15s path).
+  # omada-numeric-health — client count plus numeric HOST-RESOURCES and uptime (15s path).
+  # No text columns and no station walk on this job.
   omada_ap_health:
     walk:
       - 1.3.6.1.4.1.11863.10.1.1.1  # client count (verify on device)
+      - 1.3.6.1.2.1.25.3.3.1.2      # hrProcessorLoad
+      - 1.3.6.1.2.1.25.2.3.1.5      # hrStorageSize
+      - 1.3.6.1.2.1.25.2.3.1.6      # hrStorageUsed
+      - 1.3.6.1.2.1.1.3.0           # sysUpTime
     metrics:
       - name: omadaClientCount
         oid: 1.3.6.1.4.1.11863.10.1.1.1
         type: gauge
         help: Omada/TP-Link EAP client count (verify OID on model/firmware)
+      - name: hrProcessorLoad
+        oid: 1.3.6.1.2.1.25.3.3.1.2
+        type: gauge
+        help: The average percentage of CPU load
+        indexes:
+          - labelname: hrDeviceIndex
+            type: gauge
+      - name: hrStorageSize
+        oid: 1.3.6.1.2.1.25.2.3.1.5
+        type: gauge
+        help: Storage size in allocation units
+        indexes:
+          - labelname: hrStorageIndex
+            type: gauge
+      - name: hrStorageUsed
+        oid: 1.3.6.1.2.1.25.2.3.1.6
+        type: gauge
+        help: Storage used in allocation units
+        indexes:
+          - labelname: hrStorageIndex
+            type: gauge
+      - name: sysUpTime
+        oid: 1.3.6.1.2.1.1.3.0
+        type: gauge
+        help: SNMP sysUpTime in TimeTicks (hundredths of a second)
 
   # Omada MAC table — slow job only (optional / firmware dependent).
   omada_clients:

@@ -241,6 +241,8 @@ MODULE_MARKERS = (
     "cambiumClientTxDataBytes",
     "omadaClientInfo",
     "noc-snmp-no-lookups",
+    "fgSysMemCapacity",
+    "omada-numeric-health",
 )
 
 def extract_modules(path):

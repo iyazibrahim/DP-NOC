@@ -35,75 +35,70 @@ function dayTotal(day: LineUseDay): number | null {
 }
 
 export function LineUseCards({ network }: { network: SiteNetworkSummary | null }) {
-  const [openKey, setOpenKey] = useState<"7d" | "30d" | null>(null);
+  const [openKey, setOpenKey] = useState<"1d" | "7d" | "30d" | null>(null);
 
   useEffect(() => {
     setOpenKey(null);
   }, [network?.siteId]);
 
   const windows = [
-    { key: "1d" as const, label: "Today", clickable: false },
-    { key: "7d" as const, label: "7 days", clickable: true },
-    { key: "30d" as const, label: "30 days", clickable: true }
+    { key: "1d" as const, label: "Today", hint: "Details" },
+    { key: "7d" as const, label: "7 days", hint: "Daily" },
+    { key: "30d" as const, label: "30 days", hint: "Daily" }
   ];
 
   const openWin = openKey ? network?.utilWindows?.[openKey] : undefined;
+  const title =
+    openKey === "30d"
+      ? "Line use · last 30 days"
+      : openKey === "7d"
+        ? "Line use · last 7 days"
+        : "Line use · today";
 
   return (
     <div className="wanUtilSummary">
       <div className="wanUtilSummaryGrid">
-        {windows.map(({ key, label, clickable }) => {
+        {windows.map(({ key, label, hint }) => {
           const win = network?.utilWindows?.[key];
           const inB = win?.inBytes ?? null;
           const outB = win?.outBytes ?? null;
           const total = inB != null || outB != null ? (inB ?? 0) + (outB ?? 0) : null;
-          const body = (
-            <>
-              <div className="wanUtilCellLabel">
-                <span>{label}</span>
-                {clickable ? <span className="wanUtilCellHint">Daily</span> : null}
-              </div>
-              <div className="wanUtilCellTotal">{formatBytesUsed(total)}</div>
-              <div className="wanUtilCellSplit">
-                <span title="Download">↓ {formatBytesUsed(inB)}</span>
-                <span title="Upload">↑ {formatBytesUsed(outB)}</span>
-              </div>
-            </>
-          );
-          if (!clickable) {
-            return (
-              <div key={key} className="wanUtilCell">
-                {body}
-              </div>
-            );
-          }
           return (
             <button
               key={key}
               type="button"
               className="wanUtilCell wanUtilCellButton"
               aria-haspopup="dialog"
-              aria-label={`${label} line use, open daily overview`}
+              aria-label={`${label} line use, open overview`}
               onMouseDown={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
-                if (key === "7d" || key === "30d") setOpenKey(key);
+                setOpenKey(key);
               }}
             >
-              {body}
+              <div className="wanUtilCellLabel">
+                <span>{label}</span>
+                <span className="wanUtilCellHint">{hint}</span>
+              </div>
+              <div className="wanUtilCellTotal">{formatBytesUsed(total)}</div>
+              <div className="wanUtilCellSplit">
+                <span title="Download">↓ {formatBytesUsed(inB)}</span>
+                <span title="Upload">↑ {formatBytesUsed(outB)}</span>
+              </div>
             </button>
           );
         })}
       </div>
-      <Modal
-        open={openKey != null}
-        title={openKey === "30d" ? "Line use · last 30 days" : "Line use · last 7 days"}
-        onClose={() => setOpenKey(null)}
-        wide
-        className="sm:max-w-4xl"
-      >
-        {openKey ? (
+      <Modal open={openKey != null} title={title} onClose={() => setOpenKey(null)} wide className="sm:max-w-4xl">
+        {openKey === "1d" ? (
+          <TodayLineOverview
+            inBytes={openWin?.inBytes ?? null}
+            outBytes={openWin?.outBytes ?? null}
+            hours={openWin?.hours ?? []}
+            breakdown={network?.todayBreakdown}
+          />
+        ) : openKey ? (
           <LineUseOverview
             days={openWin?.days ?? []}
             inBytes={openWin?.inBytes ?? null}
@@ -112,6 +107,142 @@ export function LineUseCards({ network }: { network: SiteNetworkSummary | null }
         ) : null}
       </Modal>
     </div>
+  );
+}
+
+function formatRate(bps: number | null): string {
+  if (bps == null || !Number.isFinite(bps) || bps < 0) return "—";
+  if (bps >= 1_000_000_000) return `${(bps / 1_000_000_000).toFixed(2)} Gbps`;
+  if (bps >= 1_000_000) return `${(bps / 1_000_000).toFixed(bps >= 10_000_000 ? 1 : 2)} Mbps`;
+  if (bps >= 1000) return `${(bps / 1000).toFixed(0)} Kbps`;
+  return `${Math.round(bps)} bps`;
+}
+
+function TodayLineOverview({
+  inBytes,
+  outBytes,
+  hours,
+  breakdown
+}: {
+  inBytes: number | null;
+  outBytes: number | null;
+  hours: Array<{ ts: number; inBytes: number; outBytes: number }>;
+  breakdown: SiteNetworkSummary["todayBreakdown"];
+}) {
+  const total = inBytes != null || outBytes != null ? (inBytes ?? 0) + (outBytes ?? 0) : null;
+  const scale = useMemo(() => {
+    const max = Math.max(0, ...hours.map((hour) => hour.inBytes + hour.outBytes));
+    if (max >= 1_000_000_000_000) return { div: 1_000_000_000_000, unit: "TB" };
+    if (max >= 1_000_000_000) return { div: 1_000_000_000, unit: "GB" };
+    return { div: 1_000_000, unit: "MB" };
+  }, [hours]);
+  const chart = hours.map((hour) => ({
+    label: new Date(hour.ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    inBytes: hour.inBytes,
+    outBytes: hour.outBytes,
+    download: hour.inBytes / scale.div,
+    upload: hour.outBytes / scale.div
+  }));
+  const client = breakdown?.topClient ?? null;
+  const aps = breakdown?.aps ?? [];
+
+  return (
+    <>
+      <div className="wanUtilSummaryGrid lineUseOverviewStats">
+        <div className="wanUtilCell">
+          <div className="wanUtilCellLabel">Total</div>
+          <div className="wanUtilCellTotal">{formatBytesUsed(total)}</div>
+        </div>
+        <div className="wanUtilCell">
+          <div className="wanUtilCellLabel">Download</div>
+          <div className="wanUtilCellTotal">{formatBytesUsed(inBytes)}</div>
+        </div>
+        <div className="wanUtilCell">
+          <div className="wanUtilCellLabel">Upload</div>
+          <div className="wanUtilCellTotal">{formatBytesUsed(outBytes)}</div>
+        </div>
+      </div>
+      <div className="lineUseOverviewChart">
+        {chart.length < 2 ? (
+          <p className="muted">No hourly totals yet today.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted)" }} minTickGap={20} />
+              <YAxis
+                tick={{ fontSize: 11, fill: "var(--muted)" }}
+                width={56}
+                unit={scale.unit}
+                tickFormatter={(value) =>
+                  typeof value === "number" ? value.toFixed(value >= 10 ? 0 : 1) : String(value)
+                }
+              />
+              <Tooltip
+                {...darkTooltipProps()}
+                formatter={(value, name, item) => {
+                  const payload = (item as { payload?: { inBytes?: number; outBytes?: number } })?.payload;
+                  const raw = name === "Download" ? payload?.inBytes : payload?.outBytes;
+                  return [formatBytesUsed(raw ?? null), String(name)];
+                }}
+              />
+              <Legend />
+              <Bar dataKey="download" name="Download" stackId="use" fill="var(--accent)" />
+              <Bar dataKey="upload" name="Upload" stackId="use" fill="var(--accent-yellow)" />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+      <div className="lineUseOverviewMeta">
+        <span>
+          Highest client{" "}
+          {client
+            ? `${client.label} · ${client.apLabel} · ${
+                client.live
+                  ? `↓ ${formatRate(client.inBps)} ↑ ${formatRate(client.outBps)} (live)`
+                  : `↓ ${formatBytesUsed(client.inBytes)} ↑ ${formatBytesUsed(client.outBytes)}`
+              }`
+            : "—"}
+        </span>
+      </div>
+      <div className="lineUseOverviewTable">
+        <table className="dataTable">
+          <thead>
+            <tr>
+              <th>Access point</th>
+              <th className="num">Clients</th>
+              <th className="num">Download</th>
+              <th className="num">Upload</th>
+              <th className="num">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {aps.length === 0 ? (
+              <tr>
+                <td colSpan={5}>No access points on this site.</td>
+              </tr>
+            ) : (
+              aps.map((ap) => (
+                <tr key={ap.deviceId}>
+                  <td>{ap.label}</td>
+                  <td className="num">{ap.clients == null ? "—" : Math.round(ap.clients)}</td>
+                  <td className="num">{formatBytesUsed(ap.inBytes)}</td>
+                  <td className="num">{formatBytesUsed(ap.outBytes)}</td>
+                  <td className="num">
+                    {formatBytesUsed(
+                      ap.inBytes == null && ap.outBytes == null ? null : (ap.inBytes ?? 0) + (ap.outBytes ?? 0)
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted" style={{ margin: 0 }}>
+        Today is midnight until now, Malaysia time. Access-point totals are octets on that AP since midnight.
+      </p>
+    </>
   );
 }
 

@@ -4,11 +4,11 @@ Each network device always scrapes **`if_mib`**. `generate-config.sh` adds **one
 
 | Device type | Vendor (normalized) | Extra module | Metrics |
 |---|---|---|---|
-| `firewall` | `fortinet` / `fortigate` / empty | `fortigate_health` | `fgSysCpuUsage`, `fgSysMemUsage`, `fgSysSesCount` |
+| `firewall` | `fortinet` / `fortigate` / empty | `fortigate_health` | `fgSysCpuUsage`, `fgSysMemUsage`, `fgSysMemCapacity`, `fgSysDiskUsage`, `fgSysDiskCapacity`, `fgSysSesCount`, `fgSysLowMemUsage`, `fgSysSesRate`, `fgProcessorUsage`, `sysUpTime` |
 | `nas` | `synology` / `syno` / empty / `generic` | `synology_health` | `synoTemperature`, `synoDisk*`, `synoRaid*`, `hrProcessorLoad`, `memTotalReal` / `memAvailReal` |
 | `switch` | `maipu` | `maipu_health` | HOST-RESOURCES `hrProcessorLoad`, `hrStorage*` |
 | `ap` | `cambium` | `cambium_ap_health` (15s) + `cambium_clients` (60s) | Health: CPU + total clients. Stations: `cambiumClientInfo` / SNR / Tx\|Rx bytes on slow scrape |
-| `ap` | `omada` / `tp-link` / `tplink` | `omada_ap_health` (15s) + `omada_clients` (60s) | Health: `omadaClientCount`. MAC rows on slow scrape when supported |
+| `ap` | `omada` / `tp-link` / `tplink` | `omada_ap_health` (15s) + `omada_clients` (60s) | Health: `omadaClientCount`, `hrProcessorLoad`, `hrStorageSize` / `hrStorageUsed`, `sysUpTime`. MAC rows on slow scrape when supported. No RSSI or per-client bytes unless a firmware walk returns integer columns |
 
 **NAS wallboard:** Type `nas` is an SNMP device (`kind: network`). Dashboard uses the same Gauge / Line chart / Bar / SNMP device / Device stack widgets as firewalls and APs. Volume free % uses the existing gauge pie (teal = used). RAID uses the UP/DOWN gauge. LAN traffic is IF-MIB `if_in_bps` / `if_out_bps`.
 
@@ -30,8 +30,17 @@ If Force apply says “Sync already in progress”, wait a few seconds and click
 ### FortiGate (verified enterprise OIDs)
 
 - CPU %: `1.3.6.1.4.1.12356.101.4.1.3` (`fgSysCpuUsage`)
+- Hottest core: `1.3.6.1.4.1.12356.101.4.4.2.1.2` (`fgProcessorUsage`, integer index only)
 - Memory %: `1.3.6.1.4.1.12356.101.4.1.4` (`fgSysMemUsage`)
+- Memory size: `1.3.6.1.4.1.12356.101.4.1.5` (`fgSysMemCapacity`, kilobytes)
+- Disk %: `1.3.6.1.4.1.12356.101.4.1.6` (`fgSysDiskUsage`)
+- Disk size: `1.3.6.1.4.1.12356.101.4.1.7` (`fgSysDiskCapacity`, megabytes)
 - Sessions: `1.3.6.1.4.1.12356.101.4.1.8` (`fgSysSesCount`)
+- Low memory %: `1.3.6.1.4.1.12356.101.4.1.9` (`fgSysLowMemUsage`)
+- Session rate: `1.3.6.1.4.1.12356.101.4.1.10` (`fgSysSesRate`)
+- Uptime: `1.3.6.1.2.1.1.3.0` (`sysUpTime`, TimeTicks)
+
+These are numeric columns only. Name-indexed VPN tables are not polled. New series appear after the collector image is rebuilt and Force apply runs.
 
 ### Cambium cnPilot
 
@@ -48,7 +57,9 @@ Collector Console may store type as `access-point`; Alloy accepts that as AP.
 ### Omada / TP-Link EAP
 
 - Clients (total): `1.3.6.1.4.1.11863.10.1.1.1` on **`omada_ap_health`** (15s) — model/firmware dependent.
-- Station MAC table: module **`omada_clients`** (60s) → `omadaClientInfo`. No per-client SNMP bandwidth.
+- CPU and memory: HOST-RESOURCES `hrProcessorLoad`, `hrStorageSize`, `hrStorageUsed` on the same 15s module. Memory is used/size across those storages. No text columns.
+- Uptime: `sysUpTime` (`1.3.6.1.2.1.1.3.0`).
+- Station MAC table: module **`omada_clients`** (60s) → `omadaClientInfo`. No per-client SNMP bandwidth. RSSI is not polled until a firmware walk returns an integer column.
 
 ### Synology NAS (verified DSM SNMP OIDs)
 
