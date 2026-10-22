@@ -629,15 +629,26 @@ export async function getMetricInstant(
   });
 }
 
+/** Fewer samples on a small tile. The detail view can ask for a finer step. */
+export function chartStepForHours(hours: number, detail = false): string {
+  if (hours <= 1) return "60s";
+  if (hours <= 6) return detail ? "60s" : "2m";
+  if (hours <= 24) return detail ? "5m" : "15m";
+  if (hours <= 168) return detail ? "30m" : "1h";
+  return "1h";
+}
+
 export async function getMetricRange(
   token: string,
-  params: { preset: string; siteId: string; deviceId: string; hours?: number }
+  params: { preset: string; siteId: string; deviceId: string; hours?: number; detail?: boolean }
 ) {
+  const hours = params.hours ?? 1;
   const q = new URLSearchParams({
     preset: params.preset,
     siteId: params.siteId,
     deviceId: params.deviceId,
-    hours: String(params.hours ?? 1)
+    hours: String(hours),
+    step: chartStepForHours(hours, params.detail)
   });
   return fetchJson<{ data: PromQueryResult; query: string }>(`/api/metrics/query_range?${q}`, {
     headers: authHeaders(token)

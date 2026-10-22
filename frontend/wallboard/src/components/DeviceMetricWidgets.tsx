@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -36,11 +36,34 @@ function parseMatrix(data: PromQueryResult, hours: number) {
     hours >= 24
       ? { month: "short" as const, day: "numeric" as const, hour: "2-digit" as const }
       : { hour: "2-digit" as const, minute: "2-digit" as const };
-  return row.values.map(([ts, val]) => ({
-    ts,
-    t: new Date(ts * 1000).toLocaleString([], fmt),
-    v: Number(val)
-  }));
+  return thinSeries(
+    row.values.map(([ts, val]) => ({
+      ts,
+      t: new Date(ts * 1000).toLocaleString([], fmt),
+      v: Number(val)
+    })),
+    hours <= 1 ? 120 : hours <= 24 ? 160 : 240
+  );
+}
+
+function sameSeries(
+  prev: Array<{ ts: number; v: number }>,
+  next: Array<{ ts: number; v: number }>
+): boolean {
+  if (prev.length !== next.length) return false;
+  if (prev.length === 0) return true;
+  const a = prev[prev.length - 1]!;
+  const b = next[next.length - 1]!;
+  return prev[0]!.ts === next[0]!.ts && a.ts === b.ts && a.v === b.v;
+}
+
+function thinSeries<T>(rows: T[], max: number): T[] {
+  if (rows.length <= max) return rows;
+  const last = rows.length - 1;
+  const out: T[] = [];
+  const buckets = max - 1;
+  for (let i = 0; i < max; i++) out.push(rows[Math.round((i * last) / buckets)]!);
+  return out;
 }
 
 function parseInstant(data: PromQueryResult): number | null {
@@ -261,16 +284,25 @@ function MetricHistory({
   const stroke = resolveWidgetColor(color);
   const stats = showRanges ? chartStats(points) : null;
   const activeHours = lockedHours ?? hours;
+  const hasPoints = useRef(false);
 
   useEffect(() => {
     if (!token || !siteId || !deviceId || !metric) return;
     let cancelled = false;
     const load = async () => {
-      setLoading(true);
+      if (!hasPoints.current) setLoading(true);
       try {
-        const res = await getMetricRange(token, { preset: metric, siteId, deviceId, hours: activeHours });
+        const res = await getMetricRange(token, {
+          preset: metric,
+          siteId,
+          deviceId,
+          hours: activeHours,
+          detail: Boolean(showRanges)
+        });
         if (cancelled) return;
-        setPoints(parseMatrix(res.data, activeHours));
+        const next = parseMatrix(res.data, activeHours);
+        hasPoints.current = next.length > 0;
+        setPoints((prev) => (sameSeries(prev, next) ? prev : next));
         setError(null);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Query failed");
@@ -309,7 +341,7 @@ function MetricHistory({
             tickFormatter={(v) => formatYAxisTick(v, unit, bitrateScale)}
           />
           <Tooltip content={<ChartTooltip unit={unit} />} />
-          <Bar dataKey="v" fill={stroke} radius={[3, 3, 0, 0]} />
+          <Bar dataKey="v" fill={stroke} radius={[3, 3, 0, 0]} isAnimationActive={false} />
         </BarChart>
       ) : (
         <AreaChart data={points} margin={chartMargin}>
@@ -321,7 +353,14 @@ function MetricHistory({
             tickFormatter={(v) => formatYAxisTick(v, unit, bitrateScale)}
           />
           <Tooltip content={<ChartTooltip unit={unit} />} />
-          <Area type="monotone" dataKey="v" stroke={stroke} fill={`${stroke}33`} strokeWidth={2} />
+          <Area
+            type="linear"
+            dataKey="v"
+            stroke={stroke}
+            fill={`${stroke}33`}
+            strokeWidth={2}
+            isAnimationActive={false}
+          />
         </AreaChart>
       )}
     </ResponsiveContainer>
@@ -380,7 +419,7 @@ function openDetailProps(open: () => void) {
   };
 }
 
-export function DeviceMetricChart(props: {
+export const DeviceMetricChart = memo(function DeviceMetricChart(props: {
   siteId: string;
   deviceId: string;
   metric: string;
@@ -399,14 +438,16 @@ export function DeviceMetricChart(props: {
       <div className="metricChartClick" {...openDetailProps(() => setOpen(true))}>
         <MetricHistory {...props} kind="area" lockedHours={24} />
       </div>
-      <Modal open={open} title={label} onClose={() => setOpen(false)} wide className="sm:max-w-4xl">
-        <MetricHistory {...props} kind="area" showRanges />
-      </Modal>
+      {open ? (
+        <Modal open title={label} onClose={() => setOpen(false)} wide className="sm:max-w-4xl">
+          <MetricHistory {...props} kind="area" showRanges />
+        </Modal>
+      ) : null}
     </>
   );
-}
+});
 
-export function DeviceMetricBar(props: {
+export const DeviceMetricBar = memo(function DeviceMetricBar(props: {
   siteId: string;
   deviceId: string;
   metric: string;
@@ -425,12 +466,14 @@ export function DeviceMetricBar(props: {
       <div className="metricChartClick" {...openDetailProps(() => setOpen(true))}>
         <MetricHistory {...props} kind="bar" lockedHours={24} />
       </div>
-      <Modal open={open} title={label} onClose={() => setOpen(false)} wide className="sm:max-w-4xl">
-        <MetricHistory {...props} kind="bar" showRanges />
-      </Modal>
+      {open ? (
+        <Modal open title={label} onClose={() => setOpen(false)} wide className="sm:max-w-4xl">
+          <MetricHistory {...props} kind="bar" showRanges />
+        </Modal>
+      ) : null}
     </>
   );
-}
+});
 
 const BOOLEAN_METRICS = new Set(["host_up", "snmp_up", "wan_dns", "wan_vps", "nas_raid_ok"]);
 

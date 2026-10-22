@@ -354,7 +354,32 @@ export async function listDeviceInterfaces(
   return [...seen.values()].sort((a, b) => a.ifName.localeCompare(b.ifName));
 }
 
-export async function getSiteNetworkSummary(
+const SUMMARY_CACHE_MS = 20_000;
+const summaryCache = new Map<string, { at: number; value: SiteNetworkSummary | null }>();
+const summaryInflight = new Map<string, Promise<SiteNetworkSummary | null>>();
+
+export function getSiteNetworkSummary(siteId: string, hours = 24): Promise<SiteNetworkSummary | null> {
+  const key = `${siteId}:${Math.max(1, Math.round(hours))}`;
+  const hit = summaryCache.get(key);
+  if (hit && Date.now() - hit.at < SUMMARY_CACHE_MS) return Promise.resolve(hit.value);
+  const pending = summaryInflight.get(key);
+  if (pending) return pending;
+  const job = loadSiteNetworkSummary(siteId, hours).then(
+    (value) => {
+      summaryCache.set(key, { at: Date.now(), value });
+      summaryInflight.delete(key);
+      return value;
+    },
+    (err: unknown) => {
+      summaryInflight.delete(key);
+      throw err;
+    }
+  );
+  summaryInflight.set(key, job);
+  return job;
+}
+
+async function loadSiteNetworkSummary(
   siteId: string,
   hours = 24
 ): Promise<SiteNetworkSummary | null> {
@@ -1245,6 +1270,29 @@ async function collectSpeedtest(
   }
 }
 
+export type WirelessClusterStation = {
+  deviceId: string;
+  apLabel: string;
+  mac: string | null;
+  hostname: string | null;
+  ip: string | null;
+  ssid: string | null;
+  snr: number | null;
+  txRate: string | null;
+  inBps: number | null;
+  outBps: number | null;
+};
+
+export type WirelessClusterAp = {
+  deviceId: string;
+  label: string;
+  clients: number | null;
+  radioInBps: number | null;
+  radioOutBps: number | null;
+  snrAvg: number | null;
+  snrMin: number | null;
+};
+
 export type WirelessClusterSummary = {
   selected: number;
   reporting: number;
@@ -1253,7 +1301,8 @@ export type WirelessClusterSummary = {
   radioOutBps: number | null;
   snrAvg: number | null;
   snrMin: number | null;
-  byAp: Array<{ deviceId: string; label: string; clients: number | null }>;
+  byAp: WirelessClusterAp[];
+  stations: WirelessClusterStation[];
 };
 
 /** One glance for a site or a chosen set of access points. Missing APs stay out of the sums. */
@@ -1295,10 +1344,39 @@ export async function getWirelessClusterSummary(
     radioOutBps,
     snrAvg: snrs.length ? Math.round((snrs.reduce((sum, n) => sum + n, 0) / snrs.length) * 10) / 10 : null,
     snrMin: snrs.length ? Math.round(Math.min(...snrs) * 10) / 10 : null,
-    byAp: selected.map((ap) => ({
-      deviceId: ap.deviceId,
-      label: ap.label,
-      clients: ap.clients
+    byAp: selected.map((ap) => {
+      const apStations = rows.filter((st) => st.deviceId === ap.deviceId);
+      let radioInBpsAp: number | null = null;
+      let radioOutBpsAp: number | null = null;
+      const apSnrs: number[] = [];
+      for (const st of apStations) {
+        if (st.inBps != null && Number.isFinite(st.inBps)) radioInBpsAp = (radioInBpsAp ?? 0) + st.inBps;
+        if (st.outBps != null && Number.isFinite(st.outBps)) radioOutBpsAp = (radioOutBpsAp ?? 0) + st.outBps;
+        if (st.snr != null && Number.isFinite(st.snr)) apSnrs.push(st.snr);
+      }
+      return {
+        deviceId: ap.deviceId,
+        label: ap.label,
+        clients: ap.clients,
+        radioInBps: radioInBpsAp,
+        radioOutBps: radioOutBpsAp,
+        snrAvg: apSnrs.length
+          ? Math.round((apSnrs.reduce((sum, n) => sum + n, 0) / apSnrs.length) * 10) / 10
+          : null,
+        snrMin: apSnrs.length ? Math.round(Math.min(...apSnrs) * 10) / 10 : null
+      };
+    }),
+    stations: rows.map((st) => ({
+      deviceId: st.deviceId,
+      apLabel: st.apLabel,
+      mac: st.mac,
+      hostname: st.hostname,
+      ip: st.ip,
+      ssid: st.ssid,
+      snr: st.snr,
+      txRate: st.txRate,
+      inBps: st.inBps,
+      outBps: st.outBps
     }))
   };
 }

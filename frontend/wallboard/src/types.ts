@@ -211,7 +211,27 @@ export type WirelessClusterSummary = {
   radioOutBps: number | null;
   snrAvg: number | null;
   snrMin: number | null;
-  byAp: Array<{ deviceId: string; label: string; clients: number | null }>;
+  byAp: Array<{
+    deviceId: string;
+    label: string;
+    clients: number | null;
+    radioInBps?: number | null;
+    radioOutBps?: number | null;
+    snrAvg?: number | null;
+    snrMin?: number | null;
+  }>;
+  stations?: Array<{
+    deviceId: string;
+    apLabel: string;
+    mac: string | null;
+    hostname: string | null;
+    ip: string | null;
+    ssid: string | null;
+    snr: number | null;
+    txRate: string | null;
+    inBps: number | null;
+    outBps: number | null;
+  }>;
 };
 
 export type RetentionConfig = {
