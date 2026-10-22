@@ -251,47 +251,33 @@ export type ExportRecord = {
   createdAt: string;
   dir: string;
   files: string[];
+  reports?: Array<{ file: string; title: string; scope: string }>;
 };
 
 export type MonthlyReportPayload = {
   id: string;
   period: "weekly" | "monthly";
+  scope: string;
+  scopeName: string;
   generatedAt: string;
-  rangeDays: number;
-  sites: Array<{
+  rangeLabel: string;
+  locations: Array<{
     siteId: string;
     name: string;
     address: string;
-    overall: string;
-    wan: string;
-    lan: string;
-    wanUptimePct: string | null;
-    deviceCount: number;
+    probeUptimePct: number | null;
+    internetUptimePct: number | null;
+    lineInBytes: number | null;
+    lineOutBytes: number | null;
+    lineDays: Array<{ date: string; inBytes: number | null; outBytes: number | null }>;
+    accessPoints: Array<{ name: string; inBytes: number | null; outBytes: number | null; note?: string }>;
   }>;
-  devices: Array<{
-    siteId: string;
-    siteName: string;
-    deviceId: string;
-    name: string;
-    kind?: string;
-    uptimePct: number | null;
-    avgUtilInPct?: number | null;
-    avgUtilOutPct?: number | null;
-    peakUtilInPct?: number | null;
-    peakUtilOutPct?: number | null;
-  }>;
-  alerts: {
-    firing: number;
-    resolved: number;
-    topAlertnames: Array<{ alertname: string; count: number }>;
-  };
+  skipped: Array<{ siteId: string; name: string }>;
   incidents: {
-    summary: {
-      openedInRange: number;
-      resolvedInRange: number;
-      stillOpen: number;
-      acknowledgedInRange: number;
-    };
+    opened: number;
+    recovered: number;
+    stillFailing: number;
+    acknowledged: number;
     timeline: Array<{
       id: string;
       title: string;

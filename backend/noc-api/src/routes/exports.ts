@@ -42,10 +42,14 @@ exportsRouter.get("/:id", requireJwt(["operator", "wallboard"]), (req, res) => {
 
 /** Inline A4 HTML report (open in browser → Print → Save as PDF). */
 exportsRouter.get("/:id/view", requireJwt(["operator", "wallboard"]), (req, res) => {
-  const file = ensureExportHtml(req.params.id) ?? resolveExportFile(req.params.id, "report.html");
+  const requested = typeof req.query.file === "string" ? path.basename(req.query.file) : "report.html";
+  if (!/^[\w.-]+\.html$/.test(requested)) {
+    return res.status(400).json({ error: "Report file is not valid" });
+  }
+  const file = ensureExportHtml(req.params.id, requested) ?? resolveExportFile(req.params.id, requested);
   if (!file) return res.status(404).json({ error: "Report HTML not found" });
   res.setHeader("content-type", "text/html; charset=utf-8");
-  res.setHeader("content-disposition", `inline; filename="report.html"`);
+  res.setHeader("content-disposition", `inline; filename="${path.basename(file)}"`);
   return fs.createReadStream(file).pipe(res);
 });
 

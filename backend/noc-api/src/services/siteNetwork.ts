@@ -561,7 +561,7 @@ async function loadHourlyVolume(
   return series;
 }
 
-async function collectLineUseDays(
+export async function collectLineUseDays(
   siteId: string,
   deviceId: string,
   ifName: string,

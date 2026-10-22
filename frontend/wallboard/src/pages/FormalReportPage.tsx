@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { fetchExportReportHtml } from "@/api";
 import { PageHeader } from "@/components/noc/PageHeader";
@@ -8,6 +8,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function FormalReportPage() {
   const { exportId = "" } = useParams();
+  const [search] = useSearchParams();
+  const file = search.get("file") || "report.html";
   const { token } = useAuth();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [html, setHtml] = useState<string | null>(null);
@@ -19,7 +21,7 @@ export function FormalReportPage() {
     let cancelled = false;
     setBusy(true);
     setError(null);
-    fetchExportReportHtml(token, exportId)
+    fetchExportReportHtml(token, exportId, file)
       .then((doc) => {
         if (!cancelled) setHtml(doc);
       })
@@ -32,7 +34,7 @@ export function FormalReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, exportId]);
+  }, [token, exportId, file]);
 
   const onPrint = () => {
     const win = iframeRef.current?.contentWindow;

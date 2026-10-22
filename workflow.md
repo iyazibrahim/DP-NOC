@@ -397,4 +397,10 @@ Collector box → Alloy → Prometheus (central)
   - Incidents are the only alerts. Internet, Probe, Website, and Network device start on. SNMP starts off. Settings turns a type on or off for every location. Edit site can mute one location; the dashboard can still show it down.
   - A down probe opens only Probe. Websites still open. Internet, device, and SNMP incidents stay closed until the probe recovers. The old Location catch-all is no longer opened.
   - Alertmanager only delivers those incidents. The five Prometheus rules are retired so they cannot page a second copy. The Alerts page is the incident list, 10 rows per page. Click a row for the type, status, and times. Acknowledge stays in that popup.
+  - The sidebar collapses to icons. The dashboard grid measures the remaining width, so widgets pick up the space the labels used.
+- [x] **Reports match the wallboard (2026-10-22)**
+  - Settings → Reports & exports: choose This week (Monday–Sunday) or This month, then Generate.
+  - One A4 report per location that has WAN bytes, access-point bytes, a probe or internet sample, or an incident in that window, plus one All locations report. Locations with none of those are named on the combined report and skipped.
+  - Line use is the same hourly WAN total as the line-use cards. Internet uptime is the share of time DNS and the central path were both up. Access points without counters say “No byte counters”.
+  - The file is the report: Digital Penang logo, numbered sections, print to PDF. The old dark summary and all-interface utilisation table are gone.
 

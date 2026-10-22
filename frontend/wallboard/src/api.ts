@@ -668,8 +668,13 @@ export async function getExportReport(token: string, exportId: string) {
 }
 
 /** Fetch formal A4 HTML report (for iframe / print). */
-export async function fetchExportReportHtml(token: string, exportId: string): Promise<string> {
-  const res = await fetch(url(`/api/exports/${encodeURIComponent(exportId)}/view`), {
+export async function fetchExportReportHtml(
+  token: string,
+  exportId: string,
+  file = "report.html"
+): Promise<string> {
+  const q = new URLSearchParams({ file });
+  const res = await fetch(url(`/api/exports/${encodeURIComponent(exportId)}/view?${q}`), {
     headers: authHeaders(token)
   });
   if (!res.ok) {
