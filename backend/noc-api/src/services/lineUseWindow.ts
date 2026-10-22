@@ -105,6 +105,26 @@ export function calendarWeekSlots(timeZone: string, now: Date): DaySlot[] {
   return slots;
 }
 
+/**
+ * Every day of the calendar month that contains `now`, in `timeZone`.
+ * February has 28 or 29 days. The total resets when the month changes.
+ * Days after `now` stay in the list so the first of the month is not dropped.
+ */
+export function calendarMonthSlots(timeZone: string, now: Date): DaySlot[] {
+  const parts = tzParts(timeZone, now);
+  const monthKey = `${parts.year}-${String(parts.month).padStart(2, "0")}`;
+  const firstOffset = -(parts.day - 1);
+  const slots: DaySlot[] = [];
+  for (let i = 0; i < 31; i++) {
+    const start = zonedDayStartUnix(timeZone, now, firstOffset + i);
+    const date = ymdInZone(timeZone, start);
+    if (!date.startsWith(monthKey)) break;
+    const next = zonedDayStartUnix(timeZone, now, firstOffset + i + 1);
+    slots.push({ date, start, next });
+  }
+  return slots;
+}
+
 /** `count` local calendar days ending today, oldest first. */
 export function calendarDaySlots(timeZone: string, now: Date, count: number): DaySlot[] {
   const slots: DaySlot[] = [];

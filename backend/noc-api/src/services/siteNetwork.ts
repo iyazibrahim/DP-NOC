@@ -10,7 +10,7 @@ import { dualSnmpUpFresh, probeSuccessFresh, METRIC_FRESH_WINDOW } from "./promL
 import { env } from "../env";
 import {
   bucketVolumeDays,
-  calendarDaySlots,
+  calendarMonthSlots,
   calendarWeekSlots,
   sumLineUseDays,
   ymdInZone,
@@ -127,8 +127,8 @@ export type SiteNetworkSummary = {
     message?: string;
   };
   /**
-   * Line-use totals for Today / 7d / 30d.
-   * Byte totals are sums of local calendar days (see `days` on 7d and 30d).
+   * Line-use totals for Today, this week, and this month.
+   * Byte totals are sums of local calendar days (see `days`).
    */
   utilWindows?: {
     "1d": SiteNetworkUtilWindow;
@@ -148,7 +148,7 @@ export type SiteNetworkUtilWindow = {
   inBytes: number | null;
   /** Total octets uploaded (out) over the window. */
   outBytes: number | null;
-  /** Local calendar days, oldest first. This week is Monday–Sunday. 30 days stays a rolling window. */
+  /** Local calendar days, oldest first. The week is Monday–Sunday. The month is the current calendar month. */
   days?: LineUseDay[];
   /** YYYY-MM-DD of today in NOC_TZ, so a week view can mark the current day. */
   today?: string;
@@ -480,7 +480,6 @@ export async function getSiteNetworkSummary(
   };
 }
 
-const LINE_USE_DAYS = 30;
 const LINE_USE_HOUR = 3600;
 
 function parseVolumeMatrix(data: PromQueryResult): Array<{ ts: number; value: number }> {
@@ -542,10 +541,13 @@ async function collectLineUseDays(
   deviceId: string,
   ifName: string,
   now = new Date()
-): Promise<{ days: LineUseDay[]; weekDays: LineUseDay[]; today: string; todayHours: TodayLineHour[] }> {
-  const slots = calendarDaySlots(env.NOC_TZ, now, LINE_USE_DAYS);
+): Promise<{ monthDays: LineUseDay[]; weekDays: LineUseDay[]; today: string; todayHours: TodayLineHour[] }> {
+  const monthSlots = calendarMonthSlots(env.NOC_TZ, now);
   const weekSlots = calendarWeekSlots(env.NOC_TZ, now);
-  const windowStart = Math.min(slots[0]?.start ?? Math.floor(now.getTime() / 1000), weekSlots[0]?.start ?? Infinity);
+  const windowStart = Math.min(
+    monthSlots[0]?.start ?? Math.floor(now.getTime() / 1000),
+    weekSlots[0]?.start ?? Infinity
+  );
   const nowSec = Math.floor(now.getTime() / 1000);
   const todayStart = zonedDayStartUnix(env.NOC_TZ, now, 0);
   const [inbound, outbound] = await Promise.all([
@@ -553,7 +555,7 @@ async function collectLineUseDays(
     loadHourlyVolume("out", siteId, deviceId, ifName, windowStart, nowSec)
   ]);
   return {
-    days: bucketVolumeDays(slots, inbound, outbound, nowSec),
+    monthDays: bucketVolumeDays(monthSlots, inbound, outbound, nowSec),
     weekDays: bucketVolumeDays(weekSlots, inbound, outbound, nowSec),
     today: ymdInZone(env.NOC_TZ, todayStart),
     todayHours: hoursFromSamples(inbound, outbound, todayStart, nowSec)
@@ -640,8 +642,8 @@ async function collectUtilWindows(
     }
   };
 
-  // Today is the calendar day. This week is Monday–Sunday in NOC_TZ and does not drop Monday
-  // when a new day starts. 30 days stays the last 30 calendar days.
+  // Today is the calendar day. This week is Monday–Sunday. This month is the current
+  // calendar month in NOC_TZ (28–31 days) and resets on the first.
   const todayRange = calendarTodayPromRange();
   const [p1, p7, p30, collected] = await Promise.all([
     queryPercents(todayRange),
@@ -653,18 +655,18 @@ async function collectUtilWindows(
   let b1: { inBytes: number | null; outBytes: number | null };
   let b7: { inBytes: number | null; outBytes: number | null };
   let b30: { inBytes: number | null; outBytes: number | null };
-  let dayRows: LineUseDay[] | undefined;
+  let monthRows: LineUseDay[] | undefined;
   let weekRows: LineUseDay[] | undefined;
   let todayKey: string | undefined;
   let todayHours: TodayLineHour[] | undefined;
   if (collected) {
-    dayRows = collected.days;
+    monthRows = collected.monthDays;
     weekRows = collected.weekDays;
     todayKey = collected.today;
     todayHours = collected.todayHours;
-    b1 = sumLineUseDays(collected.days.slice(-1));
+    b1 = sumLineUseDays(collected.monthDays.filter((day) => day.date === collected.today));
     b7 = sumLineUseDays(collected.weekDays);
-    b30 = sumLineUseDays(collected.days);
+    b30 = sumLineUseDays(collected.monthDays);
   } else {
     [b1, b7, b30] = await Promise.all([
       queryRawVolume(todayRange),
@@ -676,7 +678,7 @@ async function collectUtilWindows(
   return {
     "1d": { ...p1, ...b1, hours: todayHours, today: todayKey },
     "7d": { ...p7, ...b7, days: weekRows, today: todayKey },
-    "30d": { ...p30, ...b30, days: dayRows, today: todayKey }
+    "30d": { ...p30, ...b30, days: monthRows, today: todayKey }
   };
 }
 

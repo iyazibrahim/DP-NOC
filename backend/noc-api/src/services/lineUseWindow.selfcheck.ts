@@ -1,6 +1,7 @@
 import {
   bucketVolumeDays,
   calendarDaySlots,
+  calendarMonthSlots,
   calendarWeekSlots,
   sumLineUseDays,
   zonedDayStartUnix,
@@ -39,6 +40,27 @@ function run() {
     }))
   ].filter((day) => day.date >= "2026-10-19"));
   assert(weekSum.inBytes === 12, `week total stays inside Mon-Sun, got ${weekSum.inBytes}`);
+
+  const month = calendarMonthSlots("Asia/Kuala_Lumpur", now);
+  assert(month.length === 31, `October has 31 days, got ${month.length}`);
+  assert(month[0].date === "2026-10-01", `month starts ${month[0].date}`);
+  assert(month[30].date === "2026-10-31", `month ends ${month[30].date}`);
+  const monthSum = sumLineUseDays(
+    month.map((slot) => ({
+      ...slot,
+      inBytes: slot.date === "2026-09-30" ? 900 : slot.date <= "2026-10-21" ? 2 : null,
+      outBytes: null
+    }))
+  );
+  assert(monthSum.inBytes === 42, `October total ignores September, got ${monthSum.inBytes}`);
+
+  const november = calendarMonthSlots("Asia/Kuala_Lumpur", new Date("2026-10-31T16:30:00Z"));
+  assert(november.length === 30, `November has 30 days, got ${november.length}`);
+  assert(november[0].date === "2026-11-01", `new month resets at ${november[0].date}`);
+
+  const february = calendarMonthSlots("Asia/Kuala_Lumpur", new Date("2026-02-10T04:00:00Z"));
+  assert(february.length === 28, `February 2026 has 28 days, got ${february.length}`);
+  assert(february[0].date === "2026-02-01" && february[27].date === "2026-02-28", "February bounds");
 
   const dayStart = 1_000_000;
   const day = 86_400;

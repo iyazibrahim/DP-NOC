@@ -14,6 +14,7 @@ import {
 import { getSiteNetwork, STATUS_POLL_MS, type SiteNetworkSummary } from "@/api";
 import { useAuth } from "@/auth/AuthContext";
 import { LineUseCards } from "@/components/LineUseCards";
+import { Modal } from "@/components/Modal";
 import { darkTooltipProps } from "@/components/noc/MetricChart";
 import { RangeToggle } from "@/components/noc/RangeToggle";
 
@@ -44,14 +45,13 @@ export function DashboardNetworkCard({
   const { token } = useAuth();
   const [network, setNetwork] = useState<SiteNetworkSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState<ChartRange>("24h");
 
   useEffect(() => {
     if (!token || !siteId) return;
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await getSiteNetwork(token, siteId, hoursForRange(range));
+        const res = await getSiteNetwork(token, siteId, 24);
         if (!cancelled) {
           setNetwork(res.network);
           setError(null);
@@ -66,121 +66,203 @@ export function DashboardNetworkCard({
       cancelled = true;
       clearInterval(t);
     };
-  }, [token, siteId, range]);
+  }, [token, siteId]);
 
   if (!siteId) return <div className="muted">Pick a site in settings.</div>;
   if (error) return <div className="muted">{error}</div>;
   if (!network) return <div className="chartSkeleton" aria-hidden />;
 
   if (view === "line") return <LineUseCards network={network} />;
-  if (view === "bandwidth") return <Bandwidth network={network} range={range} setRange={setRange} />;
-  if (view === "speed") return <SpeedTest network={network} range={range} setRange={setRange} />;
+  if (view === "bandwidth") return <Bandwidth network={network} siteId={siteId} />;
+  if (view === "speed") return <SpeedTest network={network} siteId={siteId} />;
   return <ApTraffic network={network} />;
 }
 
-function Bandwidth({
-  network,
-  range,
-  setRange
-}: {
-  network: SiteNetworkSummary;
-  range: ChartRange;
-  setRange: (range: ChartRange) => void;
-}) {
-  const data = useMemo(() => {
-    const inMap = new Map(network.trafficSeries.inBps.map((p) => [p.ts, p.value]));
-    const outMap = new Map(network.trafficSeries.outBps.map((p) => [p.ts, p.value]));
-    const ts = [...new Set([...inMap.keys(), ...outMap.keys()])].sort((a, b) => a - b);
-    const fmt =
-      range === "1h" || range === "24h"
-        ? { hour: "2-digit" as const, minute: "2-digit" as const }
-        : { month: "short" as const, day: "numeric" as const, hour: "2-digit" as const };
-    return ts.map((t) => ({
-      t: new Date(t * 1000).toLocaleString([], fmt),
-      inMbps: (inMap.get(t) ?? 0) / 1_000_000,
-      outMbps: (outMap.get(t) ?? 0) / 1_000_000
-    }));
-  }, [network, range]);
+function Bandwidth({ network, siteId }: { network: SiteNetworkSummary; siteId: string }) {
+  const [open, setOpen] = useState(false);
+  const data = useMemo(() => trafficPoints(network, "24h"), [network]);
 
   return (
-    <div className="siteNetworkChartBody">
+    <>
+      <div
+        className="siteNetworkChartBody metricChartClick"
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") setOpen(true);
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <TrafficChart network={network} data={data} />
+      </div>
+      <Modal open={open} title="Download / upload" onClose={() => setOpen(false)} wide className="sm:max-w-4xl">
+        <NetworkRangeChart siteId={siteId} view="bandwidth" />
+      </Modal>
+    </>
+  );
+}
+
+function SpeedTest({ network, siteId }: { network: SiteNetworkSummary; siteId: string }) {
+  const [open, setOpen] = useState(false);
+  const data = useMemo(() => speedPoints(network, "24h"), [network]);
+
+  return (
+    <>
+      <div
+        className="siteNetworkChartBody metricChartClick"
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") setOpen(true);
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <SpeedChart network={network} data={data} />
+      </div>
+      <Modal open={open} title="Speed test" onClose={() => setOpen(false)} wide className="sm:max-w-4xl">
+        <NetworkRangeChart siteId={siteId} view="speed" />
+      </Modal>
+    </>
+  );
+}
+
+function NetworkRangeChart({ siteId, view }: { siteId: string; view: "bandwidth" | "speed" }) {
+  const { token } = useAuth();
+  const [range, setRange] = useState<ChartRange>("24h");
+  const [network, setNetwork] = useState<SiteNetworkSummary | null>(null);
+
+  useEffect(() => {
+    if (!token || !siteId) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await getSiteNetwork(token, siteId, hoursForRange(range));
+        if (!cancelled) setNetwork(res.network);
+      } catch {
+        if (!cancelled) setNetwork(null);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, siteId, range]);
+
+  const traffic = useMemo(() => (network ? trafficPoints(network, range) : []), [network, range]);
+  const speed = useMemo(() => (network ? speedPoints(network, range) : []), [network, range]);
+
+  return (
+    <div className="metricDetail">
       <div className="siteNetworkChartToolbar">
         <RangeToggle value={range} onChange={(v) => setRange(v as ChartRange)} options={["1h", "24h", "7d", "30d"]} />
       </div>
-      <div className="chartFlexFill">
-        {!network.wanUplink || data.length < 2 ? (
-          <p className="muted">No traffic history yet.</p>
+      <div className="metricDetailChart">
+        {!network ? (
+          <div className="chartSkeleton" aria-hidden />
+        ) : view === "bandwidth" ? (
+          <TrafficChart network={network} data={traffic} />
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="t" tick={{ fontSize: 11, fill: "var(--muted)" }} minTickGap={28} />
-              <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} width={48} unit="M" />
-              <Tooltip
-                {...darkTooltipProps()}
-                formatter={(value) => [`${formatMbps(typeof value === "number" ? value : Number(value))} Mbps`, undefined]}
-              />
-              <Legend />
-              <Area type="monotone" dataKey="inMbps" name="Download" stroke="var(--accent)" fill="rgba(0, 181, 226, 0.2)" strokeWidth={1.5} />
-              <Area type="monotone" dataKey="outMbps" name="Upload" stroke="var(--accent-yellow)" fill="rgba(245, 196, 0, 0.15)" strokeWidth={1.5} />
-            </AreaChart>
-          </ResponsiveContainer>
+          <SpeedChart network={network} data={speed} />
         )}
       </div>
     </div>
   );
 }
 
-function SpeedTest({
+function trafficPoints(network: SiteNetworkSummary, range: ChartRange) {
+  const inMap = new Map(network.trafficSeries.inBps.map((p) => [p.ts, p.value]));
+  const outMap = new Map(network.trafficSeries.outBps.map((p) => [p.ts, p.value]));
+  const ts = [...new Set([...inMap.keys(), ...outMap.keys()])].sort((a, b) => a - b);
+  const fmt =
+    range === "1h" || range === "24h"
+      ? { hour: "2-digit" as const, minute: "2-digit" as const }
+      : { month: "short" as const, day: "numeric" as const, hour: "2-digit" as const };
+  return ts.map((t) => ({
+    t: new Date(t * 1000).toLocaleString([], fmt),
+    inMbps: (inMap.get(t) ?? 0) / 1_000_000,
+    outMbps: (outMap.get(t) ?? 0) / 1_000_000
+  }));
+}
+
+function TrafficChart({
   network,
-  range,
-  setRange
+  data
 }: {
   network: SiteNetworkSummary;
-  range: ChartRange;
-  setRange: (range: ChartRange) => void;
+  data: ReturnType<typeof trafficPoints>;
+}) {
+  return (
+    <div className="chartFlexFill">
+      {!network.wanUplink || data.length < 2 ? (
+        <p className="muted">No traffic history yet.</p>
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+            <XAxis dataKey="t" tick={{ fontSize: 11, fill: "var(--muted)" }} minTickGap={28} />
+            <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} width={48} unit="M" />
+            <Tooltip
+              {...darkTooltipProps()}
+              formatter={(value) => [`${formatMbps(typeof value === "number" ? value : Number(value))} Mbps`, undefined]}
+            />
+            <Legend />
+            <Area type="monotone" dataKey="inMbps" name="Download" stroke="var(--accent)" fill="rgba(0, 181, 226, 0.2)" strokeWidth={1.5} />
+            <Area type="monotone" dataKey="outMbps" name="Upload" stroke="var(--accent-yellow)" fill="rgba(245, 196, 0, 0.15)" strokeWidth={1.5} />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
+}
+
+function speedPoints(network: SiteNetworkSummary, range: ChartRange) {
+  const st = network.speedtest;
+  const down = new Map(st.downloadSeries.map((p) => [p.ts, p.value]));
+  const up = new Map(st.uploadSeries.map((p) => [p.ts, p.value]));
+  const ts = [...new Set([...down.keys(), ...up.keys()])].sort((a, b) => a - b);
+  const fmt =
+    range === "1h" || range === "24h"
+      ? { hour: "2-digit" as const, minute: "2-digit" as const }
+      : { month: "short" as const, day: "numeric" as const };
+  return ts.map((t) => ({
+    t: new Date(t * 1000).toLocaleString([], fmt),
+    downMbps: (down.get(t) ?? 0) / 1_000_000,
+    upMbps: (up.get(t) ?? 0) / 1_000_000
+  }));
+}
+
+function SpeedChart({
+  network,
+  data
+}: {
+  network: SiteNetworkSummary;
+  data: ReturnType<typeof speedPoints>;
 }) {
   const st = network.speedtest;
-  const data = useMemo(() => {
-    const down = new Map(st.downloadSeries.map((p) => [p.ts, p.value]));
-    const up = new Map(st.uploadSeries.map((p) => [p.ts, p.value]));
-    const ts = [...new Set([...down.keys(), ...up.keys()])].sort((a, b) => a - b);
-    const fmt =
-      range === "1h" || range === "24h"
-        ? { hour: "2-digit" as const, minute: "2-digit" as const }
-        : { month: "short" as const, day: "numeric" as const };
-    return ts.map((t) => ({
-      t: new Date(t * 1000).toLocaleString([], fmt),
-      downMbps: (down.get(t) ?? 0) / 1_000_000,
-      upMbps: (up.get(t) ?? 0) / 1_000_000
-    }));
-  }, [st, range]);
-
   return (
-    <div className="siteNetworkChartBody">
-      <div className="siteNetworkChartToolbar">
-        <RangeToggle value={range} onChange={(v) => setRange(v as ChartRange)} options={["1h", "24h", "7d", "30d"]} />
-      </div>
-      <div className="chartFlexFill">
-        {!st.available || data.length < 2 ? (
-          <p className="muted">{st.message ?? "Waiting for the first speed test."}</p>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="t" tick={{ fontSize: 11, fill: "var(--muted)" }} minTickGap={28} />
-              <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} width={48} unit="M" />
-              <Tooltip
-                {...darkTooltipProps()}
-                formatter={(value) => [`${formatMbps(typeof value === "number" ? value : Number(value))} Mbps`, undefined]}
-              />
-              <Legend />
-              <Area type="monotone" dataKey="downMbps" name="Download" stroke="var(--accent)" fill="rgba(0, 181, 226, 0.18)" strokeWidth={1.5} />
-              <Area type="monotone" dataKey="upMbps" name="Upload" stroke="var(--accent-yellow)" fill="rgba(245, 196, 0, 0.12)" strokeWidth={1.5} />
-            </AreaChart>
-          </ResponsiveContainer>
-        )}
-      </div>
+    <div className="chartFlexFill">
+      {!st.available || data.length < 2 ? (
+        <p className="muted">{st.message ?? "Waiting for the first speed test."}</p>
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+            <XAxis dataKey="t" tick={{ fontSize: 11, fill: "var(--muted)" }} minTickGap={28} />
+            <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} width={48} unit="M" />
+            <Tooltip
+              {...darkTooltipProps()}
+              formatter={(value) => [`${formatMbps(typeof value === "number" ? value : Number(value))} Mbps`, undefined]}
+            />
+            <Legend />
+            <Area type="monotone" dataKey="downMbps" name="Download" stroke="var(--accent)" fill="rgba(0, 181, 226, 0.18)" strokeWidth={1.5} />
+            <Area type="monotone" dataKey="upMbps" name="Upload" stroke="var(--accent-yellow)" fill="rgba(245, 196, 0, 0.12)" strokeWidth={1.5} />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }

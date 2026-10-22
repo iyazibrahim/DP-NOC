@@ -390,4 +390,6 @@ Collector box → Alloy → Prometheus (central)
   - Site health and the sites list show one Connectivity pill. It is up only when the probe and the internet checks are both up. Clicking it explains which check failed.
   - A failed internet check no longer rewrites the probe to “no data”, and it no longer hides network devices that are still answering.
   - The 7-day line-use card is the current Monday–Sunday week in `NOC_TZ`. A new day adds to the week. The previous Monday stays until the next Monday.
+  - The 30-day card is the current calendar month in `NOC_TZ`. Short months have fewer days and long months have more. The total resets on the first.
+  - Dashboard charts show the last 24 hours. Click a chart to open the longer ranges and the latest, average, and peak values.
 

@@ -1640,6 +1640,36 @@ textarea {
   box-sizing: border-box;
 }
 
+.metricChartClick {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  cursor: pointer;
+}
+
+.metricDetailChart {
+  height: 320px;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+.metricDetailChart .chartFlexFill {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.metricDetailStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .metricChartWidget {
   display: flex;
   flex-direction: column;

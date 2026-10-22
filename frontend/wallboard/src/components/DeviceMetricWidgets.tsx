@@ -19,6 +19,7 @@ import { getMetricInstant, getMetricRange, getMetricPresets } from "@/api";
 import { resolveWidgetColor } from "@/widgetColors";
 import type { MetricPreset, PromQueryResult, Site } from "@/types";
 import { darkTooltipProps } from "@/components/noc/MetricChart";
+import { Modal } from "@/components/Modal";
 
 const TIME_RANGES = [
   { hours: 1, label: "1h" },
@@ -200,13 +201,32 @@ function NoDeviceHint() {
   );
 }
 
-export function DeviceMetricChart({
+function chartStats(points: Array<{ v: number }>) {
+  if (points.length === 0) return null;
+  const latest = points[points.length - 1]?.v;
+  let peak = Number.NEGATIVE_INFINITY;
+  let sum = 0;
+  let n = 0;
+  for (const point of points) {
+    if (!Number.isFinite(point.v)) continue;
+    peak = Math.max(peak, point.v);
+    sum += point.v;
+    n += 1;
+  }
+  if (!n || latest == null || !Number.isFinite(latest)) return null;
+  return { latest, peak, avg: sum / n };
+}
+
+function MetricHistory({
   siteId,
   deviceId,
   metric,
   presets,
   title,
-  color
+  color,
+  kind,
+  lockedHours,
+  showRanges
 }: {
   siteId: string;
   deviceId: string;
@@ -214,17 +234,19 @@ export function DeviceMetricChart({
   presets: MetricPreset[];
   title?: string;
   color?: string;
+  kind: "area" | "bar";
+  lockedHours?: number;
+  showRanges?: boolean;
 }) {
   const { token } = useAuth();
   const [points, setPoints] = useState<Array<{ t: string; v: number; ts: number }>>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [hours, setHours] = useState<number>(1);
+  const [hours, setHours] = useState<number>(lockedHours ?? 24);
   const preset = presets.find((p) => p.id === metric);
   const customTitle = title?.trim();
   const label = customTitle || preset?.label || metric;
-  // Chrome already shows config.title — avoid stacking the same label again.
-  const showInnerTitle = !customTitle;
+  const showInnerTitle = !customTitle && !showRanges;
   const unit = useMemo(
     () => resolveMetricUnit(metric, preset?.unit, points.map((p) => p.v)),
     [metric, preset?.unit, points]
@@ -237,6 +259,8 @@ export function DeviceMetricChart({
   const chartMargin = { top: 8, right: 16, left: 4, bottom: 4 };
   const yAxisWidth = unit === "bps" ? 52 : 48;
   const stroke = resolveWidgetColor(color);
+  const stats = showRanges ? chartStats(points) : null;
+  const activeHours = lockedHours ?? hours;
 
   useEffect(() => {
     if (!token || !siteId || !deviceId || !metric) return;
@@ -244,9 +268,9 @@ export function DeviceMetricChart({
     const load = async () => {
       setLoading(true);
       try {
-        const res = await getMetricRange(token, { preset: metric, siteId, deviceId, hours });
+        const res = await getMetricRange(token, { preset: metric, siteId, deviceId, hours: activeHours });
         if (cancelled) return;
-        setPoints(parseMatrix(res.data, hours));
+        setPoints(parseMatrix(res.data, activeHours));
         setError(null);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Query failed");
@@ -260,12 +284,11 @@ export function DeviceMetricChart({
       cancelled = true;
       clearInterval(t);
     };
-  }, [token, siteId, deviceId, metric, hours]);
+  }, [token, siteId, deviceId, metric, activeHours]);
 
   if (!siteId || !deviceId || !metric) {
-    return <div className="muted">Configure site, device, and metric in edit mode.</div>;
+    return <div className="muted">Configure site, device, and metric in settings (⚙).</div>;
   }
-  if (!deviceId) return <NoDeviceHint />;
   if (error) {
     return (
       <div className="muted">
@@ -274,59 +297,90 @@ export function DeviceMetricChart({
     );
   }
 
+  const chart = (
+    <ResponsiveContainer width="100%" height="100%">
+      {kind === "bar" ? (
+        <BarChart data={points} margin={chartMargin}>
+          <CartesianGrid stroke="rgba(148,163,184,0.12)" strokeDasharray="3 3" />
+          <XAxis dataKey="t" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" />
+          <YAxis
+            tick={{ fill: "#94a3b8", fontSize: 10 }}
+            width={yAxisWidth}
+            tickFormatter={(v) => formatYAxisTick(v, unit, bitrateScale)}
+          />
+          <Tooltip content={<ChartTooltip unit={unit} />} />
+          <Bar dataKey="v" fill={stroke} radius={[3, 3, 0, 0]} />
+        </BarChart>
+      ) : (
+        <AreaChart data={points} margin={chartMargin}>
+          <CartesianGrid stroke="rgba(148,163,184,0.12)" strokeDasharray="3 3" />
+          <XAxis dataKey="t" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" />
+          <YAxis
+            tick={{ fill: "#94a3b8", fontSize: 10 }}
+            width={yAxisWidth}
+            tickFormatter={(v) => formatYAxisTick(v, unit, bitrateScale)}
+          />
+          <Tooltip content={<ChartTooltip unit={unit} />} />
+          <Area type="monotone" dataKey="v" stroke={stroke} fill={`${stroke}33`} strokeWidth={2} />
+        </AreaChart>
+      )}
+    </ResponsiveContainer>
+  );
+
   return (
-    <div className="metricChartWidget">
+    <div className={showRanges ? "metricDetail" : "metricChartWidget"}>
       <div className="metricChartHeader">
         {showInnerTitle ? <div className="widgetTitle">{label}</div> : <div />}
         <div className="metricChartHeaderRight">
           {unitBadge ? <span className="chartUnitBadge">{unitBadge}</span> : null}
-          <div className="timeRangePicker">
-            {TIME_RANGES.map((r) => (
-              <button
-                key={r.hours}
-                type="button"
-                className={hours === r.hours ? "timeRangeBtn active" : "timeRangeBtn"}
-                onClick={() => setHours(r.hours)}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
+          {showRanges ? (
+            <div className="timeRangePicker">
+              {TIME_RANGES.map((r) => (
+                <button
+                  key={r.hours}
+                  type="button"
+                  className={activeHours === r.hours ? "timeRangeBtn active" : "timeRangeBtn"}
+                  onClick={() => setHours(r.hours)}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
+      {stats ? (
+        <div className="metricDetailStats">
+          <span>Latest {formatMetricValue(stats.latest, unit)}</span>
+          <span>Average {formatMetricValue(stats.avg, unit)}</span>
+          <span>Peak {formatMetricValue(stats.peak, unit)}</span>
+        </div>
+      ) : null}
       {loading && points.length === 0 ? (
         <div className="chartSkeleton" aria-hidden />
       ) : points.length === 0 ? (
         <div className="muted">No data yet for {label}</div>
       ) : (
-        <div className="chartFlexFill">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={points} margin={chartMargin}>
-              <CartesianGrid stroke="rgba(148,163,184,0.12)" strokeDasharray="3 3" />
-              <XAxis dataKey="t" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" />
-              <YAxis
-                tick={{ fill: "#94a3b8", fontSize: 10 }}
-                width={yAxisWidth}
-                tickFormatter={(v) => formatYAxisTick(v, unit, bitrateScale)}
-              />
-              <Tooltip content={<ChartTooltip unit={unit} />} />
-              <Area type="monotone" dataKey="v" stroke={stroke} fill={`${stroke}33`} strokeWidth={2} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+        <div className={showRanges ? "metricDetailChart" : "chartFlexFill"}>{chart}</div>
       )}
     </div>
   );
 }
 
-export function DeviceMetricBar({
-  siteId,
-  deviceId,
-  metric,
-  presets,
-  title,
-  color
-}: {
+function openDetailProps(open: () => void) {
+  return {
+    role: "button" as const,
+    tabIndex: 0,
+    onClick: open,
+    onKeyDown: (e: { key: string }) => {
+      if (e.key === "Enter" || e.key === " ") open();
+    },
+    onMouseDown: (e: { stopPropagation: () => void }) => e.stopPropagation(),
+    onPointerDown: (e: { stopPropagation: () => void }) => e.stopPropagation()
+  };
+}
+
+export function DeviceMetricChart(props: {
   siteId: string;
   deviceId: string;
   metric: string;
@@ -334,106 +388,47 @@ export function DeviceMetricBar({
   title?: string;
   color?: string;
 }) {
-  const { token } = useAuth();
-  const [points, setPoints] = useState<Array<{ t: string; v: number; ts: number }>>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [hours, setHours] = useState<number>(1);
-  const preset = presets.find((p) => p.id === metric);
-  const customTitle = title?.trim();
-  const label = customTitle || preset?.label || metric;
-  const showInnerTitle = !customTitle;
-  const unit = useMemo(
-    () => resolveMetricUnit(metric, preset?.unit, points.map((p) => p.v)),
-    [metric, preset?.unit, points]
+  const [open, setOpen] = useState(false);
+  const preset = props.presets.find((p) => p.id === props.metric);
+  const label = props.title?.trim() || preset?.label || props.metric;
+  if (!props.siteId || !props.deviceId || !props.metric) {
+    return <div className="muted">Configure site, device, and metric in edit mode.</div>;
+  }
+  return (
+    <>
+      <div className="metricChartClick" {...openDetailProps(() => setOpen(true))}>
+        <MetricHistory {...props} kind="area" lockedHours={24} />
+      </div>
+      <Modal open={open} title={label} onClose={() => setOpen(false)} wide className="sm:max-w-4xl">
+        <MetricHistory {...props} kind="area" showRanges />
+      </Modal>
+    </>
   );
-  const bitrateScale = useMemo(
-    () => (unit === "bps" ? bitrateScaleForSeries(points.map((p) => p.v)) : undefined),
-    [unit, points]
-  );
-  const unitBadge = chartUnitBadge(unit, bitrateScale);
-  const chartMargin = { top: 8, right: 16, left: 4, bottom: 4 };
-  const yAxisWidth = unit === "bps" ? 52 : 48;
-  const stroke = resolveWidgetColor(color);
+}
 
-  useEffect(() => {
-    if (!token || !siteId || !deviceId || !metric) return;
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const res = await getMetricRange(token, { preset: metric, siteId, deviceId, hours });
-        if (cancelled) return;
-        setPoints(parseMatrix(res.data, hours));
-        setError(null);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Query failed");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    const t = setInterval(load, 15000);
-    return () => {
-      cancelled = true;
-      clearInterval(t);
-    };
-  }, [token, siteId, deviceId, metric, hours]);
-
-  if (!siteId || !deviceId || !metric) {
+export function DeviceMetricBar(props: {
+  siteId: string;
+  deviceId: string;
+  metric: string;
+  presets: MetricPreset[];
+  title?: string;
+  color?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const preset = props.presets.find((p) => p.id === props.metric);
+  const label = props.title?.trim() || preset?.label || props.metric;
+  if (!props.siteId || !props.deviceId || !props.metric) {
     return <div className="muted">Configure site, device, and metric in settings (⚙).</div>;
   }
-  if (!deviceId) return <NoDeviceHint />;
-  if (error) {
-    return (
-      <div className="muted">
-        {error}. Check device registration in <Link to="/sites">Sites</Link>.
-      </div>
-    );
-  }
-
   return (
-    <div className="metricChartWidget">
-      <div className="metricChartHeader">
-        {showInnerTitle ? <div className="widgetTitle">{label}</div> : <div />}
-        <div className="metricChartHeaderRight">
-          {unitBadge ? <span className="chartUnitBadge">{unitBadge}</span> : null}
-          <div className="timeRangePicker">
-            {TIME_RANGES.map((r) => (
-              <button
-                key={r.hours}
-                type="button"
-                className={hours === r.hours ? "timeRangeBtn active" : "timeRangeBtn"}
-                onClick={() => setHours(r.hours)}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-        </div>
+    <>
+      <div className="metricChartClick" {...openDetailProps(() => setOpen(true))}>
+        <MetricHistory {...props} kind="bar" lockedHours={24} />
       </div>
-      {loading && points.length === 0 ? (
-        <div className="chartSkeleton" aria-hidden />
-      ) : points.length === 0 ? (
-        <div className="muted">No data yet for {label}</div>
-      ) : (
-        <div className="chartFlexFill">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={points} margin={chartMargin}>
-              <CartesianGrid stroke="rgba(148,163,184,0.12)" strokeDasharray="3 3" />
-              <XAxis dataKey="t" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" />
-              <YAxis
-                tick={{ fill: "#94a3b8", fontSize: 10 }}
-                width={yAxisWidth}
-                tickFormatter={(v) => formatYAxisTick(v, unit, bitrateScale)}
-              />
-              <Tooltip content={<ChartTooltip unit={unit} />} />
-              <Bar dataKey="v" fill={stroke} radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-    </div>
+      <Modal open={open} title={label} onClose={() => setOpen(false)} wide className="sm:max-w-4xl">
+        <MetricHistory {...props} kind="bar" showRanges />
+      </Modal>
+    </>
   );
 }
 

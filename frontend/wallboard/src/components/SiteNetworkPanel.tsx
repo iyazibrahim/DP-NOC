@@ -54,7 +54,7 @@ const WIDGET_CATALOG: Array<{
     type: "wan_util_summary",
     label: "Line use",
     section: "traffic",
-    description: "Today (calendar) / 7 days / 30 days",
+    description: "Today, this week, and this month",
     w: 4,
     h: 4
   },

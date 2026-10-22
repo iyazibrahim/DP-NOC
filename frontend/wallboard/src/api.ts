@@ -125,7 +125,7 @@ export type SiteNetworkUtilWindow = {
   peakOutPct: number | null;
   inBytes: number | null;
   outBytes: number | null;
-  /** Local calendar days, oldest first. Present on the week and 30-day windows. */
+  /** Local calendar days, oldest first. Present on the week and month windows. */
   days?: LineUseDay[];
   /** YYYY-MM-DD of today in the NOC timezone. */
   today?: string;

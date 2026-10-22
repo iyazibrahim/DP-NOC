@@ -44,13 +44,13 @@ export function LineUseCards({ network }: { network: SiteNetworkSummary | null }
   const windows = [
     { key: "1d" as const, label: "Today", hint: "Details" },
     { key: "7d" as const, label: "This week", hint: "Mon–Sun" },
-    { key: "30d" as const, label: "30 days", hint: "Daily" }
+    { key: "30d" as const, label: "This month", hint: "Resets" }
   ];
 
   const openWin = openKey ? network?.utilWindows?.[openKey] : undefined;
   const title =
     openKey === "30d"
-      ? "Line use · last 30 days"
+      ? "Line use · this month"
       : openKey === "7d"
         ? "Line use · this week"
         : "Line use · today";
