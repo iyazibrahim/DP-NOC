@@ -348,12 +348,6 @@ const COLLECTOR_EXPLICIT_DOWN =
 
 const COLLECTOR_SILENCE_NOTE = "The NOC is not receiving this collector.";
 
-const COLLECTOR_WAITING_ON_INTERNET =
-  "The collector stays on the local network. Data resumes when the internet is back.";
-
-const DEVICES_WAITING_ON_INTERNET =
-  "Device checks are not arriving. They resume when the internet is back.";
-
 const SNMP_WARNING_NOTE = (name: string) =>
   `${name} is online, but SNMP is not answering. Check the SNMP community and that UDP port 161 is allowed, then use Force apply on the collector.`;
 
@@ -804,6 +798,7 @@ export async function computeSiteStatus(
   // polling SNMP and ping and posting that report. That report means the box is up.
   if (
     snapshotShowsLanUp(snapshot) &&
+    collector.notes !== COLLECTOR_EXPLICIT_DOWN &&
     (collector.state === "unknown" || collector.state === "critical")
   ) {
     collector = markCollectorAliveFromProbes(collectorDeviceStates);
@@ -812,20 +807,6 @@ export async function computeSiteStatus(
       state: "warning",
       notes: "The metrics feed is delayed. Device checks are still arriving from the collector."
     };
-  } else if (
-    uplink.state === "critical" &&
-    collector.state === "critical" &&
-    collector.notes !== COLLECTOR_EXPLICIT_DOWN &&
-    !snapshot
-  ) {
-    // Probes stopped and nothing is arriving. The box can still be on the LAN.
-    collector = { state: "unknown", notes: COLLECTOR_WAITING_ON_INTERNET };
-    for (const row of collectorDeviceStates) {
-      if (row.notes === COLLECTOR_EXPLICIT_DOWN) continue;
-      row.state = "unknown";
-      row.notes = COLLECTOR_WAITING_ON_INTERNET;
-      row.live = false;
-    }
   }
   let localDevices: DomainStatus = { state: "unknown", notes: "No devices configured" };
   const localDeviceStates: SiteStatus["localDeviceStates"] = [];
@@ -870,24 +851,10 @@ export async function computeSiteStatus(
     }
     if (
       lanProvesCollector &&
+      collector.notes !== COLLECTOR_EXPLICIT_DOWN &&
       (collector.state === "unknown" || collector.state === "critical")
     ) {
       collector = markCollectorAliveFromProbes(collectorDeviceStates);
-    }
-    const waitingOnInternet = collector.notes === COLLECTOR_WAITING_ON_INTERNET;
-    if (collector.state === "critical" || waitingOnInternet) {
-      const paused = waitingOnInternet
-        ? DEVICES_WAITING_ON_INTERNET
-        : `The collector at ${site.name} is offline, so device checks are paused.`;
-      for (let i = 0; i < deviceStatuses.length; i++) {
-        if (!localDeviceStates[i].snmpIp) continue;
-        deviceStatuses[i] = { state: "unknown", notes: paused };
-        localDeviceStates[i] = {
-          ...localDeviceStates[i],
-          state: "unknown",
-          notes: paused
-        };
-      }
     }
     localDevices = aggregateLocalDevices(deviceStatuses);
   } else if (devices.length === 0 && (await hasUnregisteredHostMetrics(siteId))) {

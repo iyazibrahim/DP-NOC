@@ -34,7 +34,7 @@ export function UplinkStatusCard({
 }) {
   const up = uplinkOf(status);
   const tone = stateTone(up.state);
-  const eyebrow = title?.trim() || "Uplink / Internet";
+  const eyebrow = title?.trim() || "Internet";
   const siteName = site?.name ?? "Pick a site";
   return (
     <div className={cardClass(tone, compact)} title={up.notes || undefined}>
@@ -59,10 +59,10 @@ export function CollectorStatusCard({
 }) {
   const col = collectorOf(status);
   const tone = stateTone(col.state);
-  const eyebrow = title?.trim() || "Collector";
+  const eyebrow = title?.trim() || "Probe";
   const siteName = site?.name ?? "Pick a site";
   const collectorName =
-    site?.devices?.find((d) => (d.kind ?? "network") === "server")?.name ?? "Collector";
+    site?.devices?.find((d) => (d.kind ?? "network") === "server")?.name ?? "Probe";
   return (
     <div className={cardClass(tone, compact)} title={col.notes || undefined}>
       {!sameLabel(eyebrow, siteName) ? <div className="signalCardEyebrow">{eyebrow}</div> : null}
@@ -98,10 +98,10 @@ export function SiteSignalBoard({
               <div className="signalBoardSite">{s.name}</div>
               <div className="signalLeds">
                 <span className={`signalLed signalLed--${stateTone(col.state)}`} title={col.notes}>
-                  <i /> {compact ? "Col" : "Collector"} {stateLabel(col.state)}
+                  <i /> Probe {stateLabel(col.state)}
                 </span>
                 <span className={`signalLed signalLed--${stateTone(up.state)}`} title={up.notes}>
-                  <i /> {compact ? "Up" : "Uplink"} {stateLabel(up.state)}
+                  <i /> Internet {stateLabel(up.state)}
                 </span>
               </div>
             </div>

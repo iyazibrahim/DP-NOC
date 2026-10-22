@@ -24,6 +24,7 @@ import {
   updateSiteWebsite
 } from "@/api";
 import type { DeviceKind, DiscoveredDevice, Site, SiteDevice, SiteStatus } from "@/types";
+import { ConnectivityStatus } from "@/components/ConnectivityStatus";
 import { StatusPill } from "@/components/StatusPill";
 import { SiteLocationPicker } from "@/components/SiteLocationPicker";
 import { DeviceTypePicker, useDeviceTypes, type DeviceTypeOption } from "@/components/DeviceTypePicker";
@@ -142,9 +143,8 @@ export function SitesPage() {
             <th>Name</th>
             <th>Address</th>
             <th>Status</th>
-            <th>Collector</th>
-            <th>Uplink</th>
-            <th>Local devices</th>
+            <th>Connectivity</th>
+            <th>Network devices</th>
             <th>Devices</th>
           </tr>
         </thead>
@@ -165,10 +165,7 @@ export function SitesPage() {
                   <StatusPill state={st?.overall ?? "unknown"} notes={col.notes ?? up.notes} />
                 </td>
                 <td>
-                  <StatusPill state={col.state} notes={col.notes} />
-                </td>
-                <td>
-                  <StatusPill state={up.state} notes={up.notes} />
+                  <ConnectivityStatus probe={col} internet={up} variant="pill" />
                 </td>
                 <td>
                   <StatusPill state={loc.state} notes={loc.notes} />
@@ -733,18 +730,9 @@ export function SiteDetailPage() {
             </div>
           </div>
           <div className="healthMiniGrid">
-            <div className={`healthMini healthMini--${col.state}`}>
-              <span className="healthMiniLabel">Collector</span>
-              <strong>{statusWord(col.state)}</strong>
-              {col.notes ? <span className="muted">{col.notes}</span> : null}
-            </div>
-            <div className={`healthMini healthMini--${up.state}`}>
-              <span className="healthMiniLabel">Uplink</span>
-              <strong>{statusWord(up.state)}</strong>
-              {up.notes ? <span className="muted">{up.notes}</span> : null}
-            </div>
+            <ConnectivityStatus probe={col} internet={up} />
             <div className={`healthMini healthMini--${loc.state}`}>
-              <span className="healthMiniLabel">Local devices</span>
+              <span className="healthMiniLabel">Network devices</span>
               <strong>{statusWord(loc.state)}</strong>
               {loc.notes ? <span className="muted">{loc.notes}</span> : null}
             </div>

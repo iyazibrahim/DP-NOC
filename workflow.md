@@ -6,9 +6,10 @@ Multisite NOC for **collectors**, **uplink / internet**, **local devices**, and 
 ## Vocabulary (user-facing)
 | Term | Meaning |
 |---|---|
-| Collector | Box running Alloy (NUC, Pi, mini-PC, server) |
-| Uplink / Internet | Collector can reach the internet / central server |
-| Local devices | Switches/routers/etc. polled via SNMP from the collector |
+| Collector | Box running Alloy (NUC, Pi, mini-PC, server). Status UI calls this **Probe**. |
+| Uplink / Internet | Collector can reach the internet / central server. Status UI calls this **Internet**. |
+| Connectivity | Probe and Internet together. Up only when both are up. The pill opens which check failed. |
+| Local devices | Switches/routers/etc. polled via SNMP from the collector. Status UI calls these **Network devices**. |
 | Website checks | Public URL checks from the central server (Blackbox + Hetrix failover) |
 | Location | Physical site (Digital Penang, libraries, etc.) — not a public website |
 | Global / Central | Synthetic site id `global` for central website probes only |
@@ -385,4 +386,8 @@ Collector box → Alloy → Prometheus (central)
   - Collector metrics come from the unix exporter already on the NUC. Shared interface metrics (throughput, busiest port, utilization, capacity, ports, errors, discards, bytes today) apply to firewall, switch, AP, NAS, and router. Cambium adds SNR, weak clients, busiest client, and client bytes today.
   - FortiGate and Omada extra numbers are numeric SNMP columns in `snmp.yml`. They show up only after the collector image is rebuilt and Force apply runs.
   - Line-use card labels (Details / Daily) wrap inside the card instead of drawing past the border on a narrow tile.
+- [x] **Connectivity pill, honest probe status, Monday–Sunday line use (2026-10-22)**
+  - Site health and the sites list show one Connectivity pill. It is up only when the probe and the internet checks are both up. Clicking it explains which check failed.
+  - A failed internet check no longer rewrites the probe to “no data”, and it no longer hides network devices that are still answering.
+  - The 7-day line-use card is the current Monday–Sunday week in `NOC_TZ`. A new day adds to the week. The previous Monday stays until the next Monday.
 

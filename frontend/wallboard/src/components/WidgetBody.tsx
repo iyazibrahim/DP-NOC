@@ -36,13 +36,13 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   {
     type: "site_signal_board",
     label: "Sites signal board",
-    description: "Collector + uplink LEDs",
+    description: "Probe + internet LEDs",
     defaultW: 6,
     defaultH: 5
   },
   {
     type: "local_devices_board",
-    label: "Local devices",
+    label: "Network devices",
     description: "List, stack, card, or AP cluster",
     defaultW: 6,
     defaultH: 5
@@ -63,15 +63,15 @@ export const WIDGET_CATALOG: WidgetCatalogEntry[] = [
   },
   {
     type: "uplink_status",
-    label: "Uplink",
+    label: "Internet",
     description: "Site internet UP/DOWN",
     defaultW: 3,
     defaultH: 3
   },
   {
     type: "collector_status",
-    label: "Collector",
-    description: "Collector UP/DOWN",
+    label: "Probe",
+    description: "Monitoring box UP/DOWN",
     defaultW: 3,
     defaultH: 3
   },

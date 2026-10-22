@@ -1,6 +1,7 @@
 import {
   bucketVolumeDays,
   calendarDaySlots,
+  calendarWeekSlots,
   sumLineUseDays,
   zonedDayStartUnix,
   ymdInZone
@@ -24,6 +25,20 @@ function run() {
   assert(slots[0].date === "2026-09-22", `oldest ${slots[0].date}`);
   assert(slots[29].date === "2026-10-21", `newest ${slots[29].date}`);
   assert(slots[29].next - slots[29].start === 86400, "day length");
+
+  const week = calendarWeekSlots("Asia/Kuala_Lumpur", now);
+  assert(week.length === 7, "week has 7 days");
+  assert(week[0].date === "2026-10-19", `week starts Monday ${week[0].date}`);
+  assert(week[6].date === "2026-10-25", `week ends Sunday ${week[6].date}`);
+  const weekSum = sumLineUseDays([
+    { date: "2026-10-16", start: 0, inBytes: 500, outBytes: 0 },
+    ...week.map((slot) => ({
+      ...slot,
+      inBytes: slot.date === "2026-10-21" ? 10 : slot.date < "2026-10-21" ? 1 : null,
+      outBytes: null
+    }))
+  ].filter((day) => day.date >= "2026-10-19"));
+  assert(weekSum.inBytes === 12, `week total stays inside Mon-Sun, got ${weekSum.inBytes}`);
 
   const dayStart = 1_000_000;
   const day = 86_400;

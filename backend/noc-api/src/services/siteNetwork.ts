@@ -11,7 +11,9 @@ import { env } from "../env";
 import {
   bucketVolumeDays,
   calendarDaySlots,
+  calendarWeekSlots,
   sumLineUseDays,
+  ymdInZone,
   zonedDayStartUnix,
   type LineUseDay
 } from "./lineUseWindow";
@@ -146,8 +148,10 @@ export type SiteNetworkUtilWindow = {
   inBytes: number | null;
   /** Total octets uploaded (out) over the window. */
   outBytes: number | null;
-  /** Local calendar days, oldest first. Set on the 7-day and 30-day windows. */
+  /** Local calendar days, oldest first. This week is Monday–Sunday. 30 days stays a rolling window. */
   days?: LineUseDay[];
+  /** YYYY-MM-DD of today in NOC_TZ, so a week view can mark the current day. */
+  today?: string;
   /** Hourly octets for the calendar day. Set on the Today window. */
   hours?: TodayLineHour[];
 };
@@ -538,9 +542,10 @@ async function collectLineUseDays(
   deviceId: string,
   ifName: string,
   now = new Date()
-): Promise<{ days: LineUseDay[]; todayHours: TodayLineHour[] }> {
+): Promise<{ days: LineUseDay[]; weekDays: LineUseDay[]; today: string; todayHours: TodayLineHour[] }> {
   const slots = calendarDaySlots(env.NOC_TZ, now, LINE_USE_DAYS);
-  const windowStart = slots[0]?.start ?? Math.floor(now.getTime() / 1000);
+  const weekSlots = calendarWeekSlots(env.NOC_TZ, now);
+  const windowStart = Math.min(slots[0]?.start ?? Math.floor(now.getTime() / 1000), weekSlots[0]?.start ?? Infinity);
   const nowSec = Math.floor(now.getTime() / 1000);
   const todayStart = zonedDayStartUnix(env.NOC_TZ, now, 0);
   const [inbound, outbound] = await Promise.all([
@@ -549,6 +554,8 @@ async function collectLineUseDays(
   ]);
   return {
     days: bucketVolumeDays(slots, inbound, outbound, nowSec),
+    weekDays: bucketVolumeDays(weekSlots, inbound, outbound, nowSec),
+    today: ymdInZone(env.NOC_TZ, todayStart),
     todayHours: hoursFromSamples(inbound, outbound, todayStart, nowSec)
   };
 }
@@ -633,8 +640,8 @@ async function collectUtilWindows(
     }
   };
 
-  // Today, 7 days, and 30 days are local calendar days (midnight in NOC_TZ).
-  // Card totals are the sum of those days, so the popup adds up to the card.
+  // Today is the calendar day. This week is Monday–Sunday in NOC_TZ and does not drop Monday
+  // when a new day starts. 30 days stays the last 30 calendar days.
   const todayRange = calendarTodayPromRange();
   const [p1, p7, p30, collected] = await Promise.all([
     queryPercents(todayRange),
@@ -647,12 +654,16 @@ async function collectUtilWindows(
   let b7: { inBytes: number | null; outBytes: number | null };
   let b30: { inBytes: number | null; outBytes: number | null };
   let dayRows: LineUseDay[] | undefined;
+  let weekRows: LineUseDay[] | undefined;
+  let todayKey: string | undefined;
   let todayHours: TodayLineHour[] | undefined;
   if (collected) {
     dayRows = collected.days;
+    weekRows = collected.weekDays;
+    todayKey = collected.today;
     todayHours = collected.todayHours;
     b1 = sumLineUseDays(collected.days.slice(-1));
-    b7 = sumLineUseDays(collected.days.slice(-7));
+    b7 = sumLineUseDays(collected.weekDays);
     b30 = sumLineUseDays(collected.days);
   } else {
     [b1, b7, b30] = await Promise.all([
@@ -663,9 +674,9 @@ async function collectUtilWindows(
   }
 
   return {
-    "1d": { ...p1, ...b1, hours: todayHours },
-    "7d": { ...p7, ...b7, days: dayRows?.slice(-7) },
-    "30d": { ...p30, ...b30, days: dayRows }
+    "1d": { ...p1, ...b1, hours: todayHours, today: todayKey },
+    "7d": { ...p7, ...b7, days: weekRows, today: todayKey },
+    "30d": { ...p30, ...b30, days: dayRows, today: todayKey }
   };
 }
 

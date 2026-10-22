@@ -2608,8 +2608,54 @@ textarea {
 
 .healthMiniGrid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
+}
+
+button.healthMiniButton {
+  appearance: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+}
+
+button.healthMiniButton:hover {
+  border-color: var(--accent);
+}
+
+.statusPillButton {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.connectivityList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.connectivityRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.connectivityRowLabel {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.connectivityRow .muted {
+  margin: 0;
 }
 
 .healthMini {

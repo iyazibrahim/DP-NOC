@@ -37,7 +37,7 @@ export function MapsOpsRail({
   return (
     <aside className="mapsOpsRail">
       <div className="mapsOpsBlock">
-        <div className="tableTitle">Site uplink</div>
+        <div className="tableTitle">Internet</div>
         <div className="mapsOpsList">
           {sites.map((s) => {
             const st = statuses.find((x) => x.siteId === s.id);
@@ -61,7 +61,7 @@ export function MapsOpsRail({
       </div>
 
       <div className="mapsOpsBlock">
-        <div className="tableTitle">Collectors</div>
+        <div className="tableTitle">Probes</div>
         <div className="mapsOpsList">
           {sites.map((s) => {
             const st = statuses.find((x) => x.siteId === s.id);

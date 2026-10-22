@@ -83,6 +83,28 @@ export function ymdInZone(timeZone: string, unixSec: number): string {
   }).format(new Date(unixSec * 1000));
 }
 
+/** Monday=0 … Sunday=6 in `timeZone`. */
+function weekdayMondayIndex(timeZone: string, now: Date): number {
+  const name = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(now);
+  const index = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(name);
+  return index >= 0 ? index : 0;
+}
+
+/**
+ * The Monday–Sunday week that contains `now`, in `timeZone`.
+ * Days after `now` are included so the window does not drop Monday when a new day starts.
+ */
+export function calendarWeekSlots(timeZone: string, now: Date): DaySlot[] {
+  const mondayOffset = -weekdayMondayIndex(timeZone, now);
+  const slots: DaySlot[] = [];
+  for (let i = 0; i < 7; i++) {
+    const start = zonedDayStartUnix(timeZone, now, mondayOffset + i);
+    const next = zonedDayStartUnix(timeZone, now, mondayOffset + i + 1);
+    slots.push({ date: ymdInZone(timeZone, start), start, next });
+  }
+  return slots;
+}
+
 /** `count` local calendar days ending today, oldest first. */
 export function calendarDaySlots(timeZone: string, now: Date, count: number): DaySlot[] {
   const slots: DaySlot[] = [];

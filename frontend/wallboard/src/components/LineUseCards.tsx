@@ -43,7 +43,7 @@ export function LineUseCards({ network }: { network: SiteNetworkSummary | null }
 
   const windows = [
     { key: "1d" as const, label: "Today", hint: "Details" },
-    { key: "7d" as const, label: "7 days", hint: "Daily" },
+    { key: "7d" as const, label: "This week", hint: "Mon–Sun" },
     { key: "30d" as const, label: "30 days", hint: "Daily" }
   ];
 
@@ -52,7 +52,7 @@ export function LineUseCards({ network }: { network: SiteNetworkSummary | null }
     openKey === "30d"
       ? "Line use · last 30 days"
       : openKey === "7d"
-        ? "Line use · last 7 days"
+        ? "Line use · this week"
         : "Line use · today";
 
   return (
@@ -101,6 +101,7 @@ export function LineUseCards({ network }: { network: SiteNetworkSummary | null }
         ) : openKey ? (
           <LineUseOverview
             days={openWin?.days ?? []}
+            today={openWin?.today}
             inBytes={openWin?.inBytes ?? null}
             outBytes={openWin?.outBytes ?? null}
           />
@@ -248,16 +249,17 @@ function TodayLineOverview({
 
 function LineUseOverview({
   days,
+  today,
   inBytes,
   outBytes
 }: {
   days: LineUseDay[];
+  today?: string;
   inBytes: number | null;
   outBytes: number | null;
 }) {
   const total = inBytes != null || outBytes != null ? (inBytes ?? 0) + (outBytes ?? 0) : null;
-  const todayDate = days[days.length - 1]?.date;
-  const fullWithData = days.slice(0, -1).filter((day) => dayTotal(day) != null);
+  const fullWithData = days.filter((day) => day.date !== today && dayTotal(day) != null);
   const avg =
     fullWithData.length > 0
       ? fullWithData.reduce((sum, day) => sum + (dayTotal(day) ?? 0), 0) / fullWithData.length
@@ -277,11 +279,11 @@ function LineUseOverview({
   }, [days]);
 
   const chart = days.map((day) => ({
-    label: formatDay(day.date, false),
+    label: formatDay(day.date, day.date === today),
     inBytes: day.inBytes,
     outBytes: day.outBytes,
-    download: (day.inBytes ?? 0) / scale.div,
-    upload: (day.outBytes ?? 0) / scale.div,
+    download: day.inBytes == null ? null : day.inBytes / scale.div,
+    upload: day.outBytes == null ? null : day.outBytes / scale.div,
     missing: day.inBytes == null && day.outBytes == null
   }));
 
@@ -306,7 +308,7 @@ function LineUseOverview({
         <span>
           Busiest{" "}
           {busiest
-            ? `${formatDay(busiest.date, busiest.date === todayDate)} · ${formatBytesUsed(dayTotal(busiest))}`
+            ? `${formatDay(busiest.date, busiest.date === today)} · ${formatBytesUsed(dayTotal(busiest))}`
             : "—"}
         </span>
       </div>
@@ -359,7 +361,7 @@ function LineUseOverview({
               <tbody>
                 {[...days].reverse().map((day) => (
                   <tr key={day.date}>
-                    <td>{formatDay(day.date, day.date === todayDate)}</td>
+                    <td>{formatDay(day.date, day.date === today)}</td>
                     <td className="num">{formatBytesUsed(day.inBytes)}</td>
                     <td className="num">{formatBytesUsed(day.outBytes)}</td>
                     <td className="num">{formatBytesUsed(dayTotal(day))}</td>

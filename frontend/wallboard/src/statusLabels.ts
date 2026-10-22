@@ -13,6 +13,14 @@ export function collectorOf(st?: SiteStatus | null): DomainStatus {
   return st?.collector ?? { state: "unknown", notes: "Waiting for collector data" };
 }
 
+/** Combined probe + internet state. A missing check is not shown as up. */
+export function connectivityState(collector?: string | null, uplink?: string | null): string {
+  const rank: Record<string, number> = { critical: 3, warning: 2, unknown: 1, healthy: 0 };
+  const a = collector || "unknown";
+  const b = uplink || "unknown";
+  return (rank[a] ?? 1) >= (rank[b] ?? 1) ? a : b;
+}
+
 /** Three words on the wall: UP, DOWN, NO DATA. */
 export function statusWord(state?: string | null): string {
   if (state === "healthy") return "UP";
