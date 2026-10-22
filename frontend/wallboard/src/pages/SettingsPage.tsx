@@ -589,23 +589,15 @@ export function SettingsPage() {
       </Modal>
 
       <Modal open={modal === "exports"} title="Reports & exports" onClose={() => setModal(null)} wide>
-        <p className="muted">
-          Choose this week (Monday–Sunday) or this calendar month, then generate. Each location that has
-          line use, access-point bytes, a probe or internet sample, or an incident gets its own A4 report,
-          plus one report for all locations. Open a report and use Print to save a PDF. Scheduled runs on
-          Sunday and the 1st of the month use the same files when exports are enabled.
-        </p>
-        <div className="formActions">
-          <label className="muted">
-            Window{" "}
-            <select
-              value={exportPeriod}
-              onChange={(e) => setExportPeriod(e.target.value === "monthly" ? "monthly" : "weekly")}
-            >
-              <option value="weekly">This week</option>
-              <option value="monthly">This month</option>
-            </select>
-          </label>
+        <p className="muted">This week or this month. One report per location, plus one for all locations.</p>
+        <div className="exportBar">
+          <select
+            value={exportPeriod}
+            onChange={(e) => setExportPeriod(e.target.value === "monthly" ? "monthly" : "weekly")}
+          >
+            <option value="weekly">This week</option>
+            <option value="monthly">This month</option>
+          </select>
           <Button type="button" onClick={() => onRunExport(exportPeriod)} disabled={busy}>
             Generate
           </Button>

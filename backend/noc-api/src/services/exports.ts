@@ -5,6 +5,7 @@ import { listIncidents, type Incident } from "../data/incidents";
 import { env } from "../env";
 import { promQuery, promQueryRange, parseFirstVectorValue, type PromQueryResult } from "./prometheus";
 import { collectLineUseDays } from "./siteNetwork";
+import { buildIfUtilQuery } from "./metrics";
 import { calendarMonthSlots, calendarWeekSlots, sumLineUseDays, type DaySlot, type LineUseDay } from "./lineUseWindow";
 import { renderExportReportHtml } from "./exportReportHtml";
 
@@ -38,6 +39,14 @@ export type ReportAccessPoint = {
   note?: string;
 };
 
+export type ReportBandwidth = {
+  name: string;
+  avgInPct: number | null;
+  peakInPct: number | null;
+  avgOutPct: number | null;
+  peakOutPct: number | null;
+};
+
 export type ReportLocation = {
   siteId: string;
   name: string;
@@ -48,6 +57,7 @@ export type ReportLocation = {
   lineOutBytes: number | null;
   lineDays: ReportBytes[];
   accessPoints: ReportAccessPoint[];
+  bandwidth: ReportBandwidth[];
 };
 
 export type ReportIncident = {
@@ -255,6 +265,29 @@ function rangeLabel(slots: DaySlot[]): string {
   return `${fmt(first)} – ${fmt(last)}`;
 }
 
+async function networkBandwidth(site: Site, range: string): Promise<ReportBandwidth[]> {
+  const devices = site.devices.filter((d) => d.kind === "network");
+  return Promise.all(
+    devices.map(async (device) => {
+      const inbound = buildIfUtilQuery("in", site.id, device.id);
+      const outbound = buildIfUtilQuery("out", site.id, device.id);
+      const [avgIn, peakIn, avgOut, peakOut] = await Promise.all([
+        avgQuery(`avg_over_time((${inbound})[${range}:1h])`),
+        avgQuery(`max_over_time((${inbound})[${range}:1h])`),
+        avgQuery(`avg_over_time((${outbound})[${range}:1h])`),
+        avgQuery(`max_over_time((${outbound})[${range}:1h])`)
+      ]);
+      return {
+        name: device.nickname || device.name,
+        avgInPct: avgIn,
+        peakInPct: peakIn,
+        avgOutPct: avgOut,
+        peakOutPct: peakOut
+      };
+    })
+  );
+}
+
 async function locationFacts(
   site: Site,
   period: ExportPeriod,
@@ -264,7 +297,7 @@ async function locationFacts(
 ): Promise<{ location: ReportLocation; hasData: boolean; incidents: ReportIncident[] }> {
   const siteLabel = escapePromLabel(site.id);
   const range = `${rangeSec}s`;
-  const [probe, internet, line, accessPoints, incidents] = await Promise.all([
+  const [probe, internet, line, accessPoints, bandwidth, incidents] = await Promise.all([
     avgQuery(
       `avg_over_time((max(up{site="${siteLabel}",job=~"site_host|integrations/unix"}))[${range}:5m])`
     ),
@@ -278,13 +311,17 @@ async function locationFacts(
       return period === "weekly" ? collected.weekDays : collected.monthDays;
     })(),
     accessPointBytes(site, windowStart, nowSec),
+    networkBandwidth(site, range),
     Promise.resolve(incidentsBetween(windowStart, nowSec, site.id))
   ]);
 
   const totals = sumLineUseDays(line);
   const lineSeen = line.some((d) => d.inBytes != null || d.outBytes != null);
   const apSeen = accessPoints.some((ap) => ap.inBytes != null || ap.outBytes != null);
-  const hasData = lineSeen || apSeen || probe != null || internet != null || incidents.length > 0;
+  const bandwidthSeen = bandwidth.some(
+    (row) => row.avgInPct != null || row.peakInPct != null || row.avgOutPct != null || row.peakOutPct != null
+  );
+  const hasData = lineSeen || apSeen || bandwidthSeen || probe != null || internet != null || incidents.length > 0;
   return {
     hasData,
     incidents,
@@ -297,7 +334,8 @@ async function locationFacts(
       lineInBytes: lineSeen ? totals.inBytes : null,
       lineOutBytes: lineSeen ? totals.outBytes : null,
       lineDays: line.map((d) => ({ date: d.date, inBytes: d.inBytes, outBytes: d.outBytes })),
-      accessPoints
+      accessPoints,
+      bandwidth
     }
   };
 }

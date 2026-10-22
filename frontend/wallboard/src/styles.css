@@ -953,6 +953,19 @@ textarea {
   flex-wrap: wrap;
 }
 
+.exportBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+.exportBar select {
+  width: 180px;
+  flex: 0 0 180px;
+  margin: 0;
+}
+
 .widgetConfig {
   padding: 0;
   border-bottom: none;

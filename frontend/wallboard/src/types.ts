@@ -271,6 +271,13 @@ export type MonthlyReportPayload = {
     lineOutBytes: number | null;
     lineDays: Array<{ date: string; inBytes: number | null; outBytes: number | null }>;
     accessPoints: Array<{ name: string; inBytes: number | null; outBytes: number | null; note?: string }>;
+    bandwidth?: Array<{
+      name: string;
+      avgInPct: number | null;
+      peakInPct: number | null;
+      avgOutPct: number | null;
+      peakOutPct: number | null;
+    }>;
   }>;
   skipped: Array<{ siteId: string; name: string }>;
   incidents: {

@@ -26,6 +26,7 @@ RUN npm ci --omit=dev || npm install --omit=dev
 COPY --from=api-build /api/dist ./dist
 COPY --from=api-build /api/data ./data
 COPY --from=ui-build /ui/dist ./public
+COPY frontend/wallboard/public/digital-penang-logo.png ./public/digital-penang-logo.png
 
 RUN mkdir -p /app/data/layouts /app/data/runtime /app/data/exports
 

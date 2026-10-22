@@ -401,6 +401,7 @@ Collector box → Alloy → Prometheus (central)
 - [x] **Reports match the wallboard (2026-10-22)**
   - Settings → Reports & exports: choose This week (Monday–Sunday) or This month, then Generate.
   - One A4 report per location that has WAN bytes, access-point bytes, a probe or internet sample, or an incident in that window, plus one All locations report. Locations with none of those are named on the combined report and skipped.
-  - Line use is the same hourly WAN total as the line-use cards. Internet uptime is the share of time DNS and the central path were both up. Access points without counters say “No byte counters”.
+  - Line use is the same hourly WAN total as the line-use cards. Internet uptime is the share of time DNS and the central path were both up. Access points without counters say “No byte counters”. Bandwidth utilisation lists average and peak in and out for each network device.
   - The file is the report: Digital Penang logo, numbered sections, print to PDF. The old dark summary and all-interface utilisation table are gone.
+  - The page uses the earlier sheet layout (KPI cards, dark table headers, incident log). The footer sits under the content. The logo is read from the app’s public folder so it is embedded in the file.
 
