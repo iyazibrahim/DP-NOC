@@ -1345,42 +1345,45 @@ export async function getWirelessClusterSummary(
   const snrs = rows
     .map((st) => st.snr)
     .filter((n): n is number => n != null && Number.isFinite(n));
-  let radioInBps: number | null = null;
-  let radioOutBps: number | null = null;
-  for (const st of rows) {
-    if (st.inBps != null && Number.isFinite(st.inBps)) radioInBps = (radioInBps ?? 0) + st.inBps;
-    if (st.outBps != null && Number.isFinite(st.outBps)) radioOutBps = (radioOutBps ?? 0) + st.outBps;
-  }
+  const byAp = selected.map((ap) => {
+    const apStations = rows.filter((st) => st.deviceId === ap.deviceId);
+    let radioInBpsAp: number | null = null;
+    let radioOutBpsAp: number | null = null;
+    const apSnrs: number[] = [];
+    for (const st of apStations) {
+      if (st.inBps != null && Number.isFinite(st.inBps)) radioInBpsAp = (radioInBpsAp ?? 0) + st.inBps;
+      if (st.outBps != null && Number.isFinite(st.outBps)) radioOutBpsAp = (radioOutBpsAp ?? 0) + st.outBps;
+      if (st.snr != null && Number.isFinite(st.snr)) apSnrs.push(st.snr);
+    }
+    return {
+      deviceId: ap.deviceId,
+      label: ap.label,
+      clients: ap.clients,
+      radioInBps: radioInBpsAp ?? ap.inBps,
+      radioOutBps: radioOutBpsAp ?? ap.outBps,
+      snrAvg: apSnrs.length
+        ? Math.round((apSnrs.reduce((sum, n) => sum + n, 0) / apSnrs.length) * 10) / 10
+        : null,
+      snrMin: apSnrs.length ? Math.round(Math.min(...apSnrs) * 10) / 10 : null
+    };
+  });
+  const sumBps = (pick: (ap: WirelessClusterAp) => number | null) => {
+    let total: number | null = null;
+    for (const ap of byAp) {
+      const n = pick(ap);
+      if (n != null && Number.isFinite(n)) total = (total ?? 0) + n;
+    }
+    return total;
+  };
   return {
     selected: selected.length,
     reporting,
     clients,
-    radioInBps,
-    radioOutBps,
+    radioInBps: sumBps((ap) => ap.radioInBps),
+    radioOutBps: sumBps((ap) => ap.radioOutBps),
     snrAvg: snrs.length ? Math.round((snrs.reduce((sum, n) => sum + n, 0) / snrs.length) * 10) / 10 : null,
     snrMin: snrs.length ? Math.round(Math.min(...snrs) * 10) / 10 : null,
-    byAp: selected.map((ap) => {
-      const apStations = rows.filter((st) => st.deviceId === ap.deviceId);
-      let radioInBpsAp: number | null = null;
-      let radioOutBpsAp: number | null = null;
-      const apSnrs: number[] = [];
-      for (const st of apStations) {
-        if (st.inBps != null && Number.isFinite(st.inBps)) radioInBpsAp = (radioInBpsAp ?? 0) + st.inBps;
-        if (st.outBps != null && Number.isFinite(st.outBps)) radioOutBpsAp = (radioOutBpsAp ?? 0) + st.outBps;
-        if (st.snr != null && Number.isFinite(st.snr)) apSnrs.push(st.snr);
-      }
-      return {
-        deviceId: ap.deviceId,
-        label: ap.label,
-        clients: ap.clients,
-        radioInBps: radioInBpsAp,
-        radioOutBps: radioOutBpsAp,
-        snrAvg: apSnrs.length
-          ? Math.round((apSnrs.reduce((sum, n) => sum + n, 0) / apSnrs.length) * 10) / 10
-          : null,
-        snrMin: apSnrs.length ? Math.round(Math.min(...apSnrs) * 10) / 10 : null
-      };
-    }),
+    byAp,
     stations: rows.map((st) => ({
       deviceId: st.deviceId,
       apLabel: st.apLabel,

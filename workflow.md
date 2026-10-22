@@ -401,7 +401,7 @@ Collector box → Alloy → Prometheus (central)
 - [x] **Reports match the wallboard (2026-10-22)**
   - Settings → Reports & exports: choose This week (Monday–Sunday) or This month, then Generate.
   - One A4 report per location that has WAN bytes, access-point bytes, a probe or internet sample, or an incident in that window, plus one All locations report. Locations with none of those are named on the combined report and skipped.
-  - Access points without 64-bit counters use the 32-bit interface counters (`ifInOctets` / `ifOutOctets`). Those series start after the collector image is rebuilt and Force apply runs. Per-client bytes are still not in the Omada MIB.
+  - Access points without 64-bit counters use the 32-bit interface counters (`ifInOctets` / `ifOutOctets`). Those series start after the collector image is rebuilt and Force apply runs. The AP cluster uses those same interface rates when an access point has no per-client radio counters. Per-client bytes and SNR are still not in the Omada MIB.
   - The file is the report: Digital Penang logo, numbered sections, print to PDF. The old dark summary and all-interface utilisation table are gone.
   - The page uses the earlier sheet layout (KPI cards, dark table headers, incident log). The footer sits under the content. The logo is read from the app’s public folder so it is embedded in the file.
 
