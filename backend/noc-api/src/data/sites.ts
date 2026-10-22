@@ -45,6 +45,8 @@ export type Site = {
   collectorTokenHash?: string;
   /** Last successful collector devices.json pull */
   collectorDevicesSyncedAt?: string;
+  /** When true, this location opens no incidents and pages nothing. Health still updates. */
+  alertsMuted?: boolean;
 };
 
 export type PublicSite = Omit<Site, "collectorTokenHash"> & {
@@ -128,7 +130,8 @@ function normalizeSite(s: Site): Site {
     devices: (s.devices ?? []).map(normalizeDevice),
     websiteTargets: s.websiteTargets ?? [],
     wan: s.wan ?? { dnsTarget: "1.1.1.1", vpsTarget: "139.99.88.174" },
-    wanUplink
+    wanUplink,
+    alertsMuted: s.alertsMuted === true
   };
 }
 
@@ -311,6 +314,7 @@ export type UpdateSitePatch = {
   websiteTargets?: Site["websiteTargets"];
   /** Pass null to clear the tagged WAN interface */
   wanUplink?: Site["wanUplink"] | null;
+  alertsMuted?: boolean;
 };
 
 export function updateSite(id: string, patch: UpdateSitePatch): Site | null {
@@ -331,6 +335,7 @@ export function updateSite(id: string, patch: UpdateSitePatch): Site | null {
       ifName: patch.wanUplink.ifName.trim()
     };
   }
+  if (typeof patch.alertsMuted === "boolean") site.alertsMuted = patch.alertsMuted;
   persist();
   return site;
 }

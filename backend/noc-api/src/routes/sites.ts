@@ -515,6 +515,7 @@ sitesRouter.patch("/:id", requireJwt(["operator"]), async (req: Request, res: Re
   if (Array.isArray(body.websiteTargets)) {
     patch.websiteTargets = body.websiteTargets as Array<{ name: string; url: string }>;
   }
+  if (typeof body.alertsMuted === "boolean") patch.alertsMuted = body.alertsMuted;
   if (body.wanUplink === null) {
     patch.wanUplink = null;
   } else if (body.wanUplink && typeof body.wanUplink === "object") {

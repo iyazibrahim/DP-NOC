@@ -3,6 +3,7 @@ import path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { env } from "../env";
+import { defaultAlertTypes, type AlertTypeId } from "./alertCatalog";
 
 const execAsync = promisify(exec);
 
@@ -29,6 +30,7 @@ export type NotificationsConfig = {
     groupInterval: string;
     repeatInterval: string;
   };
+  alertTypes: Record<AlertTypeId, boolean>;
 };
 
 export type NotificationsConfigPublic = NotificationsConfig & {
@@ -51,8 +53,22 @@ const DEFAULT: NotificationsConfig = {
     groupWait: "30s",
     groupInterval: "5m",
     repeatInterval: "3h"
-  }
+  },
+  alertTypes: defaultAlertTypes()
 };
+
+function withDefaults(raw: Partial<NotificationsConfig> | undefined): NotificationsConfig {
+  const parsed = raw ?? {};
+  return {
+    ...DEFAULT,
+    ...parsed,
+    telegram: { ...DEFAULT.telegram, ...(parsed.telegram ?? {}) },
+    email: { ...DEFAULT.email, ...(parsed.email ?? {}) },
+    webhook: { ...DEFAULT.webhook, ...(parsed.webhook ?? {}) },
+    route: { ...DEFAULT.route, ...(parsed.route ?? {}) },
+    alertTypes: { ...defaultAlertTypes(), ...(parsed.alertTypes ?? {}) }
+  };
+}
 
 function runtimeDir(): string {
   const candidates = [
@@ -86,7 +102,7 @@ export function loadNotificationsConfig(): NotificationsConfig {
     saveNotificationsConfig(DEFAULT);
     return { ...DEFAULT };
   }
-  return { ...DEFAULT, ...JSON.parse(fs.readFileSync(file, "utf8")) };
+  return withDefaults(JSON.parse(fs.readFileSync(file, "utf8")) as Partial<NotificationsConfig>);
 }
 
 export function maskNotificationsConfig(config: NotificationsConfig): NotificationsConfigPublic {
@@ -106,7 +122,7 @@ export function maskNotificationsConfig(config: NotificationsConfig): Notificati
 }
 
 export function saveNotificationsConfig(config: NotificationsConfig): NotificationsConfig {
-  const merged = { ...DEFAULT, ...config };
+  const merged = withDefaults(config);
   fs.writeFileSync(configPath(), JSON.stringify(merged, null, 2) + "\n", "utf8");
   writeAlertmanagerYaml(merged);
   return merged;
@@ -173,6 +189,16 @@ inhibit_rules:
     target_matchers:
       - alertname = SiteUplinkDown
     equal: ["site"]
+  - source_matchers:
+      - alertname = SiteCollectorDown
+    target_matchers:
+      - alertname = SiteLocalDeviceDown
+    equal: ["site"]
+  - source_matchers:
+      - alertname = SiteCollectorDown
+    target_matchers:
+      - alertname = SiteSnmpDegraded
+    equal: ["site"]
 `;
 
   fs.writeFileSync(alertmanagerPath(), yaml, "utf8");
@@ -210,6 +236,7 @@ export function mergeNotificationsPatch(
     email?: Partial<NotificationsConfig["email"]>;
     webhook?: Partial<NotificationsConfig["webhook"]>;
     route?: Partial<NotificationsConfig["route"]>;
+    alertTypes?: Partial<NotificationsConfig["alertTypes"]>;
   }
 ): NotificationsConfig {
   const next: NotificationsConfig = {
@@ -217,7 +244,8 @@ export function mergeNotificationsPatch(
     telegram: { ...current.telegram, ...(body.telegram ?? {}) },
     email: { ...current.email, ...(body.email ?? {}) },
     webhook: { ...current.webhook, ...(body.webhook ?? {}) },
-    route: { ...current.route, ...(body.route ?? {}) }
+    route: { ...current.route, ...(body.route ?? {}) },
+    alertTypes: { ...current.alertTypes, ...(body.alertTypes ?? {}) }
   };
 
   if (body.telegram?.botToken === "••••••" || body.telegram?.botToken === "") {

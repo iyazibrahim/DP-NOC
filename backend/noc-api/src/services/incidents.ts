@@ -7,6 +7,9 @@ import {
   type Incident
 } from "../data/incidents";
 import { env } from "../env";
+import { alertTypeByKind, type AlertTypeId } from "./alertCatalog";
+import { postAlerts, type PostedAlert } from "./alertmanager";
+import { loadNotificationsConfig } from "./notifications";
 import type { SiteStatus } from "./status";
 
 function siteName(siteId: string): string {
@@ -55,15 +58,65 @@ function sustainedCritical(key: string, isCritical: boolean): boolean {
   return now - since >= env.INCIDENT_SUSTAIN_MS;
 }
 
-/** Website-only critical (no local-device / residual location issue). */
-function isWebsitesOnlyCritical(st: SiteStatus): boolean {
-  if (st.websites.state !== "critical") return false;
-  const ld = st.localDevices?.state ?? st.lan?.state;
-  return ld !== "critical";
-}
-
 function websiteIncidentKey(siteId: string, url: string): string {
   return `website:${siteId}:${url}`;
+}
+
+function siteMuted(siteId: string): boolean {
+  if (siteId === "global") return false;
+  return getSiteById(siteId)?.alertsMuted === true;
+}
+
+function typeEnabled(id: AlertTypeId): boolean {
+  return loadNotificationsConfig().alertTypes[id] === true;
+}
+
+/**
+ * A muted location opens nothing. A disabled type opens nothing.
+ * While the probe is critical, Internet and device checks are explained by that
+ * outage, so they stay closed. Websites are checked from the central server.
+ */
+function alertReady(
+  siteId: string,
+  type: AlertTypeId,
+  key: string,
+  isCritical: boolean,
+  probeDown: boolean
+): boolean {
+  if (siteMuted(siteId) || !typeEnabled(type)) {
+    sustainedCritical(key, false);
+    return false;
+  }
+  const coveredByProbe = probeDown && (type === "uplink" || type === "device" || type === "snmp");
+  if (coveredByProbe) {
+    if (!isCritical) sustainedCritical(key, false);
+    return false;
+  }
+  return sustainedCritical(key, isCritical);
+}
+
+function toPostedAlert(row: Incident, resolved: boolean): PostedAlert | null {
+  const def = alertTypeByKind(row.kind);
+  if (!def) return null;
+  return {
+    labels: {
+      alertname: def.alertname,
+      site: row.siteId,
+      severity: def.severity,
+      noc_key: row.key
+    },
+    annotations: {
+      summary: row.title,
+      description: row.detail
+    },
+    startsAt: row.openedAt,
+    endsAt: resolved ? (row.resolvedAt ?? new Date().toISOString()) : undefined
+  };
+}
+
+function remember(pages: PostedAlert[], row: Incident, resolved: boolean) {
+  const posted = toPostedAlert(row, resolved);
+  if (posted) pages.push(posted);
 }
 
 /** Open/resolve status-derived incidents from current site statuses. */
@@ -72,16 +125,30 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
   history: Incident[];
 } {
   const activeKeys = new Set<string>();
+  const pages: PostedAlert[] = [];
+
+  const track = (input: {
+    key: string;
+    siteId: string;
+    siteName: string;
+    kind: AlertTypeId;
+    title: string;
+    detail: string;
+  }) => {
+    activeKeys.add(input.key);
+    const { incident } = upsertOpenIncident(input);
+    remember(pages, incident, false);
+  };
 
   for (const st of statuses) {
     const name = siteName(st.siteId);
     const up = st.uplink ?? st.wan;
     const col = st.collector;
+    const probeDown = col?.state === "critical";
 
     const uplinkKey = `uplink:${st.siteId}`;
-    if (sustainedCritical(uplinkKey, up?.state === "critical")) {
-      activeKeys.add(uplinkKey);
-      upsertOpenIncident({
+    if (alertReady(st.siteId, "uplink", uplinkKey, up?.state === "critical", probeDown)) {
+      track({
         key: uplinkKey,
         siteId: st.siteId,
         siteName: name,
@@ -92,54 +159,50 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
     }
 
     const collectorKey = `collector:${st.siteId}`;
-    if (sustainedCritical(collectorKey, col?.state === "critical")) {
-      activeKeys.add(collectorKey);
-      upsertOpenIncident({
+    if (alertReady(st.siteId, "collector", collectorKey, col?.state === "critical", probeDown)) {
+      track({
         key: collectorKey,
         siteId: st.siteId,
         siteName: name,
         kind: "collector",
         title: `Collector offline — ${name}`,
-        detail: col.notes ?? "Device checks are paused so they are not marked down. Check power and the network on the collector, then open Collector Console."
+        detail:
+          col.notes ??
+          "The monitoring box at this location is not reporting. Check power and the network, then open Collector Console."
       });
     }
 
     for (const w of st.websiteStates ?? []) {
       const wKey = websiteIncidentKey(st.siteId, w.url);
-      if (sustainedCritical(wKey, w.state === "critical")) {
-        activeKeys.add(wKey);
-        upsertOpenIncident({
+      if (alertReady(st.siteId, "website", wKey, w.state === "critical", probeDown)) {
+        track({
           key: wKey,
           siteId: st.siteId,
           siteName: name,
           kind: "website",
           title: `Website DOWN — ${w.name}`,
           detail: w.notes
-          ? `${w.name} at ${name} is not responding. ${w.notes}`
-          : `${w.name} at ${name} is not responding. Check that the address is correct and the site is up.`
+            ? `${w.name} at ${name} is not responding. ${w.notes}`
+            : `${w.name} at ${name} is not responding. Check that the address is correct and the site is up.`
         });
       }
     }
 
     for (const d of st.localDeviceStates ?? []) {
       const downKey = `device:${st.siteId}:${d.deviceId}`;
-      if (sustainedCritical(downKey, d.state === "critical")) {
-        activeKeys.add(downKey);
-        upsertOpenIncident({
+      if (alertReady(st.siteId, "device", downKey, d.state === "critical", probeDown)) {
+        track({
           key: downKey,
           siteId: st.siteId,
           siteName: name,
           kind: "device",
           title: `Device unreachable — ${d.name}`,
-          detail:
-            d.notes ??
-            `${d.name} is not answering ping or SNMP. Check power and the network cable.`
+          detail: d.notes ?? `${d.name} is not answering ping or SNMP. Check power and the network cable.`
         });
       }
       const snmpKey = `snmp:${st.siteId}:${d.deviceId}`;
-      if (sustainedCritical(snmpKey, d.state === "warning")) {
-        activeKeys.add(snmpKey);
-        upsertOpenIncident({
+      if (alertReady(st.siteId, "snmp", snmpKey, d.state === "warning", probeDown)) {
+        track({
           key: snmpKey,
           siteId: st.siteId,
           siteName: name,
@@ -150,40 +213,6 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
             `${d.name} is online, but SNMP is not answering. Check the SNMP community and that UDP port 161 is allowed, then use Force apply on the collector.`
         });
       }
-    }
-
-    // Location residual only when the outage is not already covered by uplink, collector,
-    // website, or per-device incidents.
-    const locationKey = `overall:${st.siteId}`;
-    const localCritical = (st.localDevices ?? st.lan)?.state === "critical";
-    const locationCritical =
-      st.overall === "critical" &&
-      up?.state !== "critical" &&
-      col?.state !== "critical" &&
-      !isWebsitesOnlyCritical(st) &&
-      !localCritical;
-
-    if (sustainedCritical(locationKey, locationCritical)) {
-      activeKeys.add(locationKey);
-      const causes: string[] = [];
-      if (st.websites.state === "critical") {
-        causes.push(st.websites.notes ?? "One or more websites are not responding.");
-      }
-      if (st.alerts?.firing > 0) {
-        causes.push(
-          st.alerts.firing === 1
-            ? "1 alert is still firing."
-            : `${st.alerts.firing} alerts are still firing.`
-        );
-      }
-      upsertOpenIncident({
-        key: locationKey,
-        siteId: st.siteId,
-        siteName: name,
-        kind: "location",
-        title: `Location health critical — ${name}`,
-        detail: causes.join(" ") || "This location needs attention. Open the dashboard for the failing check."
-      });
     }
   }
 
@@ -202,25 +231,24 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
       candidates.add(websiteIncidentKey(st.siteId, w.url));
     }
   }
-  // Resolve open website incidents whose URL was removed from config
-  for (const i of getOpenIncidents()) {
-    if (
-      i.kind === "website" ||
-      i.kind === "device" ||
-      i.kind === "snmp" ||
-      i.key.startsWith("website:") ||
-      i.key.startsWith("device:") ||
-      i.key.startsWith("snmp:")
-    ) {
-      candidates.add(i.key);
+  for (const i of getOpenIncidents()) candidates.add(i.key);
+
+  for (const key of candidates) {
+    if (!activeKeys.has(key)) {
+      const resolved = markResolvedIfOpen(key);
+      if (resolved) remember(pages, resolved, true);
     }
   }
 
-  for (const key of candidates) {
-    if (!activeKeys.has(key)) markResolvedIfOpen(key);
-  }
+  if (pages.length > 0) void postAlerts(pages);
 
   return { open: getOpenIncidents(), history: getHistoryIncidents() };
+}
+
+/** Stop paging an incident the operator has acknowledged. Health is unchanged. */
+export function deliverResolvedIncident(row: Incident): void {
+  const posted = toPostedAlert(row, true);
+  if (posted) void postAlerts([posted]);
 }
 
 export function listSyncedIncidents(statuses: SiteStatus[]) {

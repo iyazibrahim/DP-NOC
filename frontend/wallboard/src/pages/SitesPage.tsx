@@ -217,7 +217,8 @@ export function SiteDetailPage() {
     lat: 0,
     lng: 0,
     wanDeviceId: "",
-    wanIfName: ""
+    wanIfName: "",
+    alertsMuted: false
   });
   const [wanInterfaces, setWanInterfaces] = useState<
     Array<{ ifName: string; ifDescr?: string; ifIndex?: string }>
@@ -269,7 +270,8 @@ export function SiteDetailPage() {
       lat: s.site.lat,
       lng: s.site.lng,
       wanDeviceId: s.site.wanUplink?.deviceId ?? "",
-      wanIfName: s.site.wanUplink?.ifName ?? ""
+      wanIfName: s.site.wanUplink?.ifName ?? "",
+      alertsMuted: s.site.alertsMuted === true
     });
     setStatus(st.statuses.find((x) => x.siteId === id) ?? null);
     setDiscovered(disc.devices);
@@ -496,7 +498,8 @@ export function SiteDetailPage() {
         lat: siteForm.lat,
         lng: siteForm.lng,
         wanUplink:
-          wanDeviceId && wanIfName ? { deviceId: wanDeviceId, ifName: wanIfName } : null
+          wanDeviceId && wanIfName ? { deviceId: wanDeviceId, ifName: wanIfName } : null,
+        alertsMuted: siteForm.alertsMuted
       });
       setEditSiteOpen(false);
       await reload();
@@ -1082,6 +1085,17 @@ export function SiteDetailPage() {
             value={siteForm.notes}
             onChange={(e) => setSiteForm((f) => ({ ...f, notes: e.target.value }))}
           />
+          <label className="label">
+            <input
+              type="checkbox"
+              checked={siteForm.alertsMuted}
+              onChange={(e) => setSiteForm((f) => ({ ...f, alertsMuted: e.target.checked }))}
+            />{" "}
+            Mute alerts
+          </label>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Stops incidents and pages for this location only. The dashboard can still show it down.
+          </p>
           <SiteLocationPicker
             lat={siteForm.lat}
             lng={siteForm.lng}

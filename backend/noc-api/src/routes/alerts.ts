@@ -3,7 +3,11 @@ import express from "express";
 import { requireJwt, type AuthenticatedRequest } from "../middleware/auth";
 import { getActiveAlerts } from "../services/alertmanager";
 import { computeAllSitesStatus } from "../services/status";
-import { listSyncedIncidents, suppressIncidentUntilRecovered } from "../services/incidents";
+import {
+  deliverResolvedIncident,
+  listSyncedIncidents,
+  suppressIncidentUntilRecovered
+} from "../services/incidents";
 import { acknowledgeIncident } from "../data/incidents";
 
 export const alertsRouter = express.Router();
@@ -42,6 +46,7 @@ alertsRouter.post(
     if (!row.resolvedAt) {
       suppressIncidentUntilRecovered(row.key);
     }
+    deliverResolvedIncident(row);
     return res.json({ incident: row });
   }
 );

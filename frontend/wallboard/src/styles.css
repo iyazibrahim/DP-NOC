@@ -883,6 +883,37 @@ textarea {
   text-transform: uppercase;
 }
 
+.alertRow {
+  cursor: pointer;
+}
+
+.alertRow:hover td,
+.alertRow:focus td {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.alertDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.alertDetailNote {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.alertDetailGrid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px 12px;
+  align-items: baseline;
+}
+
+.alertDetailGrid span {
+  color: var(--muted);
+}
+
 .dataTable .num {
   font-family: "IBM Plex Mono", monospace;
   font-weight: 700;

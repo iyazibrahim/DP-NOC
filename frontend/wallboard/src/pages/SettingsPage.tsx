@@ -366,7 +366,38 @@ export function SettingsPage() {
       >
         {notifications ? (
           <form className="deviceForm" onSubmit={onSaveNotifications}>
-            <p className="muted">Telegram / email / webhook via Alertmanager. Save, then Apply.</p>
+            <p className="muted">
+              These types open an incident and page the channels below. SNMP stays off until you enable it.
+              Save, then Apply so Alertmanager picks up the channels.
+            </p>
+            <div className="tableTitle">Alert types</div>
+            {(
+              [
+                ["uplink", "Internet", "Both internet paths failed."],
+                ["collector", "Probe", "The monitoring box is not reporting."],
+                ["website", "Website", "A public website check failed."],
+                ["device", "Network device", "A device is not answering ping."],
+                ["snmp", "SNMP", "Ping works, but SNMP does not. Off until you enable it."]
+              ] as const
+            ).map(([id, label, detail]) => (
+              <label key={id} className="label">
+                <input
+                  type="checkbox"
+                  checked={notifications.alertTypes?.[id] ?? id !== "snmp"}
+                  onChange={(e) =>
+                    setNotifications({
+                      ...notifications,
+                      alertTypes: {
+                        ...notifications.alertTypes,
+                        [id]: e.target.checked
+                      }
+                    })
+                  }
+                />{" "}
+                {label}
+                <span className="muted"> — {detail}</span>
+              </label>
+            ))}
             <div className="tableTitle">Telegram</div>
             <label className="label">
               <input

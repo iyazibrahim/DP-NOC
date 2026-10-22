@@ -100,7 +100,7 @@ export async function createSite(
 export async function updateSite(
   token: string,
   id: string,
-  patch: Partial<Pick<Site, "name" | "lat" | "lng" | "address" | "notes" | "wan" | "websiteTargets">> & {
+  patch: Partial<Pick<Site, "name" | "lat" | "lng" | "address" | "notes" | "wan" | "websiteTargets" | "alertsMuted">> & {
     wanUplink?: Site["wanUplink"] | null;
   }
 ) {

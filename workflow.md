@@ -393,4 +393,8 @@ Collector box → Alloy → Prometheus (central)
   - The 30-day card is the current calendar month in `NOC_TZ`. Short months have fewer days and long months have more. The total resets on the first.
   - Dashboard charts show the last 24 hours. Click a chart to open the longer ranges and the latest, average, and peak values. Tiles use a coarser sample and do not animate, so a full day stays responsive.
   - AP traffic and AP cluster open the same way. The popup lists every access point and each client, with live rate, SNR, and today’s volume on the traffic view.
+- [x] **One alert list (2026-10-22)**
+  - Incidents are the only alerts. Internet, Probe, Website, and Network device start on. SNMP starts off. Settings turns a type on or off for every location. Edit site can mute one location; the dashboard can still show it down.
+  - A down probe opens only Probe. Websites still open. Internet, device, and SNMP incidents stay closed until the probe recovers. The old Location catch-all is no longer opened.
+  - Alertmanager only delivers those incidents. The five Prometheus rules are retired so they cannot page a second copy. The Alerts page is the incident list, 10 rows per page. Click a row for the type, status, and times. Acknowledge stays in that popup.
 

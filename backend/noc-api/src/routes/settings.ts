@@ -66,9 +66,9 @@ settingsRouter.get("/status-timing", requireJwt(["operator", "wallboard"]), (_re
       "Dashboard polls /api/sites/status/all every ~5s (UI refresh only — does not change detection speed).",
       `Status and gauges use last_over_time over ${STATUS_META.metricFreshWindowSec}s; missing samples = DOWN for uplink/collector.`,
       "Critical Internet DOWN requires both wan_dns and wan_vps failed (quorum). Single-path failure is warning.",
-      "Collector offline suppresses uplink critical (cannot confirm WAN when metrics path is down).",
-      "Incidents open only after ~90s sustained critical; Alertmanager SiteUplinkDown/SiteCollectorDown use for: 2m.",
-      "Target page time ~2 minutes — collector ICMP scrape must stay 15s–30s (not Alloy’s 60s default).",
+      "A down probe does not rewrite internet health. It stops Internet and device incidents until the probe recovers.",
+      "Incidents open only after ~90s sustained critical. Those incidents are what page Alertmanager.",
+      "Collector ICMP scrape must stay 15s–30s (not Alloy’s 60s default).",
       "If uplink flickers while the collector is healthy, check ICMP scrape interval on the collector."
     ]
   });

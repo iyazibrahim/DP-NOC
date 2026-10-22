@@ -62,6 +62,39 @@ function normalizeAlerts(data: unknown): Alert[] {
   return list.map(normalizeOneAlert).filter((a): a is Alert => a != null);
 }
 
+export type PostedAlert = {
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  startsAt: string;
+  endsAt?: string;
+};
+
+/**
+ * Push the incidents noc-api owns. Omit endsAt to keep an alert firing.
+ * Alertmanager dedupes on labels, so repeating an open incident refreshes it.
+ */
+export async function postAlerts(alerts: PostedAlert[]): Promise<void> {
+  if (alerts.length === 0) return;
+  try {
+    const url = new URL("/api/v2/alerts", env.ALERTMANAGER_BASE_URL);
+    const body = alerts.map((alert) => ({
+      labels: alert.labels,
+      annotations: alert.annotations,
+      startsAt: alert.startsAt,
+      endsAt: alert.endsAt ?? "0001-01-01T00:00:00.000Z"
+    }));
+    const res = await fetch(url.toString(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!res.ok) console.warn(`Alertmanager post ${res.status}`);
+  } catch (e) {
+    console.warn("Alertmanager post failed", e);
+  }
+}
+
 /** Never throws — empty list if Alertmanager is down or unreachable. */
 export async function getActiveAlerts(): Promise<Alert[]> {
   try {

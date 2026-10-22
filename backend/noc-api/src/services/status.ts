@@ -134,8 +134,8 @@ function applyRecoveryHysteresis(key: string, raw: DomainStatus): DomainStatus {
 export const STATUS_META: Omit<StatusMeta, "checkedAt"> = {
   dashboardRefreshSec: env.STATUS_DASHBOARD_REFRESH_SEC,
   metricFreshWindowSec: env.STATUS_METRIC_FRESH_SEC,
-  /** Alertmanager for: 2m — typical page time for sustained outages */
-  typicalDetectionSec: 120,
+  /** Fresh window plus the 90s incident sustain. */
+  typicalDetectionSec: env.STATUS_METRIC_FRESH_SEC + Math.round(env.INCIDENT_SUSTAIN_MS / 1000),
   scrapeIntervalSec: 15
 };
 
@@ -429,17 +429,6 @@ async function siteHasFreshSuccessfulPing(siteId: string): Promise<boolean> {
   }
 }
 
-function alertForcesOverallDown(alert: Alert, snapshotFresh: boolean): boolean {
-  if (alert.status !== "firing" || isWebsiteAlert(alert)) return false;
-  const name = String(alert.labels?.alertname ?? "");
-  if (name === "SiteSnmpDegraded" || name === "SiteLocalDeviceDown") return false;
-  if (snapshotFresh && name === "SiteCollectorDown") {
-    return false;
-  }
-  const sev = String(alert.labels?.severity ?? "critical").toLowerCase();
-  return sev !== "warning" && sev !== "info";
-}
-
 /**
  * Blackbox probe for one URL, with Hetrix multi-location failover:
  * critical only if Blackbox says down AND Hetrix does not say up.
@@ -542,11 +531,6 @@ async function computeWebsitesDomain(
 
   websites = applyRecoveryHysteresis(`websites:${siteId}`, websites);
   return { websites, websiteStates };
-}
-
-function isWebsiteAlert(alert: Alert): boolean {
-  const name = String(alert.labels?.alertname ?? alert.labels?.alertName ?? "").toLowerCase();
-  return name.includes("website") || name === "sitewebsitedown";
 }
 
 /**
@@ -710,11 +694,8 @@ export async function computeSiteStatus(
     const firing = relevant.filter((a) => a.status === "firing").length;
     const resolved = relevant.filter((a) => a.status === "resolved").length;
 
-    // Global is website-only — overall follows website domain (Hetrix failover applied).
-    // Do not force critical from Blackbox-only SiteWebsiteDown AM alerts.
-    let overall: DomainState = websites.state;
-    const nonWebsiteFiring = relevant.filter((a) => alertForcesOverallDown(a, false)).length;
-    if (nonWebsiteFiring > 0) overall = "critical";
+    // Global is website-only. Overall follows the website checks.
+    const overall: DomainState = websites.state;
 
     const na = { state: "unknown" as const, notes: "Not applicable" };
     return {
@@ -889,13 +870,6 @@ export async function computeSiteStatus(
     overall = worst(overall, websites.state);
     overall = worst(overall, localDevices.state);
   }
-  // Website AM alerts are reflected via websites domain (Hetrix failover); do not
-  // force overall critical from Blackbox-only SiteWebsiteDown pages.
-  const nonWebsiteFiring = relevant.filter((a) =>
-    alertForcesOverallDown(a, Boolean(snapshot))
-  ).length;
-  if (nonWebsiteFiring > 0) overall = "critical";
-
   return {
     siteId,
     wan: uplink,

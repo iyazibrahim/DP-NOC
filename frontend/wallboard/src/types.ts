@@ -83,6 +83,8 @@ export type Site = {
   /** Present when a collector sync token has been generated */
   hasCollectorToken?: boolean;
   collectorDevicesSyncedAt?: string | null;
+  /** When true, this location opens no incidents and pages nothing. */
+  alertsMuted?: boolean;
 };
 
 export type ActiveAlert = {
@@ -337,6 +339,13 @@ export type NotificationsConfig = {
     groupWait: string;
     groupInterval: string;
     repeatInterval: string;
+  };
+  alertTypes: {
+    uplink: boolean;
+    collector: boolean;
+    website: boolean;
+    device: boolean;
+    snmp: boolean;
   };
 };
 

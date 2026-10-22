@@ -1,24 +1,46 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
-import {
-  acknowledgeIncident,
-  getIncidents,
-  getRecentAlerts,
-  STATUS_POLL_MS,
-  type NocIncident
-} from "@/api";
-import type { ActiveAlert } from "@/types";
+import { acknowledgeIncident, getIncidents, STATUS_POLL_MS, type NocIncident } from "@/api";
 import { StatusPill } from "@/components/StatusPill";
+import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/noc/PageHeader";
 import { TablePagination, paginateItems } from "@/components/TableControls";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
+const PAGE_SIZE = 10;
+
+function kindLabel(kind: string): string {
+  switch (kind) {
+    case "uplink":
+      return "Internet";
+    case "collector":
+      return "Probe";
+    case "website":
+      return "Website";
+    case "device":
+      return "Network device";
+    case "snmp":
+      return "SNMP";
+    case "location":
+    case "overall":
+      return "Location";
+    default:
+      return kind ? kind.charAt(0).toUpperCase() + kind.slice(1) : "Alert";
+  }
+}
+
 function incidentStatusLabel(i: NocIncident) {
-  if (i.acknowledgedAt) return "Acked";
-  if (i.resolvedAt) return "Needs ack";
+  if (i.acknowledgedAt) return "Acknowledged";
+  if (i.resolvedAt) return "Recovered";
   return "Active";
+}
+
+function incidentStatusSentence(i: NocIncident) {
+  if (i.acknowledgedAt) return "Acknowledged. This does not change whether the check is up.";
+  if (i.resolvedAt) return "The check has recovered. Acknowledge to move it to history.";
+  return "The check is still failing.";
 }
 
 function formatWhen(iso?: string) {
@@ -30,23 +52,26 @@ function formatWhen(iso?: string) {
   }
 }
 
+function siteCell(row: NocIncident) {
+  if (row.siteId === "global") return row.siteName;
+  return <Link to={`/sites/${row.siteId}`}>{row.siteName}</Link>;
+}
+
 export function AlertsPage() {
   const { token } = useAuth();
   const [open, setOpen] = useState<NocIncident[]>([]);
   const [history, setHistory] = useState<NocIncident[]>([]);
-  const [amAlerts, setAmAlerts] = useState<ActiveAlert[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [openPage, setOpenPage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
-  const [alertPage, setAlertPage] = useState(1);
+  const [selected, setSelected] = useState<NocIncident | null>(null);
 
   async function reload() {
     if (!token) return;
-    const [inc, al] = await Promise.all([getIncidents(token), getRecentAlerts(token, 100)]);
+    const inc = await getIncidents(token);
     setOpen(inc.open ?? []);
     setHistory(inc.history ?? []);
-    setAmAlerts(al.alerts ?? []);
   }
 
   useEffect(() => {
@@ -68,11 +93,19 @@ export function AlertsPage() {
     };
   }, [token]);
 
+  useEffect(() => {
+    setSelected((current) => {
+      if (!current) return null;
+      return [...open, ...history].find((row) => row.id === current.id) ?? null;
+    });
+  }, [open, history]);
+
   async function onAck(id: string) {
     if (!token) return;
     setBusyId(id);
     try {
       await acknowledgeIncident(token, id);
+      setSelected(null);
       await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Acknowledge failed");
@@ -81,11 +114,13 @@ export function AlertsPage() {
     }
   }
 
-  const firingAm = amAlerts.filter((a) => a.status === "firing");
-  const pendingAck = open.filter((i) => i.resolvedAt).length;
-  const openPager = useMemo(() => paginateItems(open, openPage), [open, openPage]);
-  const historyPager = useMemo(() => paginateItems(history, historyPage), [history, historyPage]);
-  const alertPager = useMemo(() => paginateItems(amAlerts, alertPage), [amAlerts, alertPage]);
+  const activeCount = open.filter((row) => !row.resolvedAt).length;
+  const pendingAck = open.filter((row) => row.resolvedAt).length;
+  const openPager = useMemo(() => paginateItems(open, openPage, PAGE_SIZE), [open, openPage]);
+  const historyPager = useMemo(
+    () => paginateItems(history, historyPage, PAGE_SIZE),
+    [history, historyPage]
+  );
 
   useEffect(() => {
     if (openPage !== openPager.page) setOpenPage(openPager.page);
@@ -93,15 +128,12 @@ export function AlertsPage() {
   useEffect(() => {
     if (historyPage !== historyPager.page) setHistoryPage(historyPager.page);
   }, [historyPage, historyPager.page]);
-  useEffect(() => {
-    if (alertPage !== alertPager.page) setAlertPage(alertPager.page);
-  }, [alertPage, alertPager.page]);
 
   return (
     <div className="page">
       <PageHeader
         title="Alerts"
-        subtitle="Acknowledge clears open incidents — it does not change site health"
+        subtitle="Click an incident for the full detail. Acknowledge clears it from this list and does not change site health."
       />
 
       {error ? (
@@ -112,74 +144,37 @@ export function AlertsPage() {
 
       <div className="healthStrip" style={{ marginBottom: 14 }}>
         <div className="healthChip">
-          <span className="healthChipLabel">Open incidents</span>
-          <strong>{open.length}</strong>
+          <span className="healthChipLabel">Active</span>
+          <strong>{activeCount}</strong>
         </div>
         <div className="healthChip">
-          <span className="healthChipLabel">Needs ack</span>
+          <span className="healthChipLabel">Needs acknowledgement</span>
           <strong>{pendingAck}</strong>
-        </div>
-        <div className="healthChip">
-          <span className="healthChipLabel">Alertmanager firing</span>
-          <strong>{firingAm.length}</strong>
         </div>
       </div>
 
       <div className="tableCard" style={{ marginBottom: 14 }}>
-        <div className="tableTitle">Open incidents</div>
-        <p className="muted" style={{ marginBottom: 10 }}>
-          Acknowledge clears this list (does not fix the site). If still down, it stays cleared until
-          the site recovers — then a new outage can open again. Recovered incidents also stay here
-          until you ack them.
-        </p>
+        <div className="tableTitle">Open</div>
         <table className="dataTable">
           <thead>
             <tr>
+              <th>Type</th>
               <th>Problem</th>
               <th>Site</th>
               <th>Status</th>
-              <th>Detail</th>
               <th>Opened</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {open.length === 0 ? (
               <tr>
-                <td colSpan={6} className="muted">
+                <td colSpan={5} className="muted">
                   No open incidents.
                 </td>
               </tr>
             ) : (
-              openPager.slice.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.title}</td>
-                  <td>
-                    {r.siteId === "global" ? (
-                      r.siteName
-                    ) : (
-                      <Link to={`/sites/${r.siteId}`}>{r.siteName}</Link>
-                    )}
-                  </td>
-                  <td>
-                    {r.resolvedAt ? (
-                      <span className="muted">{incidentStatusLabel(r)}</span>
-                    ) : (
-                      <StatusPill state="critical" />
-                    )}
-                  </td>
-                  <td>{r.detail}</td>
-                  <td>{formatWhen(r.openedAt)}</td>
-                  <td>
-                    <Button
-                      type="button"
-                      disabled={busyId === r.id}
-                      onClick={() => onAck(r.id)}
-                    >
-                      Acknowledge
-                    </Button>
-                  </td>
-                </tr>
+              openPager.slice.map((row) => (
+                <IncidentRow key={row.id} row={row} onOpen={() => setSelected(row)} />
               ))
             )}
           </tbody>
@@ -196,45 +191,31 @@ export function AlertsPage() {
         ) : null}
       </div>
 
-      <div className="tableCard" style={{ marginBottom: 14 }}>
+      <div className="tableCard">
         <div className="tableTitle">History</div>
         <p className="muted" style={{ marginBottom: 10 }}>
-          Acknowledged incidents (last 30 days, up to 200).
+          Acknowledged incidents from the last 30 days.
         </p>
         <table className="dataTable">
           <thead>
             <tr>
+              <th>Type</th>
               <th>Problem</th>
               <th>Site</th>
-              <th>Opened</th>
               <th>Resolved</th>
               <th>Acknowledged</th>
-              <th>By</th>
             </tr>
           </thead>
           <tbody>
             {history.length === 0 ? (
               <tr>
-                <td colSpan={6} className="muted">
+                <td colSpan={5} className="muted">
                   No acknowledged incidents yet.
                 </td>
               </tr>
             ) : (
-              historyPager.slice.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.title}</td>
-                  <td>
-                    {r.siteId === "global" ? (
-                      r.siteName
-                    ) : (
-                      <Link to={`/sites/${r.siteId}`}>{r.siteName}</Link>
-                    )}
-                  </td>
-                  <td>{formatWhen(r.openedAt)}</td>
-                  <td>{formatWhen(r.resolvedAt)}</td>
-                  <td>{formatWhen(r.acknowledgedAt)}</td>
-                  <td>{r.acknowledgedBy ?? "—"}</td>
-                </tr>
+              historyPager.slice.map((row) => (
+                <IncidentRow key={row.id} row={row} onOpen={() => setSelected(row)} history />
               ))
             )}
           </tbody>
@@ -251,56 +232,99 @@ export function AlertsPage() {
         ) : null}
       </div>
 
-      <div className="tableCard">
-        <div className="tableTitle">Alertmanager</div>
-        <p className="muted" style={{ marginBottom: 10 }}>
-          Live Prometheus rules feed (Telegram / email). Use Open incidents above to acknowledge
-          operator work.
-        </p>
-        <table className="dataTable">
-          <thead>
-            <tr>
-              <th>Alert</th>
-              <th>Site</th>
-              <th>Status</th>
-              <th>Summary</th>
-            </tr>
-          </thead>
-          <tbody>
-            {amAlerts.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="muted">
-                  No Alertmanager alerts.
-                </td>
-              </tr>
-            ) : (
-              alertPager.slice.map((a, i) => {
-                const siteId = a.labels?.site ?? "";
-                return (
-                  <tr key={`${a.labels?.alertname}-${siteId}-${a.startsAt ?? i}`}>
-                    <td>{a.labels?.alertname ?? "Alert"}</td>
-                    <td>
-                      {siteId ? <Link to={`/sites/${siteId}`}>{siteId}</Link> : "—"}
-                    </td>
-                    <td>{typeof a.status === "string" ? a.status : "firing"}</td>
-                    <td>{a.annotations?.summary ?? "—"}</td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-        {amAlerts.length > 0 ? (
-          <TablePagination
-            page={alertPager.page}
-            totalPages={alertPager.totalPages}
-            total={alertPager.total}
-            start={alertPager.start}
-            end={alertPager.end}
-            onPageChange={setAlertPage}
+      <Modal open={selected != null} title={selected?.title ?? "Incident"} onClose={() => setSelected(null)} wide>
+        {selected ? (
+          <IncidentDetail
+            row={selected}
+            busy={busyId === selected.id}
+            onAck={() => void onAck(selected.id)}
           />
         ) : null}
+      </Modal>
+    </div>
+  );
+}
+
+function IncidentRow({
+  row,
+  onOpen,
+  history
+}: {
+  row: NocIncident;
+  onOpen: () => void;
+  history?: boolean;
+}) {
+  return (
+    <tr
+      className="alertRow"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+    >
+      <td>{kindLabel(row.kind)}</td>
+      <td>{row.title}</td>
+      <td onClick={(e) => e.stopPropagation()}>{siteCell(row)}</td>
+      {history ? (
+        <>
+          <td>{formatWhen(row.resolvedAt)}</td>
+          <td>{formatWhen(row.acknowledgedAt)}</td>
+        </>
+      ) : (
+        <>
+          <td>
+            {row.resolvedAt ? (
+              <span className="muted">{incidentStatusLabel(row)}</span>
+            ) : (
+              <StatusPill state="critical" notes="Still failing" />
+            )}
+          </td>
+          <td>{formatWhen(row.openedAt)}</td>
+        </>
+      )}
+    </tr>
+  );
+}
+
+function IncidentDetail({
+  row,
+  busy,
+  onAck
+}: {
+  row: NocIncident;
+  busy: boolean;
+  onAck: () => void;
+}) {
+  return (
+    <div className="alertDetail">
+      <p className="alertDetailNote">{row.detail || "No further detail was recorded."}</p>
+      <div className="alertDetailGrid">
+        <span>Type</span>
+        <strong>{kindLabel(row.kind)}</strong>
+        <span>Site</span>
+        <strong>{siteCell(row)}</strong>
+        <span>Status</span>
+        <strong>{incidentStatusSentence(row)}</strong>
+        <span>Opened</span>
+        <strong>{formatWhen(row.openedAt)}</strong>
+        <span>Resolved</span>
+        <strong>{formatWhen(row.resolvedAt)}</strong>
+        <span>Acknowledged</span>
+        <strong>{formatWhen(row.acknowledgedAt)}</strong>
+        <span>Acknowledged by</span>
+        <strong>{row.acknowledgedBy ?? "—"}</strong>
       </div>
+      {row.acknowledgedAt ? null : (
+        <div className="formActions">
+          <Button type="button" disabled={busy} onClick={onAck}>
+            Acknowledge
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

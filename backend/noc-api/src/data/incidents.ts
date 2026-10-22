@@ -91,7 +91,7 @@ export function upsertOpenIncident(input: {
   title: string;
   detail: string;
   source?: "status" | "alertmanager";
-}): Incident {
+}): { incident: Incident; created: boolean } {
   load();
   const existing = incidents.find((i) => i.key === input.key && !i.acknowledgedAt);
   if (existing) {
@@ -100,7 +100,7 @@ export function upsertOpenIncident(input: {
     existing.siteName = input.siteName;
     if (existing.resolvedAt) delete existing.resolvedAt;
     persist();
-    return existing;
+    return { incident: existing, created: false };
   }
   const created: Incident = {
     id: crypto.randomUUID(),
@@ -116,17 +116,17 @@ export function upsertOpenIncident(input: {
   incidents.unshift(created);
   prune();
   persist();
-  return created;
+  return { incident: created, created: true };
 }
 
-export function markResolvedIfOpen(key: string): void {
+/** Sets resolvedAt the first time a still-open incident leaves the active set. */
+export function markResolvedIfOpen(key: string): Incident | null {
   load();
   const open = incidents.find((i) => i.key === key && !i.acknowledgedAt);
-  if (!open) return;
-  if (!open.resolvedAt) {
-    open.resolvedAt = new Date().toISOString();
-    persist();
-  }
+  if (!open || open.resolvedAt) return null;
+  open.resolvedAt = new Date().toISOString();
+  persist();
+  return open;
 }
 
 export function acknowledgeIncident(id: string, by: string): Incident | null {
