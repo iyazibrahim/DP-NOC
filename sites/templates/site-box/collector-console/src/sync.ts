@@ -59,7 +59,8 @@ export const SNMP_MODULE_MARKERS = [
   "omadaClientInfo",
   "noc-snmp-no-lookups",
   "fgSysMemCapacity",
-  "omada-numeric-health"
+  "omada-numeric-health",
+  "if-mib-32bit-octets"
 ] as const;
 
 /** Marker checks use the modules block only. Header comments are stripped on regenerate. */

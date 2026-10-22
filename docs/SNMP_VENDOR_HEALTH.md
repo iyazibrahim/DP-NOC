@@ -60,6 +60,7 @@ Collector Console may store type as `access-point`; Alloy accepts that as AP.
 - CPU and memory: HOST-RESOURCES `hrProcessorLoad`, `hrStorageSize`, `hrStorageUsed` on the same 15s module. Memory is used/size across those storages. No text columns.
 - Uptime: `sysUpTime` (`1.3.6.1.2.1.1.3.0`).
 - Station MAC table: module **`omada_clients`** (60s) → `omadaClientInfo`. No per-client SNMP bandwidth. RSSI is not polled until a firmware walk returns an integer column.
+- Interface traffic uses 32-bit `ifInOctets` / `ifOutOctets` when the AP does not answer 64-bit `ifHCInOctets` / `ifHCOutOctets`. Those counters arrive after the collector image is rebuilt and Force apply runs.
 
 ### Synology NAS (verified DSM SNMP OIDs)
 

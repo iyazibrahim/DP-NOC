@@ -200,12 +200,29 @@ function escapePromRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function octetNames(direction: "in" | "out"): { hc: string; plain: string } {
+  return direction === "in"
+    ? { hc: "ifHCInOctets", plain: "ifInOctets" }
+    : { hc: "ifHCOutOctets", plain: "ifOutOctets" };
+}
+
+/** 64-bit counters when the device has them, otherwise the 32-bit IF-MIB counters Omada answers. */
+function octetRate(direction: "in" | "out", labels: string): string {
+  const { hc, plain } = octetNames(direction);
+  return `(rate(${hc}{${labels}}[5m]) or rate(${plain}{${labels}}[5m]))`;
+}
+
+function octetIncrease(direction: "in" | "out", labels: string, range: string): string {
+  const { hc, plain } = octetNames(direction);
+  return `(increase(${hc}{${labels}}[${range}]) or increase(${plain}{${labels}}[${range}]))`;
+}
+
 function ifNameJoinMatcher(siteId: string, deviceId: string, ifName: string): string {
   const s = escapePromLabel(siteId);
   const d = escapePromLabel(deviceId);
   const indexOnly = /^ifIndex:(\d+)$/i.exec(ifName.trim());
   if (indexOnly) {
-    return `ifHCInOctets{site="${s}",device="${d}",ifIndex="${indexOnly[1]}"}`;
+    return `(ifHCInOctets{site="${s}",device="${d}",ifIndex="${indexOnly[1]}"} or ifInOctets{site="${s}",device="${d}",ifIndex="${indexOnly[1]}"})`;
   }
   const n = escapePromLabel(ifName);
   const nRe = escapePromRegex(ifName);
@@ -223,19 +240,15 @@ function buildIfTrafficQuery(
   deviceId: string,
   ifName: string
 ): string {
-  const octets = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
   const s = escapePromLabel(siteId);
   const d = escapePromLabel(deviceId);
   const join = ifNameJoinMatcher(siteId, deviceId, ifName);
   const indexOnly = /^ifIndex:(\d+)$/i.test(ifName.trim());
   if (indexOnly) {
     const idx = /^ifIndex:(\d+)$/i.exec(ifName.trim())![1];
-    return `sum(rate(${octets}{site="${s}",device="${d}",ifIndex="${idx}"}[5m]) * 8)`;
+    return `sum(${octetRate(direction, `site="${s}",device="${d}",ifIndex="${idx}"`)} * 8)`;
   }
-  return `sum(
-  rate(${octets}{site="${s}",device="${d}"}[5m]) * 8
-  and on(ifIndex) ${join}
-)`;
+  return `sum(${octetRate(direction, `site="${s}",device="${d}"`)} * 8 and on(ifIndex) ${join})`;
 }
 
 function buildDeviceTrafficQuery(
@@ -243,8 +256,9 @@ function buildDeviceTrafficQuery(
   siteId: string,
   deviceId: string
 ): string {
-  const octets = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
-  return `sum(rate(${octets}{site="${escapePromLabel(siteId)}",device="${escapePromLabel(deviceId)}"}[5m]) * 8)`;
+  const s = escapePromLabel(siteId);
+  const d = escapePromLabel(deviceId);
+  return `sum(${octetRate(direction, `site="${s}",device="${d}"`)} * 8)`;
 }
 
 function buildIfCapacityQuery(siteId: string, deviceId: string, ifName: string): string {
@@ -282,13 +296,12 @@ function buildIfVolumeQuery(
   ifName: string,
   range: string
 ): string {
-  const octets = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
   const s = escapePromLabel(siteId);
   const d = escapePromLabel(deviceId);
   const indexOnly = /^ifIndex:(\d+)$/i.exec(ifName.trim());
   const increaseExpr = indexOnly
-    ? `increase(${octets}{site="${s}",device="${d}",ifIndex="${indexOnly[1]}"}[${range}])`
-    : `increase(${octets}{site="${s}",device="${d}"}[${range}]) and on(ifIndex) ${ifNameJoinMatcher(siteId, deviceId, ifName)}`;
+    ? octetIncrease(direction, `site="${s}",device="${d}",ifIndex="${indexOnly[1]}"`, range)
+    : `${octetIncrease(direction, `site="${s}",device="${d}"`, range)} and on(ifIndex) ${ifNameJoinMatcher(siteId, deviceId, ifName)}`;
   return `sum(max by (ifIndex) (${increaseExpr}))`;
 }
 
@@ -328,11 +341,12 @@ export async function listDeviceInterfaces(
   const d = escapePromLabel(deviceId);
   const seen = new Map<string, SnmpInterfaceInfo>();
   try {
-    const [byName, byDescr, byOper, byOctets] = await Promise.all([
+    const [byName, byDescr, byOper, byHc, byPlain] = await Promise.all([
       promQuery(`ifName{site="${s}",device="${d}"}`).catch(() => null),
       promQuery(`ifDescr{site="${s}",device="${d}"}`).catch(() => null),
       promQuery(`ifOperStatus{site="${s}",device="${d}"}`).catch(() => null),
-      promQuery(`ifHCInOctets{site="${s}",device="${d}"}`).catch(() => null)
+      promQuery(`ifHCInOctets{site="${s}",device="${d}"}`).catch(() => null),
+      promQuery(`ifInOctets{site="${s}",device="${d}"}`).catch(() => null)
     ]);
     if (byName) {
       for (const [k, v] of collectInterfacesFromProm(byName, ["ifName"])) seen.set(k, v);
@@ -345,6 +359,7 @@ export async function listDeviceInterfaces(
     if (seen.size === 0 && byOper) {
       for (const [k, v] of collectInterfacesFromProm(byOper, ["ifName", "ifDescr"])) seen.set(k, v);
     }
+    const byOctets = byHc?.resultType === "vector" && Array.isArray(byHc.result) && byHc.result.length > 0 ? byHc : byPlain;
     if (seen.size === 0 && byOctets) {
       for (const [k, v] of collectInterfacesFromProm(byOctets, ["ifName", "ifDescr"])) seen.set(k, v);
     }
@@ -717,10 +732,10 @@ async function collectTodayBreakdown(
   const apIds = new Set(aps.map((ap) => ap.deviceId));
   const [inRows, outRows, rxRows, txRows] = await Promise.all([
     readPromDeviceValues(
-      `sum by (device) (max by (device, ifIndex) (increase(ifHCInOctets{site="${s}"}[${range}])))`
+      `sum by (device) (max by (device, ifIndex) (increase(ifHCInOctets{site="${s}"}[${range}]) or increase(ifInOctets{site="${s}"}[${range}])))`
     ),
     readPromDeviceValues(
-      `sum by (device) (max by (device, ifIndex) (increase(ifHCOutOctets{site="${s}"}[${range}])))`
+      `sum by (device) (max by (device, ifIndex) (increase(ifHCOutOctets{site="${s}"}[${range}]) or increase(ifOutOctets{site="${s}"}[${range}])))`
     ),
     readPromLabeledValues(
       `max by (device, clientIndex) (increase(cambiumClientRxDataBytes{site="${s}"}[${range}]))`

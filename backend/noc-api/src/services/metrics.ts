@@ -771,15 +771,21 @@ function buildCapacityDenom(siteId: string, deviceId: string): string {
   1)`;
 }
 
+function octetRateExpr(direction: "in" | "out", siteId: string, deviceId: string): string {
+  const hc = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
+  const plain = direction === "in" ? "ifInOctets" : "ifOutOctets";
+  const sel = `site="${siteId}",device="${deviceId}"`;
+  return `(rate(${hc}{${sel}}[5m]) or rate(${plain}{${sel}}[5m]))`;
+}
+
 /** Device-summed interface utilization % (prefers ifHighSpeed for capacity). */
 export function buildIfUtilQuery(
   direction: "in" | "out",
   siteId: string,
   deviceId: string
 ): string {
-  const octets = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
   return `(
-  sum(rate(${octets}{site="${siteId}",device="${deviceId}"}[5m]) * 8)
+  sum(${octetRateExpr(direction, siteId, deviceId)} * 8)
   /
   ${buildCapacityDenom(siteId, deviceId)}
 ) * 100`;
@@ -791,8 +797,7 @@ export function buildBusiestIfQuery(
   siteId: string,
   deviceId: string
 ): string {
-  const octets = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
-  return `max(rate(${octets}{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
+  return `max(${octetRateExpr(direction, siteId, deviceId)} * 8)`;
 }
 
 function buildRadioQuery(direction: "in" | "out", siteId: string, deviceId: string): string {
@@ -812,8 +817,8 @@ function buildNasVolFreeGbQuery(siteId: string, deviceId: string): string {
 
 /** Peak of device-summed in/out bitrates (Mbps-scale chart), not % of capacity. */
 export function buildIfUtilMaxQuery(siteId: string, deviceId: string): string {
-  const inQ = `sum(rate(ifHCInOctets{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
-  const outQ = `sum(rate(ifHCOutOctets{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
+  const inQ = `sum(${octetRateExpr("in", siteId, deviceId)} * 8)`;
+  const outQ = `sum(${octetRateExpr("out", siteId, deviceId)} * 8)`;
   return `max(
   label_replace(${inQ}, "side", "in", "", "")
   or
@@ -921,14 +926,15 @@ unless
 }
 
 function buildSumIfQuery(direction: "in" | "out", siteId: string, deviceId: string): string {
-  const octets = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
-  return `sum(rate(${octets}{site="${siteId}",device="${deviceId}"}[5m]) * 8)`;
+  return `sum(${octetRateExpr(direction, siteId, deviceId)} * 8)`;
 }
 
 function buildIfBytesTodayQuery(direction: "in" | "out", siteId: string, deviceId: string): string {
-  const octets = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
+  const hc = direction === "in" ? "ifHCInOctets" : "ifHCOutOctets";
+  const plain = direction === "in" ? "ifInOctets" : "ifOutOctets";
+  const sel = `site="${siteId}",device="${deviceId}"`;
   const range = calendarTodayPromRange();
-  return `sum(max by (ifIndex) (increase(${octets}{site="${siteId}",device="${deviceId}"}[${range}])))`;
+  return `sum(max by (ifIndex) (increase(${hc}{${sel}}[${range}]) or increase(${plain}{${sel}}[${range}])))`;
 }
 
 function dualHostSumRate(metric: string, siteId: string, deviceId: string, extra = ""): string {

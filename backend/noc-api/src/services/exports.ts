@@ -186,14 +186,14 @@ async function accessPointBytes(
   const aps = site.devices.filter((d) => isApLike(d));
   if (aps.length === 0) return [];
   const s = escapePromLabel(site.id);
-  const query = (metric: string) =>
-    `sum by (device) (max by (device, ifIndex) (increase(${metric}{site="${s}"}[1h])))`;
+  const query = (hc: string, plain: string) =>
+    `sum by (device) (max by (device, ifIndex) (increase(${hc}{site="${s}"}[1h]) or increase(${plain}{site="${s}"}[1h])))`;
   let inbound = new Map<string, number>();
   let outbound = new Map<string, number>();
   try {
     const [inn, out] = await Promise.all([
-      promQueryRange(query("ifHCInOctets"), windowStart, nowSec, "3600"),
-      promQueryRange(query("ifHCOutOctets"), windowStart, nowSec, "3600")
+      promQueryRange(query("ifHCInOctets", "ifInOctets"), windowStart, nowSec, "3600"),
+      promQueryRange(query("ifHCOutOctets", "ifOutOctets"), windowStart, nowSec, "3600")
     ]);
     inbound = sumMatrix(inn, windowStart, nowSec);
     outbound = sumMatrix(out, windowStart, nowSec);

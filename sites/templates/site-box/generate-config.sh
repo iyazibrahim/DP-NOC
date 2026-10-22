@@ -243,6 +243,7 @@ MODULE_MARKERS = (
     "noc-snmp-no-lookups",
     "fgSysMemCapacity",
     "omada-numeric-health",
+    "if-mib-32bit-octets",
 )
 
 def extract_modules(path):
