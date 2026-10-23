@@ -399,8 +399,9 @@ Collector box → Alloy → Prometheus (central)
   - Alertmanager only delivers those incidents. The five Prometheus rules are retired so they cannot page a second copy. The Alerts page is the incident list, 10 rows per page. Click a row for the type, status, and times. Acknowledge stays in that popup.
   - The sidebar collapses to icons. The dashboard grid measures the remaining width, so widgets pick up the space the labels used.
 - [x] **Status chips and collector sync (2026-10-23)**
-  - Site network status chips: DNS 1, DNS 2, and Internet check open a popup with the target, result, and latency. The chip row scrolls inside the widget so Speed test and Ping stay reachable.
+  - Site network status chips: DNS 1, DNS 2, and Internet check open a popup with the ping address, result, and latency. The address is the configured ping target. The collector hostname is not the target.
   - Collector inventory sync shows In sync, Stale, or No sync with the last pull time. The long setup paragraph is gone.
+  - Collector Console Setup uses DNS 1, DNS 2, and Internet. The dashboard lists the NOC address, metrics address, and those three checks. Each dashboard card opens its detail and the collector log.
 - [x] **Reports match the wallboard (2026-10-22)**
   - Settings → Reports & exports: choose This week (Monday–Sunday) or This month, then Generate.
   - One A4 report per location that has WAN bytes, access-point bytes, a probe or internet sample, or an incident in that window, plus one All locations report. Locations with none of those are named on the combined report and skipped.

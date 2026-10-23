@@ -45,12 +45,12 @@
           <div class="field">
             <label for="wiz-noc">NOC API URL</label>
             <input id="wiz-noc" placeholder="https://noc.example.com" autocomplete="off" />
-            <p class="hint">The dashboard address, without a path. Example: https://noc.example.com</p>
+            <p class="hint">Dashboard address.</p>
           </div>
           <div class="field">
             <label for="wiz-token">Collector token</label>
             <input id="wiz-token" placeholder="nocc_…" autocomplete="off" spellcheck="false" />
-            <p class="hint" id="wiz-token-hint">Paste the token from the site page. It is stored on this collector.</p>
+            <p class="hint" id="wiz-token-hint">From the site page in the NOC.</p>
           </div>
         </div>
 
@@ -76,28 +76,24 @@
         </div>
 
         <div class="wizard-stage" data-step="3" hidden>
-          <p class="lead">These checks decide uplink status and the SNMP community used when a device has none of its own.</p>
+          <p class="lead">DNS 1, DNS 2, and the Internet check.</p>
           <div class="row2">
             <div class="field">
-              <label for="wiz-ping1">Ping target 1</label>
+              <label for="wiz-ping1">DNS 1</label>
               <input id="wiz-ping1" value="1.1.1.1" />
-              <p class="hint">Public DNS, used as a WAN check.</p>
             </div>
             <div class="field">
-              <label for="wiz-ping2">Ping target 2</label>
-              <input id="wiz-ping2" value="139.99.88.174" />
-              <p class="hint">Second WAN target, often the VPS.</p>
+              <label for="wiz-ping3">DNS 2</label>
+              <input id="wiz-ping3" value="8.8.8.8" />
             </div>
           </div>
           <div class="field">
-            <label for="wiz-ping3">Ping target 3 (second DNS)</label>
-            <input id="wiz-ping3" value="8.8.8.8" />
-            <p class="hint">Internet stays up when either DNS answers.</p>
+            <label for="wiz-ping2">Internet</label>
+            <input id="wiz-ping2" value="139.99.88.174" />
           </div>
           <div class="field">
-            <label for="wiz-community">Default SNMP community (v2c)</label>
+            <label for="wiz-community">SNMP community</label>
             <input id="wiz-community" value="public" autocomplete="off" />
-            <p class="hint">Used only when a device does not have its own community.</p>
           </div>
         </div>
 
@@ -120,7 +116,7 @@
     <div id="console">
       <header class="page-head">
         <h1>Collector Console</h1>
-        <p class="sub">Manage local SNMP devices for this site. Status comes from the NOC dashboard.</p>
+        <p class="sub">This site’s collector.</p>
       </header>
 
       <div class="main-split">
@@ -146,27 +142,23 @@
 
             <section id="panel-setup" class="panel" role="tabpanel">
               <div class="panel-intro">
-                <p class="hint">Connection, metrics, and the default SNMP community. On a new collector, the setup guide walks through this in order.</p>
                 <button type="button" class="secondary" id="btn-open-guide">Open setup guide</button>
               </div>
               <form id="setup-form">
                 <div class="field">
                   <label for="siteName">Site ID</label>
                   <select id="siteName" name="siteName" required></select>
-                  <p class="hint">Must match the site id in the NOC wallboard (e.g. site-1).</p>
                 </div>
                 <div class="field">
-                  <label for="nocApiUrl">NOC API URL</label>
+                  <label for="nocApiUrl">NOC</label>
                   <input id="nocApiUrl" name="nocApiUrl" placeholder="https://noc.example.com" />
-                  <p class="hint">Leave blank if already set in Environment / compose (survives redeploy).</p>
                 </div>
                 <div class="field">
                   <label for="collectorToken">Collector token</label>
                   <input id="collectorToken" name="collectorToken" placeholder="nocc_…" autocomplete="off" />
-                  <p class="hint">Saved on the collector volume — you should not need to re-enter after restart.</p>
                 </div>
                 <div class="field">
-                  <label for="centralRemoteWriteUrl">Metrics remote write URL</label>
+                  <label for="centralRemoteWriteUrl">Metrics</label>
                   <input id="centralRemoteWriteUrl" name="centralRemoteWriteUrl" placeholder="https://metrics.example.com/api/v1/write" />
                 </div>
                 <div class="row2">
@@ -177,28 +169,26 @@
                   <div class="field">
                     <label for="cfAccessClientSecret">CF Access Client Secret</label>
                     <input id="cfAccessClientSecret" name="cfAccessClientSecret" type="password" autocomplete="new-password" />
-                    <p class="hint">Leave blank to keep existing.</p>
+                    <p class="hint">Blank keeps the saved secret.</p>
                   </div>
                 </div>
                 <div class="row2">
                   <div class="field">
-                    <label for="pingTarget1">Ping target 1 (WAN DNS)</label>
+                    <label for="pingTarget1">DNS 1</label>
                     <input id="pingTarget1" name="pingTarget1" value="1.1.1.1" />
                   </div>
                   <div class="field">
-                    <label for="pingTarget2">Ping target 2 (WAN VPS)</label>
-                    <input id="pingTarget2" name="pingTarget2" value="139.99.88.174" />
+                    <label for="pingTarget3">DNS 2</label>
+                    <input id="pingTarget3" name="pingTarget3" value="8.8.8.8" />
                   </div>
                 </div>
                 <div class="field">
-                  <label for="pingTarget3">Ping target 3 (second DNS)</label>
-                  <input id="pingTarget3" name="pingTarget3" value="8.8.8.8" />
-                  <p class="hint">Internet stays up when either DNS answers. Default is 8.8.8.8.</p>
+                  <label for="pingTarget2">Internet</label>
+                  <input id="pingTarget2" name="pingTarget2" value="139.99.88.174" />
                 </div>
                 <div class="field">
-                  <label for="snmpCommunity">Default SNMP community (v2c)</label>
+                  <label for="snmpCommunity">SNMP community</label>
                   <input id="snmpCommunity" name="snmpCommunity" value="public" autocomplete="off" />
-                  <p class="hint">Used when a device has no per-device community.</p>
                 </div>
                 <div class="toolbar">
                   <button type="submit">Save &amp; sync</button>
@@ -328,7 +318,7 @@
 
   <div id="modal-snmp" class="modal" hidden aria-hidden="true">
     <div class="modal-backdrop" data-close="snmp"></div>
-    <div class="modal-card" role="dialog" aria-labelledby="snmp-modal-title">
+    <div class="modal-card modal-card--wide" role="dialog" aria-labelledby="snmp-modal-title">
       <div class="modal-head">
         <h2 id="snmp-modal-title">SNMP polling</h2>
         <button type="button" class="modal-close" data-close="snmp" aria-label="Close">&times;</button>
@@ -339,6 +329,22 @@
         <button type="button" class="secondary" data-close="snmp">Close</button>
       </div>
       <div id="snmp-modal-msg"></div>
+    </div>
+  </div>
+
+  <div id="modal-detail" class="modal" hidden aria-hidden="true">
+    <div class="modal-backdrop" data-close="detail"></div>
+    <div class="modal-card modal-card--wide" role="dialog" aria-labelledby="detail-title">
+      <div class="modal-head">
+        <h2 id="detail-title">Details</h2>
+        <button type="button" class="modal-close" data-close="detail" aria-label="Close">&times;</button>
+      </div>
+      <div id="detail-body" class="modal-body"></div>
+      <p class="label">Logs</p>
+      <pre id="detail-logs" class="modal-pre">Loading…</pre>
+      <div class="modal-actions">
+        <button type="button" class="secondary" data-close="detail">Close</button>
+      </div>
     </div>
   </div>
 

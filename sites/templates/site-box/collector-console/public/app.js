@@ -143,30 +143,54 @@ function renderStatus(status) {
         ? '<span class="bad">Missing</span>'
         : '<span class="ok">Applied</span>';
 
+  const links = status.connections || {};
+  const linkRow = (label, value) =>
+    `<div><dt>${label}</dt><dd>${escapeHtml(value || "—")}</dd></div>`;
+  const box = (kind, inner, wide) =>
+    `<div class="card card--clickable${wide ? " card-wide" : ""}" data-detail="${kind}" role="button" tabindex="0">${inner}</div>`;
+
   cards.innerHTML = `
-    <div class="card"><div class="label">Site</div><div class="value">${escapeHtml(status.siteName || "—")}</div></div>
-    <div class="card"><div class="label">Alloy</div><div class="value">${alloy}</div></div>
-    <div class="card"><div class="label">Dashboard</div><div class="value">${dashHtml}</div></div>
-    <div class="card"><div class="label">Devices</div><div class="value">${status.deviceCount ?? 0}</div></div>
-    <div class="card"><div class="label">SNMP config</div><div class="value">${snmpValue}</div></div>
-    <div class="card"><div class="label">Metrics push</div><div class="value">${
-      status.metricsConfigured === false
-        ? '<span class="bad">Not set</span>'
-        : status.metricsConfigured === true
-          ? '<span class="ok">Ready</span>'
-          : "—"
-    }</div></div>
-    <div class="card card--clickable" id="card-snmp-polling" role="button" tabindex="0" title="Click for details">
-      <div class="label">SNMP polling</div>
-      <div class="value">${
+    ${box("site", `<div class="label">Site</div><div class="value">${escapeHtml(status.siteName || "—")}</div>`)}
+    ${box("alloy", `<div class="label">Alloy</div><div class="value">${alloy}</div>`)}
+    ${box("noc", `<div class="label">NOC</div><div class="value">${dashHtml}</div>`)}
+    ${box("devices", `<div class="label">Devices</div><div class="value">${status.deviceCount ?? 0}</div>`)}
+    ${box("snmp-config", `<div class="label">SNMP config</div><div class="value">${snmpValue}</div>`)}
+    ${box(
+      "metrics",
+      `<div class="label">Metrics push</div><div class="value">${
+        status.metricsConfigured === false
+          ? '<span class="bad">Not set</span>'
+          : status.metricsConfigured === true
+            ? '<span class="ok">Ready</span>'
+            : "—"
+      }</div>`
+    )}
+    ${box(
+      "snmp",
+      `<div class="label">SNMP polling</div><div class="value">${
         status.snmpPollingLabel === "Active"
           ? '<span class="ok">Active</span>'
           : '<span class="warn">Idle</span>'
-      }</div>
-    </div>
-    <div class="card"><div class="label">Last sync</div><div class="value stack"><span>${escapeHtml(synced.date)}</span>${
-      synced.time ? `<span class="muted">${escapeHtml(synced.time)}</span>` : ""
-    }</div></div>
+      }</div>`
+    )}
+    ${box(
+      "sync",
+      `<div class="label">Last sync</div><div class="value stack"><span>${escapeHtml(synced.date)}</span>${
+        synced.time ? `<span class="muted">${escapeHtml(synced.time)}</span>` : ""
+      }</div>`
+    )}
+    ${box(
+      "links",
+      `<div class="label">Connected to</div>
+      <dl class="connect-list">
+        ${linkRow("NOC", links.noc)}
+        ${linkRow("Metrics", links.metrics)}
+        ${linkRow("DNS 1", links.dns1)}
+        ${linkRow("DNS 2", links.dns2)}
+        ${linkRow("Internet", links.internet)}
+      </dl>`,
+      true
+    )}
   `;
 
   const warnings = status.warnings && status.warnings.length
@@ -184,17 +208,80 @@ function renderStatus(status) {
         )
         .join("");
   }
+  latestStatus = status;
+}
 
-  const snmpCard = document.getElementById("card-snmp-polling");
-  if (snmpCard) {
-    const open = () => openSnmpModal(status);
-    snmpCard.onclick = open;
-    snmpCard.onkeydown = (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        open();
-      }
-    };
+let latestStatus = null;
+
+function detailFacts(kind, status) {
+  const links = status.connections || {};
+  const sync = status.lastSync;
+  const rows = {
+    site: [
+      ["Site", status.siteName || "—"],
+      ["Host", status.hostDeviceId || "—"]
+    ],
+    alloy: [["Alloy", status.alloyRunning ? "Running" : "Stopped"]],
+    noc: [
+      ["NOC", status.dashboardConnection?.label || "—"],
+      ["Address", links.noc || "—"]
+    ],
+    "snmp-config": [
+      ["Config", status.configUnsafe ? "Unsafe" : status.snmpConfigStale ? "Stale" : "Applied"],
+      ["Note", status.snmpStaleReason?.detail || "Current checks are installed."]
+    ],
+    metrics: [
+      ["Push", status.metricsConfigured ? "Ready" : "Not set"],
+      ["Address", links.metrics || "—"]
+    ],
+    sync: [
+      ["When", sync?.at ? new Date(sync.at).toLocaleString() : "No sync yet"],
+      ["Result", sync?.message || "—"],
+      ["Devices", sync?.deviceCount != null ? String(sync.deviceCount) : "—"]
+    ],
+    links: [
+      ["NOC", links.noc || "—"],
+      ["Metrics", links.metrics || "—"],
+      ["DNS 1", links.dns1 || "—"],
+      ["DNS 2", links.dns2 || "—"],
+      ["Internet", links.internet || "—"]
+    ]
+  };
+  const list = rows[kind] || [];
+  return `<dl class="connect-list">${list
+    .map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`)
+    .join("")}</dl>`;
+}
+
+const DETAIL_TITLES = {
+  site: "Site",
+  alloy: "Alloy",
+  noc: "NOC",
+  devices: "Devices",
+  "snmp-config": "SNMP config",
+  metrics: "Metrics push",
+  sync: "Last sync",
+  links: "Connected to"
+};
+
+async function openDetail(kind, status) {
+  document.getElementById("detail-title").textContent = DETAIL_TITLES[kind] || "Details";
+  const body = document.getElementById("detail-body");
+  const logs = document.getElementById("detail-logs");
+  if (kind === "devices") {
+    const names = (cachedDevices || [])
+      .map((d) => `${d.name || d.id || "Device"}${d.snmpIp ? ` · ${d.snmpIp}` : ""}`)
+      .join("\n");
+    body.innerHTML = `<p>${status.deviceCount ?? 0} devices</p><pre class="modal-pre detail-list">${escapeHtml(names || "No devices yet.")}</pre>`;
+  } else {
+    body.innerHTML = detailFacts(kind, status);
+  }
+  logs.textContent = "Loading logs…";
+  openModal("modal-detail");
+  try {
+    logs.textContent = await fetch("/api/logs/alloy").then((r) => r.text());
+  } catch (err) {
+    logs.textContent = err.message || "Logs unavailable.";
   }
 }
 
@@ -217,10 +304,22 @@ function openSnmpModal(status) {
         ? `<p class="warn" style="margin-top:10px">${escapeHtml(status.snmpStaleReason.detail)}</p>`
         : ""
     }
+    <p class="label" style="margin-top:14px">Logs</p>
+    <pre id="snmp-logs" class="modal-pre">Loading logs…</pre>
   `;
   document.getElementById("snmp-modal-msg").textContent = "";
   document.getElementById("snmp-modal-msg").className = "msg";
   openModal("modal-snmp");
+  fetch("/api/logs/alloy")
+    .then((r) => r.text())
+    .then((text) => {
+      const el = document.getElementById("snmp-logs");
+      if (el) el.textContent = text;
+    })
+    .catch((err) => {
+      const el = document.getElementById("snmp-logs");
+      if (el) el.textContent = err.message || "Logs unavailable.";
+    });
 }
 
 let cachedDevices = [];
@@ -425,6 +524,22 @@ async function loadConfigForm() {
   }
 }
 
+document.getElementById("status-cards").addEventListener("click", (e) => {
+  const card = e.target.closest("[data-detail]");
+  if (!card || !latestStatus) return;
+  const kind = card.dataset.detail;
+  if (kind === "snmp") openSnmpModal(latestStatus);
+  else openDetail(kind, latestStatus);
+});
+document.getElementById("status-cards").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const card = e.target.closest("[data-detail]");
+  if (!card || !latestStatus) return;
+  e.preventDefault();
+  if (card.dataset.detail === "snmp") openSnmpModal(latestStatus);
+  else openDetail(card.dataset.detail, latestStatus);
+});
+
 document.querySelectorAll(".tab").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
@@ -440,6 +555,7 @@ document.querySelectorAll("[data-close]").forEach((el) => {
     if (which === "device") closeModal("modal-device");
     if (which === "diag") closeModal("modal-diag");
     if (which === "snmp") closeModal("modal-snmp");
+    if (which === "detail") closeModal("modal-detail");
   });
 });
 
@@ -448,6 +564,7 @@ document.addEventListener("keydown", (e) => {
   closeModal("modal-device");
   closeModal("modal-diag");
   closeModal("modal-snmp");
+  closeModal("modal-detail");
 });
 
 const scanBtn = document.getElementById("btn-scan-clients");
@@ -748,7 +865,9 @@ function renderWizardReview() {
     ["Token", token ? "Will be saved" : savedConfig?.collectorToken ? "Keep saved token" : "Missing"],
     ["Metrics URL", document.getElementById("wiz-rw").value.trim() || "—"],
     ["Cloudflare Access", cfId || cfSecret ? "Will be saved" : savedConfig?.cfAccessClientId ? "Keep saved credentials" : "Not used"],
-    ["Ping targets", `${document.getElementById("wiz-ping1").value.trim()}, ${document.getElementById("wiz-ping3").value.trim()}, and ${document.getElementById("wiz-ping2").value.trim()}`],
+    ["DNS 1", document.getElementById("wiz-ping1").value.trim() || "—"],
+    ["DNS 2", document.getElementById("wiz-ping3").value.trim() || "—"],
+    ["Internet", document.getElementById("wiz-ping2").value.trim() || "—"],
     ["SNMP community", document.getElementById("wiz-community").value.trim() || "—"],
     ["Host id", hostField || (site ? `${site}-nuc` : "—")]
   ];

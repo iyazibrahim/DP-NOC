@@ -198,6 +198,13 @@ function formatAge(tsSec: number | null): string {
   return `${Math.floor(age / 3600)}h ago`;
 }
 
+function pingAddress(fromProbe: string | null | undefined, fromSite?: string | null): string {
+  const probe = (fromProbe || "").trim();
+  if (probe && /[.:]/.test(probe)) return probe;
+  const configured = (fromSite || "").trim();
+  return configured || "—";
+}
+
 function uplinkLabel(v: number | null): { state: string; label: string } {
   if (v == null) return { state: "unknown", label: "NO DATA" };
   if (v >= 1) return { state: "healthy", label: "UP" };
@@ -525,7 +532,7 @@ export function SiteNetworkPanel({ token, site }: Props) {
             id: "dns" as const,
             label: "DNS 1",
             state: dns,
-            target: network?.uplink.dnsTarget || site.wan.dnsTarget || "—",
+            target: pingAddress(network?.uplink.dnsTarget, site.wan.dnsTarget),
             ms: network?.uplink.dnsMs,
             note: "First DNS server the collector pings."
           },
@@ -533,7 +540,7 @@ export function SiteNetworkPanel({ token, site }: Props) {
             id: "dns2" as const,
             label: "DNS 2",
             state: dns2,
-            target: network?.uplink.dns2Target || "—",
+            target: pingAddress(network?.uplink.dns2Target),
             ms: network?.uplink.dns2Ms,
             note: "Second DNS server the collector pings."
           },
@@ -541,7 +548,7 @@ export function SiteNetworkPanel({ token, site }: Props) {
             id: "vps" as const,
             label: "Internet check",
             state: vps,
-            target: network?.uplink.vpsTarget || site.wan.vpsTarget || "—",
+            target: pingAddress(network?.uplink.vpsTarget, site.wan.vpsTarget),
             ms: network?.uplink.vpsMs,
             note: "Path from the collector to the central server."
           }

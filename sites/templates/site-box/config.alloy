@@ -51,21 +51,21 @@ prometheus.exporter.blackbox "icmp_probe" {
     name    = "ping_dns"
     address = sys.env("PING_TARGET_1")
     module  = "icmp"
-    labels  = { check = "wan_dns", site = sys.env("SITE_NAME") }
+    labels  = { check = "wan_dns", site = sys.env("SITE_NAME"), probe_target = sys.env("PING_TARGET_1") }
   }
 
   target {
     name    = "ping_dns2"
     address = sys.env("PING_TARGET_3")
     module  = "icmp"
-    labels  = { check = "wan_dns2", site = sys.env("SITE_NAME") }
+    labels  = { check = "wan_dns2", site = sys.env("SITE_NAME"), probe_target = sys.env("PING_TARGET_3") }
   }
 
   target {
     name    = "ping_vps"
     address = sys.env("PING_TARGET_2")
     module  = "icmp"
-    labels  = { check = "wan_vps", site = sys.env("SITE_NAME") }
+    labels  = { check = "wan_vps", site = sys.env("SITE_NAME"), probe_target = sys.env("PING_TARGET_2") }
   }
 }
 

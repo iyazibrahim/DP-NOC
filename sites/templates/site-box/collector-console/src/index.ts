@@ -213,6 +213,13 @@ app.get("/api/status", async (_req, res) => {
           ? { state: "ok" as const, label: "Connected" }
           : { state: "unknown" as const, label: "Unknown" },
     nocReachable,
+    connections: {
+      noc: config.nocApiUrl || "",
+      metrics: config.centralRemoteWriteUrl || "",
+      dns1: config.pingTarget1 || "",
+      dns2: config.pingTarget3 || "",
+      internet: config.pingTarget2 || ""
+    },
     lastSync: last,
     siteName: config.siteName,
     hostDeviceId: config.hostDeviceId,

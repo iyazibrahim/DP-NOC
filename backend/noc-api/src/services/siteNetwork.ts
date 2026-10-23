@@ -435,7 +435,7 @@ async function loadSiteNetworkSummary(
       const row = duration.result[0];
       const raw = Number(row.value?.[1]);
       if (Number.isFinite(raw)) ms = Math.round(raw * 1000 * 10) / 10;
-      target = (row.metric?.instance || "").trim() || null;
+      target = (row.metric?.probe_target || "").trim() || null;
     }
     return { up, ms, target };
   };
