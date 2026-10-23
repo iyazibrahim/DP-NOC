@@ -1992,6 +1992,11 @@ textarea {
   box-sizing: border-box;
 }
 
+.widgetInnerScroll .websiteKpiStrip {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
 .websiteUrlLink {
   color: var(--accent);
   text-decoration: none;

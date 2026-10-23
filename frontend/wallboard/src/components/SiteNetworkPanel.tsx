@@ -27,6 +27,7 @@ import {
 } from "@/api";
 import type { Site, SiteNetworkLayout, SiteNetworkWidget, SiteNetworkWidgetType } from "@/types";
 import { LineUseCards } from "@/components/LineUseCards";
+import { Modal } from "@/components/Modal";
 import { StatusPill } from "@/components/StatusPill";
 import { darkTooltipProps } from "@/components/noc/MetricChart";
 import { RangeToggle } from "@/components/noc/RangeToggle";
@@ -48,7 +49,7 @@ const WIDGET_CATALOG: Array<{
   w: number;
   h: number;
 }> = [
-  { type: "kpi_strip", label: "Status chips", section: "status", description: "Live link and speed", w: 12, h: 2 },
+  { type: "kpi_strip", label: "Status chips", section: "status", description: "Live link and speed", w: 12, h: 3 },
   { type: "wan_status", label: "Line note", section: "status", description: "Which pipe is tagged", w: 12, h: 1 },
   {
     type: "wan_util_summary",
@@ -256,6 +257,7 @@ export function SiteNetworkPanel({ token, site }: Props) {
   const [layout, setLayout] = useState<SiteNetworkLayout | null>(null);
   const [editing, setEditing] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [checkOpen, setCheckOpen] = useState<"dns" | "dns2" | "vps" | null>(null);
   const [width, setWidth] = useState(0);
   const [hostEl, setHostEl] = useState<HTMLDivElement | null>(null);
   const hostRef = useCallback((node: HTMLDivElement | null) => {
@@ -517,59 +519,109 @@ export function SiteNetworkPanel({ token, site }: Props) {
     }
 
     switch (w.type) {
-      case "kpi_strip":
+      case "kpi_strip": {
+        const checks = [
+          {
+            id: "dns" as const,
+            label: "DNS 1",
+            state: dns,
+            target: network?.uplink.dnsTarget || site.wan.dnsTarget || "—",
+            ms: network?.uplink.dnsMs,
+            note: "First DNS server the collector pings."
+          },
+          {
+            id: "dns2" as const,
+            label: "DNS 2",
+            state: dns2,
+            target: network?.uplink.dns2Target || "—",
+            ms: network?.uplink.dns2Ms,
+            note: "Second DNS server the collector pings."
+          },
+          {
+            id: "vps" as const,
+            label: "Internet check",
+            state: vps,
+            target: network?.uplink.vpsTarget || site.wan.vpsTarget || "—",
+            ms: network?.uplink.vpsMs,
+            note: "Path from the collector to the central server."
+          }
+        ];
+        const open = checks.find((c) => c.id === checkOpen) ?? null;
         return (
-          <div className="websiteKpiStrip">
-            <div className="healthChip">
-              <span className="healthChipLabel">DNS check</span>
-              <StatusPill state={dns.state} notes={dns.label} />
+          <>
+            <div className="websiteKpiStrip">
+              {checks.map((check) => (
+                <button
+                  key={check.id}
+                  type="button"
+                  className="healthChip healthChipButton"
+                  onClick={() => setCheckOpen(check.id)}
+                >
+                  <span className="healthChipLabel">{check.label}</span>
+                  <StatusPill state={check.state.state} notes={check.state.label} />
+                </button>
+              ))}
+              <div className="healthChip">
+                <span className="healthChipLabel">Download</span>
+                <strong className="healthChipValue">{formatBitrate(network?.traffic.inBps ?? null)}</strong>
+              </div>
+              <div className="healthChip">
+                <span className="healthChipLabel">Upload</span>
+                <strong className="healthChipValue">{formatBitrate(network?.traffic.outBps ?? null)}</strong>
+              </div>
+              <div className="healthChip">
+                <span className="healthChipLabel">Line in use</span>
+                <strong className="healthChipValue">
+                  {formatBitrate(network?.traffic.inBps ?? null)}
+                  {" / "}
+                  {formatBitrate(network?.traffic.outBps ?? null)}
+                </strong>
+              </div>
+              <div className="healthChip">
+                <span className="healthChipLabel">Clients</span>
+                <strong className="healthChipValue">
+                  {network?.clients.total != null ? network.clients.total : "—"}
+                </strong>
+              </div>
+              <div className="healthChip">
+                <span className="healthChipLabel">Speed test</span>
+                <strong className="healthChipValue">
+                  {st?.available
+                    ? `${formatBitrate(st.downloadBps)} / ${formatBitrate(st.uploadBps)}`
+                    : "—"}
+                </strong>
+              </div>
+              <div className="healthChip">
+                <span className="healthChipLabel">Ping</span>
+                <strong className="healthChipValue">
+                  {st?.pingMs != null ? `${st.pingMs} ms` : "—"}
+                </strong>
+              </div>
             </div>
-            <div className="healthChip">
-              <span className="healthChipLabel">DNS 2</span>
-              <StatusPill state={dns2.state} notes={dns2.label} />
-            </div>
-            <div className="healthChip">
-              <span className="healthChipLabel">Internet check</span>
-              <StatusPill state={vps.state} notes={vps.label} />
-            </div>
-            <div className="healthChip">
-              <span className="healthChipLabel">Download</span>
-              <strong className="healthChipValue">{formatBitrate(network?.traffic.inBps ?? null)}</strong>
-            </div>
-            <div className="healthChip">
-              <span className="healthChipLabel">Upload</span>
-              <strong className="healthChipValue">{formatBitrate(network?.traffic.outBps ?? null)}</strong>
-            </div>
-            <div className="healthChip">
-              <span className="healthChipLabel">Line in use</span>
-              <strong className="healthChipValue">
-                {formatBitrate(network?.traffic.inBps ?? null)}
-                {" / "}
-                {formatBitrate(network?.traffic.outBps ?? null)}
-              </strong>
-            </div>
-            <div className="healthChip">
-              <span className="healthChipLabel">Clients</span>
-              <strong className="healthChipValue">
-                {network?.clients.total != null ? network.clients.total : "—"}
-              </strong>
-            </div>
-            <div className="healthChip">
-              <span className="healthChipLabel">Speed test</span>
-              <strong className="healthChipValue">
-                {st?.available
-                  ? `${formatBitrate(st.downloadBps)} / ${formatBitrate(st.uploadBps)}`
-                  : "—"}
-              </strong>
-            </div>
-            <div className="healthChip">
-              <span className="healthChipLabel">Ping</span>
-              <strong className="healthChipValue">
-                {st?.pingMs != null ? `${st.pingMs} ms` : "—"}
-              </strong>
-            </div>
-          </div>
+            <Modal open={open != null} title={open?.label ?? "Check"} onClose={() => setCheckOpen(null)}>
+              {open ? (
+                <div className="kvList">
+                  <div>
+                    <strong>Result</strong>
+                    <div style={{ marginTop: 6 }}>
+                      <StatusPill state={open.state.state} notes={open.state.label} />
+                    </div>
+                  </div>
+                  <div>
+                    <strong>Target</strong>
+                    <div className="muted">{open.target}</div>
+                  </div>
+                  <div>
+                    <strong>Latency</strong>
+                    <div className="muted">{open.ms != null ? `${open.ms} ms` : "—"}</div>
+                  </div>
+                  <p className="muted">{open.note}</p>
+                </div>
+              ) : null}
+            </Modal>
+          </>
         );
+      }
 
       case "wan_status":
         return (
@@ -965,6 +1017,8 @@ export function SiteNetworkPanel({ token, site }: Props) {
                   </div>
                   <div
                     className={`widgetInner${
+                      w.type === "kpi_strip" ? " widgetInnerScroll" : ""
+                    }${
                       w.type === "wan_bandwidth_chart" ||
                       w.type === "speedtest_chart" ||
                       w.type.startsWith("ap_")

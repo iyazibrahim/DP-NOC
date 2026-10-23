@@ -137,7 +137,17 @@ export type SiteNetworkSummary = {
   siteId: string;
   wanUplink: { deviceId: string; ifName: string } | null;
   wanDeviceName: string | null;
-  uplink: { dns: number | null; dns2?: number | null; vps: number | null };
+  uplink: {
+    dns: number | null;
+    dns2?: number | null;
+    vps: number | null;
+    dnsMs?: number | null;
+    dns2Ms?: number | null;
+    vpsMs?: number | null;
+    dnsTarget?: string | null;
+    dns2Target?: string | null;
+    vpsTarget?: string | null;
+  };
   traffic: {
     inBps: number | null;
     outBps: number | null;

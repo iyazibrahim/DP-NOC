@@ -6,7 +6,7 @@ import {
 } from "./prometheus";
 import { getSiteById, type Site } from "../data/sites";
 import { loadSiteStations } from "../data/siteStations";
-import { dualSnmpUpFresh, probeSuccessFresh, METRIC_FRESH_WINDOW } from "./promLabels";
+import { dualSnmpUpFresh, METRIC_FRESH_WINDOW } from "./promLabels";
 import { env } from "../env";
 import {
   bucketVolumeDays,
@@ -96,6 +96,12 @@ export type SiteNetworkSummary = {
     dns: number | null;
     dns2: number | null;
     vps: number | null;
+    dnsMs: number | null;
+    dns2Ms: number | null;
+    vpsMs: number | null;
+    dnsTarget: string | null;
+    dns2Target: string | null;
+    vpsTarget: string | null;
   };
   traffic: {
     inBps: number | null;
@@ -409,10 +415,45 @@ async function loadSiteNetworkSummary(
   let dns: number | null = null;
   let dns2: number | null = null;
   let vps: number | null = null;
+  let dnsMs: number | null = null;
+  let dns2Ms: number | null = null;
+  let vpsMs: number | null = null;
+  let dnsTarget: string | null = null;
+  let dns2Target: string | null = null;
+  let vpsTarget: string | null = null;
+  const readProbe = async (check: string) => {
+    const s = escapePromLabel(siteId);
+    const c = escapePromLabel(check);
+    const [success, duration] = await Promise.all([
+      promQuery(`last_over_time(probe_success{site="${s}",check="${c}"}[${METRIC_FRESH_WINDOW}])`),
+      promQuery(`last_over_time(probe_duration_seconds{site="${s}",check="${c}"}[${METRIC_FRESH_WINDOW}])`)
+    ]);
+    const up = parseFirstVectorValue(success);
+    let ms: number | null = null;
+    let target: string | null = null;
+    if (duration.resultType === "vector" && Array.isArray(duration.result) && duration.result[0]) {
+      const row = duration.result[0];
+      const raw = Number(row.value?.[1]);
+      if (Number.isFinite(raw)) ms = Math.round(raw * 1000 * 10) / 10;
+      target = (row.metric?.instance || "").trim() || null;
+    }
+    return { up, ms, target };
+  };
   try {
-    dns = parseFirstVectorValue(await promQuery(probeSuccessFresh(siteId, "wan_dns", METRIC_FRESH_WINDOW)));
-    dns2 = parseFirstVectorValue(await promQuery(probeSuccessFresh(siteId, "wan_dns2", METRIC_FRESH_WINDOW)));
-    vps = parseFirstVectorValue(await promQuery(probeSuccessFresh(siteId, "wan_vps", METRIC_FRESH_WINDOW)));
+    const [dnsProbe, dns2Probe, vpsProbe] = await Promise.all([
+      readProbe("wan_dns"),
+      readProbe("wan_dns2"),
+      readProbe("wan_vps")
+    ]);
+    dns = dnsProbe.up;
+    dns2 = dns2Probe.up;
+    vps = vpsProbe.up;
+    dnsMs = dnsProbe.ms;
+    dns2Ms = dns2Probe.ms;
+    vpsMs = vpsProbe.ms;
+    dnsTarget = dnsProbe.target;
+    dns2Target = dns2Probe.target;
+    vpsTarget = vpsProbe.target;
   } catch {
     /* ignore */
   }
@@ -500,7 +541,17 @@ async function loadSiteNetworkSummary(
     siteId,
     wanUplink,
     wanDeviceName: wanDevice?.name ?? null,
-    uplink: { dns, dns2, vps },
+    uplink: {
+      dns,
+      dns2,
+      vps,
+      dnsMs,
+      dns2Ms,
+      vpsMs,
+      dnsTarget,
+      dns2Target,
+      vpsTarget
+    },
     traffic,
     trafficSeries: { inBps: inSeries, outBps: outSeries },
     clients: {

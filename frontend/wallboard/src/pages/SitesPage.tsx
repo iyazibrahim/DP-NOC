@@ -922,25 +922,37 @@ export function SiteDetailPage() {
               onPageChange={setDevicePage}
             />
           ) : null}
-          <p className="muted" style={{ marginTop: 10 }}>
-            Network inventory syncs to the site collector automatically when the Collector Console is
-            configured and running (typically every 90 seconds).
-          </p>
-
           <div className="collectorSyncPanel" style={{ marginTop: 16 }}>
             <div className="tableTitle">Collector inventory sync</div>
-            <p className="muted">
-              {site.hasCollectorToken
-                ? "Token configured. Open the Collector Console on the site box (http://<collector-ip>:8090) to add SNMP devices and sync. Devices added there appear here automatically."
-                : "Generate a token so this site’s Alloy box can pull SNMP targets from the UI."}
-            </p>
-            {site.collectorDevicesSyncedAt ? (
-              <p className="muted">
-                Last collector pull: {new Date(site.collectorDevicesSyncedAt).toLocaleString()}
-              </p>
-            ) : (
-              <p className="muted">No successful collector pull yet.</p>
-            )}
+            {(() => {
+              const syncedAt = site.collectorDevicesSyncedAt
+                ? new Date(site.collectorDevicesSyncedAt)
+                : null;
+              const fresh = syncedAt != null && Date.now() - syncedAt.getTime() < 3 * 60 * 1000;
+              const label = !site.hasCollectorToken
+                ? "NO TOKEN"
+                : fresh
+                  ? "IN SYNC"
+                  : syncedAt
+                    ? "STALE"
+                    : "NO SYNC";
+              const state = !site.hasCollectorToken
+                ? "unknown"
+                : fresh
+                  ? "healthy"
+                  : syncedAt
+                    ? "warning"
+                    : "unknown";
+              return (
+                <div className="healthChip" style={{ marginTop: 10, width: "fit-content" }}>
+                  <span className="healthChipLabel">Collector</span>
+                  <StatusPill state={state} notes={label} />
+                  <span className="muted">
+                    {syncedAt ? syncedAt.toLocaleString() : "No pull yet"}
+                  </span>
+                </div>
+              );
+            })()}
             {revealedCollectorToken ? (
               <div className="bannerHint" style={{ marginTop: 8 }}>
                 <strong>Copy now (shown once):</strong>
