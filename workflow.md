@@ -415,4 +415,5 @@ Collector box → Alloy → Prometheus (central)
   - Block this MAC saves the address. The collector SNMP-writes a disconnect on every Cambium AP where that MAC is associated. The published E410 client table is read-only, so a refusal is stored on the block and shown in the UI.
   - Optional FortiGate API token on the firewall device. The collector reads session application names and the ledger shows them. Without the token or app-control logs, the column stays “Not logged”.
   - Names start after the collector image is rebuilt and Force apply has run. Last weekend’s laptop is still unknown.
+  - Clients → Use on this day pages at 10 rows.
 

@@ -56,6 +56,7 @@ export function SiteClientsPanel({ token, site }: Props) {
     }).format(new Date())
   );
   const [dayClients, setDayClients] = useState<ClientDayUse[]>([]);
+  const [usePage, setUsePage] = useState(1);
   const [blocks, setBlocks] = useState<ClientBlock[]>([]);
 
   useEffect(() => {
@@ -98,6 +99,10 @@ export function SiteClientsPanel({ token, site }: Props) {
     setPage(1);
   }, [apFilter, search, site.id]);
 
+  useEffect(() => {
+    setUsePage(1);
+  }, [useDate, site.id]);
+
   const aps = useMemo(() => {
     const rows = network?.aps?.length
       ? network.aps
@@ -134,6 +139,7 @@ export function SiteClientsPanel({ token, site }: Props) {
   }, [stations, apFilter, search]);
 
   const pager = useMemo(() => paginateItems(filteredStations, page, 20), [filteredStations, page]);
+  const dayPager = useMemo(() => paginateItems(dayClients, usePage, 10), [dayClients, usePage]);
 
   const omadaMacOnly = useMemo(() => {
     if (stations.length === 0) return false;
@@ -330,7 +336,7 @@ export function SiteClientsPanel({ token, site }: Props) {
                 </td>
               </tr>
             ) : (
-              dayClients.map((client) => (
+              dayPager.slice.map((client) => (
                 <tr key={client.mac}>
                   <td>
                     {client.hostname || client.mac}
@@ -360,6 +366,16 @@ export function SiteClientsPanel({ token, site }: Props) {
             )}
           </tbody>
         </table>
+        {dayClients.length > 0 ? (
+          <TablePagination
+            page={dayPager.page}
+            totalPages={dayPager.totalPages}
+            total={dayPager.total}
+            start={dayPager.start}
+            end={dayPager.end}
+            onPageChange={setUsePage}
+          />
+        ) : null}
         {blocks.length > 0 ? (
           <p className="muted" style={{ marginTop: "0.75rem" }}>
             {blocks.map((row) => `${row.mac}: ${row.lastDetail || row.lastResult}`).join(" ")}
