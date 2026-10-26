@@ -64,6 +64,8 @@ export type SiteDevice = {
   snmpIp?: string;
   /** Optional per-device SNMPv2c community; collector uses site default if omitted */
   snmpCommunity?: string;
+  /** True when a FortiGate API token is saved. The token itself is not sent to the browser. */
+  hasFortiApiToken?: boolean;
   hostMetricId?: string;
   vendor: string;
 };
@@ -339,6 +341,7 @@ export type NotificationsConfig = {
     website: boolean;
     device: boolean;
     snmp: boolean;
+    bandwidth?: boolean;
   };
 };
 

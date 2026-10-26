@@ -338,7 +338,8 @@ export function SettingsPage() {
                 ["collector", "Probe", "The monitoring box is not reporting."],
                 ["website", "Website", "A public website check failed."],
                 ["device", "Network device", "A device is not answering ping."],
-                ["snmp", "SNMP", "Ping works, but SNMP does not. Off until you enable it."]
+                ["snmp", "SNMP", "Ping works, but SNMP does not. Off until you enable it."],
+                ["bandwidth", "Bandwidth", "A Wi-Fi client crossed a daily guest, download, or upload cap."]
               ] as const
             ).map(([id, label, detail]) => (
               <label key={id} className="label">

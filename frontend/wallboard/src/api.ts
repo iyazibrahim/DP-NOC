@@ -188,6 +188,7 @@ export type SiteNetworkSummary = {
     outBps: number | null;
     clientOs: string | null;
     hwMode: string | null;
+    apps?: string[];
   }>;
   speedtest: {
     available: boolean;
@@ -228,6 +229,94 @@ export async function getSiteNetwork(token: string, siteId: string, hours = 24) 
   return fetchJson<{ network: SiteNetworkSummary }>(
     `/api/sites/${siteId}/network?hours=${hours}`,
     { headers: authHeaders(token) }
+  );
+}
+
+export type DayDeviceUse = {
+  deviceId: string;
+  label: string;
+  type: string;
+  role: "wan" | "ap" | "firewall" | "nas" | "other";
+  inBytes: number | null;
+  outBytes: number | null;
+};
+
+export type ClientDayUse = {
+  mac: string;
+  hostname: string | null;
+  ip: string | null;
+  ssid: string | null;
+  apLabel: string | null;
+  deviceId: string | null;
+  vendor: string | null;
+  apps: string[];
+  inBytes: number;
+  outBytes: number;
+  lastSeen: string;
+};
+
+export async function getLineUseDay(token: string, siteId: string, date: string) {
+  return fetchJson<{ date: string; devices: DayDeviceUse[]; clients: ClientDayUse[] }>(
+    `/api/sites/${siteId}/line-use/day?date=${encodeURIComponent(date)}`,
+    { headers: authHeaders(token) }
+  );
+}
+
+export type ClientWatchPolicy = {
+  guestSsids: string[];
+  guestDownloadBytes: number;
+  clientTotalBytes: number;
+  uploadBytes: number;
+  uploadRatio: number;
+};
+
+export async function getClientWatch(token: string, siteId: string) {
+  return fetchJson<{ policy: ClientWatchPolicy; ssids: string[] }>(`/api/sites/${siteId}/client-watch`, {
+    headers: authHeaders(token)
+  });
+}
+
+export async function saveClientWatch(token: string, siteId: string, policy: ClientWatchPolicy) {
+  return fetchJson<{ policy: ClientWatchPolicy; ssids: string[] }>(`/api/sites/${siteId}/client-watch`, {
+    method: "PUT",
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify(policy)
+  });
+}
+
+export type ClientBlock = {
+  mac: string;
+  hostname: string | null;
+  ssid: string | null;
+  apLabel: string | null;
+  createdAt: string;
+  lastAttemptAt: string | null;
+  lastResult: "pending" | "dropped" | "refused" | "absent";
+  lastDetail: string | null;
+};
+
+export async function getClientBlocks(token: string, siteId: string) {
+  return fetchJson<{ blocks: ClientBlock[] }>(`/api/sites/${siteId}/client-blocks`, {
+    headers: authHeaders(token)
+  });
+}
+
+export async function blockClientMac(
+  token: string,
+  siteId: string,
+  body: { mac: string; hostname?: string | null; ssid?: string | null; apLabel?: string | null }
+) {
+  return fetchJson<{ block: ClientBlock }>(`/api/sites/${siteId}/client-blocks`, {
+    method: "POST",
+    headers: { ...authHeaders(token), "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+}
+
+export async function unblockClientMac(token: string, siteId: string, mac: string) {
+  return fetchJson<{ ok: boolean }>(
+    `/api/sites/${siteId}/client-blocks?mac=${encodeURIComponent(mac)}`,
+    { method: "DELETE", headers: authHeaders(token) }
   );
 }
 
@@ -290,6 +379,7 @@ export async function addSiteDevice(
     snmpCommunity?: string;
     hostMetricId?: string;
     vendor: string;
+    fortiApiToken?: string;
   }
 ) {
   return fetchJson<{ site: Site }>(`/api/sites/${siteId}/devices`, {

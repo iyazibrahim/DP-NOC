@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { LineUseDay, SiteNetworkSummary } from "@/api";
+import {
+  getLineUseDay,
+  type ClientDayUse,
+  type DayDeviceUse,
+  type LineUseDay,
+  type SiteNetworkSummary
+} from "@/api";
+import { useAuth } from "@/auth/AuthContext";
 import { Modal } from "@/components/Modal";
 import { darkTooltipProps } from "@/components/noc/MetricChart";
 
@@ -36,9 +43,11 @@ function dayTotal(day: LineUseDay): number | null {
 
 export function LineUseCards({ network }: { network: SiteNetworkSummary | null }) {
   const [openKey, setOpenKey] = useState<"1d" | "7d" | "30d" | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   useEffect(() => {
     setOpenKey(null);
+    setSelectedDate(null);
   }, [network?.siteId]);
 
   const windows = [
@@ -74,6 +83,7 @@ export function LineUseCards({ network }: { network: SiteNetworkSummary | null }
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
+                setSelectedDate(null);
                 setOpenKey(key);
               }}
             >
@@ -92,19 +102,35 @@ export function LineUseCards({ network }: { network: SiteNetworkSummary | null }
       </div>
       <Modal open={openKey != null} title={title} onClose={() => setOpenKey(null)} wide className="sm:max-w-4xl">
         {openKey === "1d" ? (
-          <TodayLineOverview
-            inBytes={openWin?.inBytes ?? null}
-            outBytes={openWin?.outBytes ?? null}
-            hours={openWin?.hours ?? []}
-            breakdown={network?.todayBreakdown}
-          />
+          <>
+            <TodayLineOverview
+              inBytes={openWin?.inBytes ?? null}
+              outBytes={openWin?.outBytes ?? null}
+              hours={openWin?.hours ?? []}
+              breakdown={network?.todayBreakdown}
+            />
+            {network?.siteId && openWin?.today ? (
+              <DaySplit siteId={network.siteId} date={openWin.today} />
+            ) : null}
+          </>
         ) : openKey ? (
-          <LineUseOverview
-            days={openWin?.days ?? []}
-            today={openWin?.today}
-            inBytes={openWin?.inBytes ?? null}
-            outBytes={openWin?.outBytes ?? null}
-          />
+          <>
+            <LineUseOverview
+              days={openWin?.days ?? []}
+              today={openWin?.today}
+              inBytes={openWin?.inBytes ?? null}
+              outBytes={openWin?.outBytes ?? null}
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
+            />
+            {network?.siteId && selectedDate ? (
+              <DaySplit siteId={network.siteId} date={selectedDate} />
+            ) : (
+              <p className="muted" style={{ margin: 0 }}>
+                Select a day to see which device moved the bytes, and which Wi-Fi client the ledger has for that day.
+              </p>
+            )}
+          </>
         ) : null}
       </Modal>
     </div>
@@ -251,12 +277,16 @@ function LineUseOverview({
   days,
   today,
   inBytes,
-  outBytes
+  outBytes,
+  selectedDate,
+  onSelectDate
 }: {
   days: LineUseDay[];
   today?: string;
   inBytes: number | null;
   outBytes: number | null;
+  selectedDate: string | null;
+  onSelectDate: (date: string) => void;
 }) {
   const total = inBytes != null || outBytes != null ? (inBytes ?? 0) + (outBytes ?? 0) : null;
   const fullWithData = days.filter((day) => day.date !== today && dayTotal(day) != null);
@@ -360,7 +390,12 @@ function LineUseOverview({
               </thead>
               <tbody>
                 {[...days].reverse().map((day) => (
-                  <tr key={day.date}>
+                  <tr
+                    key={day.date}
+                    className="alertRow"
+                    onClick={() => onSelectDate(day.date)}
+                    style={day.date === selectedDate ? { outline: "1px solid var(--accent)" } : undefined}
+                  >
                     <td>{formatDay(day.date, day.date === today)}</td>
                     <td className="num">{formatBytesUsed(day.inBytes)}</td>
                     <td className="num">{formatBytesUsed(day.outBytes)}</td>
@@ -374,7 +409,122 @@ function LineUseOverview({
       )}
       <p className="muted" style={{ margin: 0 }}>
         Each day is midnight to midnight, Malaysia time. Today runs up to now. The total is the sum of these days.
+        Select a day to see which box moved it.
       </p>
     </>
+  );
+}
+
+function DaySplit({ siteId, date }: { siteId: string; date: string }) {
+  const { token } = useAuth();
+  const [devices, setDevices] = useState<DayDeviceUse[] | null>(null);
+  const [clients, setClients] = useState<ClientDayUse[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    setDevices(null);
+    setClients(null);
+    getLineUseDay(token, siteId, date)
+      .then((res) => {
+        if (cancelled) return;
+        setDevices(res.devices);
+        setClients(res.clients);
+        setError(null);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Day detail failed");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, siteId, date]);
+
+  return (
+    <div className="lineUseOverviewTable" style={{ marginTop: 12 }}>
+      <div className="tableTitle">Devices · {date}</div>
+      {error ? <p className="muted">{error}</p> : null}
+      {devices == null && !error ? <p className="muted">Loading device totals…</p> : null}
+      {devices ? (
+        <table className="dataTable">
+          <thead>
+            <tr>
+              <th>Device</th>
+              <th>Role</th>
+              <th className="num">Download</th>
+              <th className="num">Upload</th>
+              <th className="num">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {devices.length === 0 ? (
+              <tr>
+                <td colSpan={5}>No interface counters for this day.</td>
+              </tr>
+            ) : (
+              devices.map((device) => (
+                <tr key={`${device.role}-${device.deviceId}-${device.label}`}>
+                  <td>{device.label}</td>
+                  <td>{device.role}</td>
+                  <td className="num">{formatBytesUsed(device.inBytes)}</td>
+                  <td className="num">{formatBytesUsed(device.outBytes)}</td>
+                  <td className="num">
+                    {formatBytesUsed(
+                      device.inBytes == null && device.outBytes == null
+                        ? null
+                        : (device.inBytes ?? 0) + (device.outBytes ?? 0)
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      ) : null}
+      <p className="muted">
+        Internet line is the tagged WAN port. Other rows add every port on that device, so a firewall can read higher
+        than the line. A small access-point total next to a large line means the transfer was wired.
+      </p>
+      <div className="tableTitle">Wi-Fi clients · {date}</div>
+      {clients ? (
+        <table className="dataTable">
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>SSID</th>
+              <th>Access point</th>
+              <th>Services</th>
+              <th className="num">Download</th>
+              <th className="num">Upload</th>
+            </tr>
+          </thead>
+          <tbody>
+            {clients.length === 0 ? (
+              <tr>
+                <td colSpan={6}>
+                  No per-client bytes for this day. The ledger starts when the collector is rebuilt. Omada access
+                  points have no byte counters.
+                </td>
+              </tr>
+            ) : (
+              clients.map((client) => (
+                <tr key={client.mac}>
+                  <td>
+                    {client.hostname || client.mac}
+                    <div className="muted">{client.mac}</div>
+                  </td>
+                  <td>{client.ssid || "—"}</td>
+                  <td>{client.apLabel || "—"}</td>
+                  <td>{client.apps.length > 0 ? client.apps.join(", ") : "Not logged"}</td>
+                  <td className="num">{formatBytesUsed(client.inBytes)}</td>
+                  <td className="num">{formatBytesUsed(client.outBytes)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      ) : null}
+    </div>
   );
 }

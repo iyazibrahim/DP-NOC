@@ -17,6 +17,8 @@ export type StoredStation = {
   hwMode: string | null;
   /** SNMP table index, used to attach this walk to the matching Prometheus row. */
   clientIndex?: string | null;
+  /** Top services from the FortiGate, when a token and traffic log exist. */
+  apps?: string[];
 };
 
 export type SiteStationsPayload = {

@@ -408,4 +408,11 @@ Collector box → Alloy → Prometheus (central)
   - Access points without 64-bit counters use the 32-bit interface counters (`ifInOctets` / `ifOutOctets`). Those series start after the collector image is rebuilt and Force apply runs. The AP cluster uses those same interface rates when an access point has no per-client radio counters. Per-client bytes and SNR are still not in the Omada MIB.
   - The file is the report: Digital Penang logo, numbered sections, print to PDF. The old dark summary and all-interface utilisation table are gone.
   - The page uses the earlier sheet layout (KPI cards, dark table headers, incident log). The footer sits under the content. The logo is read from the app’s public folder so it is embedded in the file.
+- [x] **Client misuse detection (2026-10-26)**
+  - Line-use day popup lists each device’s interface volume for that calendar day (tagged WAN plus every network device). A large line with small AP radios means the transfer was wired.
+  - Collector posts Cambium rx/tx counters. NOC keeps a MAC ledger (hourly 14 days, daily 90 days). First sample is a baseline. A roam does not add the other AP’s full counter. Omada still has no byte counters.
+  - Edit site → Client misuse: tick guest SSIDs and the daily caps (5 GB guest download, 20 GB any client, 10 GB upload at 70% of download). One Bandwidth incident per client per day, through the existing Telegram/email path. No automatic ban.
+  - Block this MAC saves the address. The collector SNMP-writes a disconnect on every Cambium AP where that MAC is associated. The published E410 client table is read-only, so a refusal is stored on the block and shown in the UI.
+  - Optional FortiGate API token on the firewall device. The collector reads session application names and the ledger shows them. Without the token or app-control logs, the column stays “Not logged”.
+  - Names start after the collector image is rebuilt and Force apply has run. Last weekend’s laptop is still unknown.
 

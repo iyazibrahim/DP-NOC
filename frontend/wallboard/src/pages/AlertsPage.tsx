@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
-import { acknowledgeIncident, getIncidents, STATUS_POLL_MS, type NocIncident } from "@/api";
+import { acknowledgeIncident, getClientBlocks, getIncidents, STATUS_POLL_MS, type ClientBlock, type NocIncident } from "@/api";
+import { BlockMacButton } from "@/components/BlockMacButton";
 import { StatusPill } from "@/components/StatusPill";
 import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/noc/PageHeader";
@@ -23,6 +24,8 @@ function kindLabel(kind: string): string {
       return "Network device";
     case "snmp":
       return "SNMP";
+    case "bandwidth":
+      return "Bandwidth";
     case "location":
     case "overall":
       return "Location";
@@ -38,9 +41,20 @@ function incidentStatusLabel(i: NocIncident) {
 }
 
 function incidentStatusSentence(i: NocIncident) {
+  if (i.kind === "bandwidth") {
+    if (i.acknowledgedAt) return "Acknowledged. Blocking the MAC is a separate step.";
+    return "This client crossed a daily cap. Acknowledge clears the alert. Block is optional.";
+  }
   if (i.acknowledgedAt) return "Acknowledged. This does not change whether the check is up.";
   if (i.resolvedAt) return "The check has recovered. Acknowledge to move it to history.";
   return "The check is still failing.";
+}
+
+function macFromIncident(row: NocIncident): string | null {
+  const prefix = `bandwidth:${row.siteId}:`;
+  if (!row.key.startsWith(prefix)) return null;
+  const match = row.key.slice(prefix.length).match(/^([0-9a-f]{2}(?::[0-9a-f]{2}){5}):\d{4}-\d{2}-\d{2}$/);
+  return match ? match[1] : null;
 }
 
 function formatWhen(iso?: string) {
@@ -236,6 +250,7 @@ export function AlertsPage() {
         {selected ? (
           <IncidentDetail
             row={selected}
+            token={token}
             busy={busyId === selected.id}
             onAck={() => void onAck(selected.id)}
           />
@@ -292,13 +307,32 @@ function IncidentRow({
 
 function IncidentDetail({
   row,
+  token,
   busy,
   onAck
 }: {
   row: NocIncident;
+  token: string | null;
   busy: boolean;
   onAck: () => void;
 }) {
+  const mac = macFromIncident(row);
+  const [blocked, setBlocked] = useState<ClientBlock | null>(null);
+  useEffect(() => {
+    if (!token || !mac || row.siteId === "global") return;
+    let cancelled = false;
+    getClientBlocks(token, row.siteId)
+      .then((res) => {
+        if (!cancelled) setBlocked(res.blocks.find((item) => item.mac === mac) ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setBlocked(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, mac, row.siteId]);
+
   return (
     <div className="alertDetail">
       <p className="alertDetailNote">{row.detail || "No further detail was recorded."}</p>
@@ -318,13 +352,26 @@ function IncidentDetail({
         <span>Acknowledged by</span>
         <strong>{row.acknowledgedBy ?? "—"}</strong>
       </div>
-      {row.acknowledgedAt ? null : (
-        <div className="formActions">
+      <div className="formActions">
+        {token && mac && row.siteId !== "global" ? (
+          <BlockMacButton
+            token={token}
+            siteId={row.siteId}
+            mac={mac}
+            blocked={blocked}
+            onChanged={() => {
+              getClientBlocks(token, row.siteId)
+                .then((res) => setBlocked(res.blocks.find((item) => item.mac === mac) ?? null))
+                .catch(() => undefined);
+            }}
+          />
+        ) : null}
+        {row.acknowledgedAt ? null : (
           <Button type="button" disabled={busy} onClick={onAck}>
             Acknowledge
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

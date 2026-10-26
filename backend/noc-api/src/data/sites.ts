@@ -15,6 +15,8 @@ export type SiteDevice = {
   snmpIp?: string;
   /** Optional SNMPv2c community for this device; collector falls back to site default */
   snmpCommunity?: string;
+  /** FortiOS API token. Sent to the collector only. The wallboard sees hasFortiApiToken. */
+  fortiApiToken?: string;
   hostMetricId?: string;
   vendor: string;
 };
@@ -49,7 +51,12 @@ export type Site = {
   alertsMuted?: boolean;
 };
 
-export type PublicSite = Omit<Site, "collectorTokenHash"> & {
+export type PublicDevice = Omit<SiteDevice, "fortiApiToken"> & {
+  hasFortiApiToken: boolean;
+};
+
+export type PublicSite = Omit<Site, "collectorTokenHash" | "devices"> & {
+  devices: PublicDevice[];
   hasCollectorToken: boolean;
 };
 
@@ -112,6 +119,8 @@ function normalizeDevice(d: SiteDevice): SiteDevice {
     vendor: d.vendor || "generic",
     snmpIp: kind === "network" ? d.snmpIp : d.snmpIp || undefined,
     snmpCommunity: community,
+    fortiApiToken:
+      typeof d.fortiApiToken === "string" && d.fortiApiToken.trim() ? d.fortiApiToken.trim() : undefined,
     hostMetricId: kind === "server" ? d.hostMetricId || `${d.id}` : d.hostMetricId
   };
 }
@@ -204,10 +213,16 @@ export function getSiteById(id: string) {
   return siteList.find((s) => s.id === id) ?? null;
 }
 
+function toPublicDevice(device: SiteDevice): PublicDevice {
+  const { fortiApiToken, ...rest } = device;
+  return { ...rest, hasFortiApiToken: Boolean(fortiApiToken) };
+}
+
 export function toPublicSite(site: Site): PublicSite {
   const { collectorTokenHash, ...rest } = site;
   return {
     ...rest,
+    devices: (site.devices ?? []).map(toPublicDevice),
     hasCollectorToken: Boolean(collectorTokenHash)
   };
 }
@@ -260,17 +275,21 @@ export function markCollectorDevicesSynced(siteId: string): void {
 }
 
 export function networkDevicesContentHash(siteId: string): string {
-  const devices = exportNetworkDevicesJson(siteId);
+  const devices = exportNetworkDevicesJson(siteId, { includeSecrets: true });
   return crypto.createHash("sha256").update(JSON.stringify(devices), "utf8").digest("hex");
 }
 
 export function getAllDevices() {
   return siteList.flatMap((site) =>
-    (site.devices ?? []).map((d) => ({
-      ...d,
-      siteId: site.id,
-      siteName: site.name
-    }))
+    (site.devices ?? []).map((d) => {
+      const { fortiApiToken, ...rest } = d;
+      return {
+        ...rest,
+        hasFortiApiToken: Boolean(fortiApiToken),
+        siteId: site.id,
+        siteName: site.name
+      };
+    })
   );
 }
 
@@ -445,13 +464,14 @@ export function removeDevice(siteId: string, deviceId: string): Site | null {
   return site;
 }
 
-export function exportNetworkDevicesJson(siteId: string): Array<{
+export function exportNetworkDevicesJson(siteId: string, opts?: { includeSecrets?: boolean }): Array<{
   id: string;
   name: string;
   type: string;
   snmpIp: string;
   vendor: string;
   snmpCommunity?: string;
+  fortiApiToken?: string;
 }> {
   const site = getSiteById(siteId);
   if (!site) return [];
@@ -465,6 +485,7 @@ export function exportNetworkDevicesJson(siteId: string): Array<{
         snmpIp: string;
         vendor: string;
         snmpCommunity?: string;
+        fortiApiToken?: string;
       } = {
         id: d.id,
         name: d.name,
@@ -473,6 +494,7 @@ export function exportNetworkDevicesJson(siteId: string): Array<{
         vendor: d.vendor
       };
       if (d.snmpCommunity) row.snmpCommunity = d.snmpCommunity;
+      if (opts?.includeSecrets && d.fortiApiToken) row.fortiApiToken = d.fortiApiToken;
       return row;
     });
 }

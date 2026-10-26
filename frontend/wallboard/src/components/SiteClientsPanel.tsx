@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Users, Wifi } from "lucide-react";
-import { getSiteNetwork, STATUS_POLL_MS, type SiteNetworkSummary } from "@/api";
+import {
+  getClientBlocks,
+  getLineUseDay,
+  getSiteNetwork,
+  STATUS_POLL_MS,
+  type ClientBlock,
+  type ClientDayUse,
+  type SiteNetworkSummary
+} from "@/api";
+import { BlockMacButton } from "@/components/BlockMacButton";
+import { formatBytesUsed } from "@/components/LineUseCards";
 import type { Site } from "@/types";
 import { StatusPill } from "@/components/StatusPill";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -37,6 +47,16 @@ export function SiteClientsPanel({ token, site }: Props) {
   const [apFilter, setApFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [useDate, setUseDate] = useState(() =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kuala_Lumpur",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(new Date())
+  );
+  const [dayClients, setDayClients] = useState<ClientDayUse[]>([]);
+  const [blocks, setBlocks] = useState<ClientBlock[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +79,20 @@ export function SiteClientsPanel({ token, site }: Props) {
       clearInterval(t);
     };
   }, [token, site.id]);
+
+  function reloadUse() {
+    if (!token) return;
+    getLineUseDay(token, site.id, useDate)
+      .then((res) => setDayClients(res.clients))
+      .catch(() => setDayClients([]));
+    getClientBlocks(token, site.id)
+      .then((res) => setBlocks(res.blocks))
+      .catch(() => setBlocks([]));
+  }
+
+  useEffect(() => {
+    reloadUse();
+  }, [token, site.id, useDate]);
 
   useEffect(() => {
     setPage(1);
@@ -195,14 +229,16 @@ export function SiteClientsPanel({ token, site }: Props) {
               <th>SSID</th>
               <th>SNR</th>
               <th>Link rate</th>
-              <th>In</th>
-              <th>Out</th>
-            </tr>
+                  <th>In</th>
+                  <th>Out</th>
+                  <th>Services</th>
+                  <th></th>
+                </tr>
           </thead>
           <tbody>
             {pager.slice.length === 0 ? (
               <tr>
-                <td colSpan={9} className="muted">
+                <td colSpan={11} className="muted">
                   {stations.length === 0
                     ? "No connected clients reported yet."
                     : "No clients match this filter."}
@@ -225,6 +261,23 @@ export function SiteClientsPanel({ token, site }: Props) {
                   <td>{dash(st.txRate)}</td>
                   <td>{formatBitrate(st.inBps)}</td>
                   <td>{formatBitrate(st.outBps)}</td>
+                  <td>{st.apps && st.apps.length > 0 ? st.apps.join(", ") : "Not logged"}</td>
+                  <td>
+                    {st.mac ? (
+                      <BlockMacButton
+                        token={token}
+                        siteId={site.id}
+                        mac={st.mac}
+                        hostname={st.hostname}
+                        ssid={st.ssid}
+                        apLabel={st.apLabel}
+                        blocked={blocks.find((row) => row.mac === (st.mac || "").toLowerCase()) ?? null}
+                        onChanged={reloadUse}
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                 </tr>
               ))
             )}
@@ -244,6 +297,74 @@ export function SiteClientsPanel({ token, site }: Props) {
           end={pager.end}
           onPageChange={setPage}
         />
+      </div>
+
+      <div className="tableCard">
+        <div className="siteClientsToolbar">
+          <div className="tableTitle" style={{ margin: 0 }}>
+            Use on this day
+          </div>
+          <label className="siteClientsFilter">
+            <span className="muted text-sm">Date (Malaysia)</span>
+            <input type="date" value={useDate} onChange={(e) => setUseDate(e.target.value)} aria-label="Usage date" />
+          </label>
+        </div>
+        <table className="dataTable">
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>SSID</th>
+              <th>Access point</th>
+              <th>Services</th>
+              <th className="num">Download</th>
+              <th className="num">Upload</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {dayClients.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="muted">
+                  No per-client bytes for this day yet. Cambium totals start after the collector image is rebuilt.
+                  Omada access points do not report client bytes.
+                </td>
+              </tr>
+            ) : (
+              dayClients.map((client) => (
+                <tr key={client.mac}>
+                  <td>
+                    {client.hostname || client.mac}
+                    <div className="muted">{client.mac}</div>
+                  </td>
+                  <td>{dash(client.ssid)}</td>
+                  <td>{dash(client.apLabel)}</td>
+                  <td>{client.apps.length > 0 ? client.apps.join(", ") : "Not logged"}</td>
+                  <td className="num">{formatBytesUsed(client.inBytes)}</td>
+                  <td className="num">{formatBytesUsed(client.outBytes)}</td>
+                  <td>
+                    <BlockMacButton
+                      token={token}
+                      siteId={site.id}
+                      mac={client.mac}
+                      hostname={client.hostname}
+                      ssid={client.ssid}
+                      apLabel={client.apLabel}
+                      inBytes={client.inBytes}
+                      outBytes={client.outBytes}
+                      blocked={blocks.find((row) => row.mac === client.mac) ?? null}
+                      onChanged={reloadUse}
+                    />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+        {blocks.length > 0 ? (
+          <p className="muted" style={{ marginTop: "0.75rem" }}>
+            {blocks.map((row) => `${row.mac}: ${row.lastDetail || row.lastResult}`).join(" ")}
+          </p>
+        ) : null}
       </div>
 
       <div className="tableCard">

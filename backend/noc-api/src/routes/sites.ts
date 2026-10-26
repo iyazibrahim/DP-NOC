@@ -29,7 +29,10 @@ import { computeSiteStatus, computeAllSitesStatus } from "../services/status";
 import { applyWebsiteProbes } from "../services/websiteProbes";
 import { discoverDevicesForSite } from "../services/deviceDiscovery";
 import { addGlobalWebsite, removeGlobalWebsite, updateGlobalWebsite, getGlobalWebsites } from "../data/globalWebsites";
-import { getSiteNetworkSummary, getWirelessClusterSummary, listDeviceInterfaces } from "../services/siteNetwork";
+import { collectDayDeviceVolume, getSiteNetworkSummary, getWirelessClusterSummary, listDeviceInterfaces } from "../services/siteNetwork";
+import { clientDayRows } from "../services/clientLedger";
+import { saveClientWatch, watchContext } from "../services/clientWatch";
+import { blockClient, listClientBlocks, unblockClient } from "../services/clientBlocks";
 import {
   getDefaultSiteNetworkLayout,
   loadSiteNetworkLayout,
@@ -71,6 +74,8 @@ function parseDeviceBody(body: unknown): SiteDevice | { error: string } {
     typeof b.snmpCommunity === "string" && b.snmpCommunity.trim()
       ? b.snmpCommunity.trim()
       : undefined;
+  const fortiApiToken =
+    typeof b.fortiApiToken === "string" && b.fortiApiToken.trim() ? b.fortiApiToken.trim() : undefined;
   if (!id) return { error: "id is required" };
   if (!name) return { error: "name is required" };
   if (kind === "network" && !snmpIp) return { error: "snmpIp is required for network devices" };
@@ -93,6 +98,7 @@ function parseDeviceBody(body: unknown): SiteDevice | { error: string } {
     kind,
     snmpIp: kind === "network" ? snmpIp : undefined,
     snmpCommunity: kind === "network" ? snmpCommunity : undefined,
+    fortiApiToken: kind === "network" ? fortiApiToken : undefined,
     hostMetricId: kind === "server" ? hostMetricId || id : undefined,
     vendor: vendor || "generic"
   };
@@ -180,6 +186,78 @@ sitesRouter.get("/:id/wireless-summary", requireJwt(["operator", "wallboard"]), 
       error: e instanceof Error ? e.message : "Wireless summary failed"
     });
   }
+});
+
+sitesRouter.get("/:id/line-use/day", requireJwt(["operator", "wallboard"]), async (req, res) => {
+  const siteId = req.params.id;
+  if (!getSiteById(siteId)) return res.status(404).json({ error: "Site not found" });
+  const date = typeof req.query.date === "string" ? req.query.date : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: "date must be YYYY-MM-DD" });
+  }
+  try {
+    const devices = await collectDayDeviceVolume(siteId, date);
+    return res.json({
+      date,
+      devices: devices ?? [],
+      clients: clientDayRows(siteId, date)
+    });
+  } catch (e) {
+    return res.status(502).json({ error: e instanceof Error ? e.message : "Line use day failed" });
+  }
+});
+
+sitesRouter.get("/:id/client-watch", requireJwt(["operator", "wallboard"]), (req, res) => {
+  const siteId = req.params.id;
+  if (!getSiteById(siteId)) return res.status(404).json({ error: "Site not found" });
+  return res.json(watchContext(siteId));
+});
+
+sitesRouter.put("/:id/client-watch", requireJwt(["operator"]), (req, res) => {
+  const siteId = req.params.id;
+  if (!getSiteById(siteId)) return res.status(404).json({ error: "Site not found" });
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const guestSsids = Array.isArray(body.guestSsids)
+    ? body.guestSsids.filter((item): item is string => typeof item === "string")
+    : [];
+  const policy = saveClientWatch(siteId, {
+    guestSsids,
+    guestDownloadBytes: Number(body.guestDownloadBytes),
+    clientTotalBytes: Number(body.clientTotalBytes),
+    uploadBytes: Number(body.uploadBytes),
+    uploadRatio: Number(body.uploadRatio)
+  });
+  return res.json({ policy, ssids: watchContext(siteId).ssids });
+});
+
+sitesRouter.get("/:id/client-blocks", requireJwt(["operator", "wallboard"]), (req, res) => {
+  const siteId = req.params.id;
+  if (!getSiteById(siteId)) return res.status(404).json({ error: "Site not found" });
+  return res.json({ blocks: listClientBlocks(siteId) });
+});
+
+sitesRouter.post("/:id/client-blocks", requireJwt(["operator"]), (req, res) => {
+  const siteId = req.params.id;
+  if (!getSiteById(siteId)) return res.status(404).json({ error: "Site not found" });
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const mac = typeof body.mac === "string" ? body.mac : "";
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const block = blockClient(siteId, {
+    mac,
+    hostname: str(body.hostname),
+    ssid: str(body.ssid),
+    apLabel: str(body.apLabel)
+  });
+  if (!block) return res.status(400).json({ error: "A 12-digit MAC address is required" });
+  return res.status(201).json({ block });
+});
+
+sitesRouter.delete("/:id/client-blocks", requireJwt(["operator"]), (req, res) => {
+  const siteId = req.params.id;
+  if (!getSiteById(siteId)) return res.status(404).json({ error: "Site not found" });
+  const mac = typeof req.query.mac === "string" ? req.query.mac : "";
+  if (!unblockClient(siteId, mac)) return res.status(404).json({ error: "That MAC is not blocked" });
+  return res.json({ ok: true });
 });
 
 sitesRouter.get("/:id/network", requireJwt(["operator", "wallboard"]), async (req, res) => {
@@ -582,6 +660,9 @@ sitesRouter.patch("/:id/devices/:deviceId", requireJwt(["operator"]), async (req
   }
   if (typeof body.hostMetricId === "string") patch.hostMetricId = body.hostMetricId.trim();
   if (typeof body.vendor === "string") patch.vendor = body.vendor.trim();
+  if (typeof body.fortiApiToken === "string") {
+    patch.fortiApiToken = body.fortiApiToken.trim() || undefined;
+  }
   const site = updateDevice(siteId, deviceId, patch);
   if (!site) {
     return res.status(404).json({ error: "Device not found" });

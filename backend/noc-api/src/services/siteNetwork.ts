@@ -13,6 +13,7 @@ import {
   calendarMonthSlots,
   calendarWeekSlots,
   sumLineUseDays,
+  slotForYmd,
   ymdInZone,
   zonedDayStartUnix,
   type LineUseDay
@@ -86,6 +87,7 @@ export type SiteNetworkStation = {
   outBps: number | null;
   clientOs: string | null;
   hwMode: string | null;
+  apps?: string[];
 };
 
 export type SiteNetworkSummary = {
@@ -880,6 +882,102 @@ async function collectTodayBreakdown(
   return { aps: apUses, topClient };
 }
 
+export type DayDeviceUse = {
+  deviceId: string;
+  label: string;
+  type: string;
+  /** wan is the tagged internet port. Other rows sum every port on that device. */
+  role: "wan" | "ap" | "firewall" | "nas" | "other";
+  inBytes: number | null;
+  outBytes: number | null;
+};
+
+function deviceRole(d: { type: string; kind: string; vendor: string }): DayDeviceUse["role"] {
+  const type = (d.type || "").toLowerCase();
+  const vendor = (d.vendor || "").toLowerCase();
+  if (type === "nas" || type === "storage" || vendor.includes("synology")) return "nas";
+  if (type === "firewall" || vendor.includes("forti")) return "firewall";
+  if (isApLikeDevice(d)) return "ap";
+  return "other";
+}
+
+/** Per-device interface volume for one Malaysia calendar day. Past days use counters Prometheus still has. */
+export async function collectDayDeviceVolume(siteId: string, date: string): Promise<DayDeviceUse[] | null> {
+  const site = getSiteById(siteId);
+  if (!site) return null;
+  const slot = slotForYmd(env.NOC_TZ, date);
+  if (!slot) return [];
+  const nowSec = Math.floor(Date.now() / 1000);
+  const end = Math.min(slot.next, nowSec);
+  if (end <= slot.start) return [];
+  const rangeSec = Math.max(60, end - slot.start);
+  const s = escapePromLabel(siteId);
+  const [inRows, outRows] = await Promise.all([
+    readPromDeviceValues(
+      `sum by (device) (max by (device, ifIndex) (increase(ifHCInOctets{site="${s}"}[${rangeSec}s]) or increase(ifInOctets{site="${s}"}[${rangeSec}s])))`,
+      end
+    ),
+    readPromDeviceValues(
+      `sum by (device) (max by (device, ifIndex) (increase(ifHCOutOctets{site="${s}"}[${rangeSec}s]) or increase(ifOutOctets{site="${s}"}[${rangeSec}s])))`,
+      end
+    )
+  ]);
+  const inByDevice = new Map(inRows.map((row) => [row.deviceId, row.value]));
+  const outByDevice = new Map(outRows.map((row) => [row.deviceId, row.value]));
+  const rows: DayDeviceUse[] = [];
+  const wan = site.wanUplink;
+  if (wan) {
+    let inBytes: number | null = null;
+    let outBytes: number | null = null;
+    try {
+      const [inbound, outbound] = await Promise.all([
+        parseFirstVectorValue(
+          await promQuery(buildIfVolumeQuery("in", siteId, wan.deviceId, wan.ifName, `${rangeSec}s`), end)
+        ),
+        parseFirstVectorValue(
+          await promQuery(buildIfVolumeQuery("out", siteId, wan.deviceId, wan.ifName, `${rangeSec}s`), end)
+        )
+      ]);
+      inBytes = inbound != null && inbound >= 0 ? Math.round(inbound) : null;
+      outBytes = outbound != null && outbound >= 0 ? Math.round(outbound) : null;
+    } catch {
+      inBytes = null;
+      outBytes = null;
+    }
+    const wanDevice = site.devices.find((d) => d.id === wan.deviceId);
+    rows.push({
+      deviceId: wan.deviceId,
+      label: `Internet line · ${wanDevice ? deviceLabel(wanDevice, wan.deviceId).label : wan.deviceId} · ${wan.ifName}`,
+      type: "wan",
+      role: "wan",
+      inBytes,
+      outBytes
+    });
+  }
+  for (const device of site.devices) {
+    if (device.kind !== "network") continue;
+    const role = deviceRole(device);
+    const inbound = inByDevice.get(device.id);
+    const outbound = outByDevice.get(device.id);
+    rows.push({
+      deviceId: device.id,
+      label: deviceLabel(device, device.id).label,
+      type: device.type,
+      role,
+      inBytes: inbound != null && inbound >= 0 ? Math.round(inbound) : null,
+      outBytes: outbound != null && outbound >= 0 ? Math.round(outbound) : null
+    });
+  }
+  const rank = { wan: 0, firewall: 1, ap: 2, nas: 3, other: 4 };
+  rows.sort((a, b) => {
+    const volume = (row: DayDeviceUse) => (row.inBytes ?? 0) + (row.outBytes ?? 0);
+    const byVolume = volume(b) - volume(a);
+    if (byVolume !== 0) return byVolume;
+    return rank[a.role] - rank[b.role];
+  });
+  return rows;
+}
+
 function isApLikeDevice(d: { type: string; kind: string; vendor: string }): boolean {
   if (d.kind !== "network") return false;
   const type = (d.type || "").toLowerCase();
@@ -894,10 +992,11 @@ function normalizeVendorKey(vendor: string): string {
 }
 
 async function readPromDeviceValues(
-  query: string
+  query: string,
+  time?: number
 ): Promise<Array<{ deviceId: string; value: number }>> {
   try {
-    const data = await promQuery(query);
+    const data = await promQuery(query, time);
     if (data.resultType !== "vector" || !Array.isArray(data.result)) return [];
     const out: Array<{ deviceId: string; value: number }> = [];
     for (const row of data.result as Array<{
@@ -1258,7 +1357,8 @@ async function collectStations(siteId: string, site: Site): Promise<SiteNetworkS
         inBps: live?.inBps ?? st.inBps,
         outBps: live?.outBps ?? st.outBps,
         clientOs: st.clientOs,
-        hwMode: st.hwMode
+        hwMode: st.hwMode,
+        apps: st.apps ?? []
       };
     });
   }

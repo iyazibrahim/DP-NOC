@@ -13,12 +13,14 @@ import {
   deleteSiteWebsite,
   downloadSiteDevicesJson,
   getAllSiteStatuses,
+  getClientWatch,
   getDeviceInterfaces,
   getDiscoveredDevices,
   getSite,
   getSites,
   getWebsites,
   rotateCollectorToken,
+  saveClientWatch,
   updateSite,
   updateSiteDevice,
   updateSiteWebsite
@@ -198,6 +200,8 @@ const emptyForm = {
   kind: "network" as DeviceKind,
   snmpIp: "",
   snmpCommunity: "",
+  fortiApiToken: "",
+  clearFortiToken: false,
   hostMetricId: "",
   vendor: "generic"
 };
@@ -219,6 +223,15 @@ export function SiteDetailPage() {
     wanDeviceId: "",
     wanIfName: "",
     alertsMuted: false
+  });
+  const [watchForm, setWatchForm] = useState({
+    guestSsids: [] as string[],
+    knownSsids: [] as string[],
+    extraSsid: "",
+    guestGb: "5",
+    totalGb: "20",
+    uploadGb: "10",
+    uploadPct: "70"
   });
   const [wanInterfaces, setWanInterfaces] = useState<
     Array<{ ifName: string; ifDescr?: string; ifIndex?: string }>
@@ -287,6 +300,24 @@ export function SiteDetailPage() {
   }, [deviceSearch, id]);
 
   useEffect(() => {
+    if (!token || !id || !editSiteOpen) return;
+    getClientWatch(token, id)
+      .then((res) => {
+        const gb = (bytes: number) => String(Math.round((bytes / 1_000_000_000) * 100) / 100);
+        setWatchForm({
+          guestSsids: res.policy.guestSsids,
+          knownSsids: res.ssids,
+          extraSsid: "",
+          guestGb: gb(res.policy.guestDownloadBytes),
+          totalGb: gb(res.policy.clientTotalBytes),
+          uploadGb: gb(res.policy.uploadBytes),
+          uploadPct: String(Math.round(res.policy.uploadRatio * 100))
+        });
+      })
+      .catch(() => undefined);
+  }, [token, id, editSiteOpen]);
+
+  useEffect(() => {
     if (!token || !id || !editSiteOpen || !siteForm.wanDeviceId) {
       setWanInterfaces([]);
       return;
@@ -343,6 +374,8 @@ export function SiteDetailPage() {
       kind: d.kind ?? "network",
       snmpIp: d.snmpIp ?? "",
       snmpCommunity: d.snmpCommunity ?? "",
+      fortiApiToken: "",
+      clearFortiToken: false,
       hostMetricId: d.hostMetricId ?? d.id,
       vendor: d.vendor
     });
@@ -412,7 +445,12 @@ export function SiteDetailPage() {
             : form.kind === "network"
               ? ""
               : undefined,
-        hostMetricId: form.kind === "server" ? form.hostMetricId || form.id : undefined
+        hostMetricId: form.kind === "server" ? form.hostMetricId || form.id : undefined,
+        ...(form.fortiApiToken.trim()
+          ? { fortiApiToken: form.fortiApiToken.trim() }
+          : form.clearFortiToken
+            ? { fortiApiToken: "" }
+            : {})
       };
       if (editingId) {
         await updateSiteDevice(token, id, editingId, payload);
@@ -440,6 +478,8 @@ export function SiteDetailPage() {
         kind: "network",
         snmpIp: "",
         snmpCommunity: "",
+        fortiApiToken: "",
+        clearFortiToken: false,
         hostMetricId: "",
         vendor: "generic"
       });
@@ -491,6 +531,10 @@ export function SiteDetailPage() {
     try {
       const wanDeviceId = siteForm.wanDeviceId.trim();
       const wanIfName = siteForm.wanIfName.trim();
+      const gb = (value: string) => {
+        const n = Number(value);
+        return Number.isFinite(n) && n >= 0 ? Math.round(n * 1_000_000_000) : 0;
+      };
       await updateSite(token, id, {
         name: siteForm.name,
         address: siteForm.address,
@@ -500,6 +544,13 @@ export function SiteDetailPage() {
         wanUplink:
           wanDeviceId && wanIfName ? { deviceId: wanDeviceId, ifName: wanIfName } : null,
         alertsMuted: siteForm.alertsMuted
+      });
+      await saveClientWatch(token, id, {
+        guestSsids: watchForm.guestSsids,
+        guestDownloadBytes: gb(watchForm.guestGb),
+        clientTotalBytes: gb(watchForm.totalGb),
+        uploadBytes: gb(watchForm.uploadGb),
+        uploadRatio: Math.min(1, Math.max(0, Number(watchForm.uploadPct) / 100 || 0))
       });
       setEditSiteOpen(false);
       await reload();
@@ -1108,6 +1159,78 @@ export function SiteDetailPage() {
           <p className="muted" style={{ marginTop: 0 }}>
             Stops incidents and pages for this location only. The dashboard can still show it down.
           </p>
+          <div className="tableTitle" style={{ marginTop: 12 }}>
+            Client misuse
+          </div>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Tick the guest SSIDs. Nothing is guessed. Caps are per client per day, Malaysia time. One alert per client
+            per day. Blocking stays a separate confirm step.
+          </p>
+          {[...new Set([...watchForm.knownSsids, ...watchForm.guestSsids])].map((ssid) => (
+            <label key={ssid} className="label">
+              <input
+                type="checkbox"
+                checked={watchForm.guestSsids.includes(ssid)}
+                onChange={(e) =>
+                  setWatchForm((f) => ({
+                    ...f,
+                    guestSsids: e.target.checked
+                      ? [...f.guestSsids, ssid]
+                      : f.guestSsids.filter((item) => item !== ssid)
+                  }))
+                }
+              />{" "}
+              Guest · {ssid}
+            </label>
+          ))}
+          <label className="label">Add an SSID name</label>
+          <div className="formActions">
+            <input
+              value={watchForm.extraSsid}
+              onChange={(e) => setWatchForm((f) => ({ ...f, extraSsid: e.target.value }))}
+              placeholder="Digital Economy"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                const name = watchForm.extraSsid.trim();
+                if (!name) return;
+                setWatchForm((f) => ({
+                  ...f,
+                  extraSsid: "",
+                  knownSsids: f.knownSsids.includes(name) ? f.knownSsids : [...f.knownSsids, name],
+                  guestSsids: f.guestSsids.includes(name) ? f.guestSsids : [...f.guestSsids, name]
+                }));
+              }}
+            >
+              Add guest SSID
+            </Button>
+          </div>
+          <label className="label">Guest download cap (GB)</label>
+          <input
+            value={watchForm.guestGb}
+            onChange={(e) => setWatchForm((f) => ({ ...f, guestGb: e.target.value }))}
+            inputMode="decimal"
+          />
+          <label className="label">Any client combined cap (GB)</label>
+          <input
+            value={watchForm.totalGb}
+            onChange={(e) => setWatchForm((f) => ({ ...f, totalGb: e.target.value }))}
+            inputMode="decimal"
+          />
+          <label className="label">Upload-shaped floor (GB)</label>
+          <input
+            value={watchForm.uploadGb}
+            onChange={(e) => setWatchForm((f) => ({ ...f, uploadGb: e.target.value }))}
+            inputMode="decimal"
+          />
+          <label className="label">Upload must be at least this % of download</label>
+          <input
+            value={watchForm.uploadPct}
+            onChange={(e) => setWatchForm((f) => ({ ...f, uploadPct: e.target.value }))}
+            inputMode="numeric"
+          />
           <SiteLocationPicker
             lat={siteForm.lat}
             lng={siteForm.lng}
@@ -1238,6 +1361,36 @@ export function SiteDetailPage() {
               <p className="hint" style={{ marginTop: 4 }}>
                 Per-device SNMPv2c string. Blank = Collector Console default community.
               </p>
+              {/forti|firewall/i.test(`${form.vendor} ${form.type}`) ? (
+                <>
+                  <label className="label">FortiGate API token</label>
+                  <input
+                    type="password"
+                    value={form.fortiApiToken}
+                    onChange={(e) => setForm((f) => ({ ...f, fortiApiToken: e.target.value, clearFortiToken: false }))}
+                    placeholder={
+                      editingId && site?.devices.find((d) => d.id === editingId)?.hasFortiApiToken
+                        ? "Saved — leave blank to keep"
+                        : "Optional. Used to name the service a client is using."
+                    }
+                    autoComplete="off"
+                  />
+                  {editingId && site?.devices.find((d) => d.id === editingId)?.hasFortiApiToken ? (
+                    <label className="label">
+                      <input
+                        type="checkbox"
+                        checked={form.clearFortiToken}
+                        onChange={(e) => setForm((f) => ({ ...f, clearFortiToken: e.target.checked }))}
+                      />{" "}
+                      Remove saved token
+                    </label>
+                  ) : null}
+                  <p className="hint" style={{ marginTop: 4 }}>
+                    The collector asks this firewall for session application names. The token is not shown again.
+                    Services stay “Not logged” until traffic logging or app control is on.
+                  </p>
+                </>
+              ) : null}
             </>
           ) : (
             <>

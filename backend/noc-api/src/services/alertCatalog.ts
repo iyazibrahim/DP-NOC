@@ -1,4 +1,4 @@
-export const ALERT_TYPE_IDS = ["uplink", "collector", "website", "device", "snmp"] as const;
+export const ALERT_TYPE_IDS = ["uplink", "collector", "website", "device", "snmp", "bandwidth"] as const;
 
 export type AlertTypeId = (typeof ALERT_TYPE_IDS)[number];
 
@@ -52,6 +52,14 @@ export const ALERT_TYPES: AlertTypeDef[] = [
     severity: "warning",
     defaultEnabled: false,
     description: "A device answers ping but not SNMP."
+  },
+  {
+    id: "bandwidth",
+    label: "Bandwidth",
+    alertname: "ClientBandwidth",
+    severity: "warning",
+    defaultEnabled: true,
+    description: "A Wi-Fi client crossed a daily download, upload, or guest cap."
   }
 ];
 
@@ -61,7 +69,8 @@ export function defaultAlertTypes(): Record<AlertTypeId, boolean> {
     collector: true,
     website: true,
     device: true,
-    snmp: false
+    snmp: false,
+    bandwidth: true
   };
 }
 

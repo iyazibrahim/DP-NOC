@@ -1,6 +1,8 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { readConfig, readSnmpCommunity, stateDir } from "./config";
+import { applyClientBlocks } from "./clientBlock";
+import { attachFortiApps } from "./fortiApps";
 import fs from "fs";
 import path from "path";
 
@@ -21,6 +23,10 @@ export type ScannedStation = {
   clientOs: string | null;
   hwMode: string | null;
   clientIndex: string | null;
+  /** Absolute AP counters. Rx is download toward the client. */
+  rxBytes: number | null;
+  txBytes: number | null;
+  apps: string[];
 };
 
 type LocalDevice = {
@@ -30,6 +36,7 @@ type LocalDevice = {
   type?: string;
   vendor?: string;
   snmpCommunity?: string;
+  fortiApiToken?: string;
 };
 
 function norm(s: string): string {
@@ -215,6 +222,10 @@ function applyByteRates(
     const tx = st._txBytes ?? 0;
     const rx = st._rxBytes ?? 0;
     next.counters[key] = { tx, rx };
+    if (st._rxBytes != null && st._txBytes != null) {
+      st.rxBytes = st._rxBytes;
+      st.txBytes = st._txBytes;
+    }
     if (prev?.counters[key] && dtSec > 0) {
       const p = prev.counters[key];
       // Rx bytes at AP = download to client → In; Tx bytes = upload from client → Out
@@ -264,6 +275,9 @@ async function scanDevice(
         clientOs: cols["6"]?.trim() || null,
         hwMode: cols["7"]?.trim() || null,
         clientIndex: idx,
+        rxBytes: null,
+        txBytes: null,
+        apps: [],
         _txBytes: Number.isFinite(txBytes) ? txBytes : undefined,
         _rxBytes: Number.isFinite(rxBytes) ? rxBytes : undefined,
         _idx: idx
@@ -288,6 +302,9 @@ async function scanDevice(
         clientOs: null,
         hwMode: null,
         clientIndex: idx,
+        rxBytes: null,
+        txBytes: null,
+        apps: [],
         _idx: idx
       });
     }
@@ -327,10 +344,10 @@ export async function scanAllStations(): Promise<{
 
 export async function pushStationsToNoc(
   stations: ScannedStation[]
-): Promise<{ ok: boolean; message: string }> {
+): Promise<{ ok: boolean; message: string; blocks: Array<{ mac: string }> }> {
   const config = readConfig();
   if (!config.nocApiUrl || !config.siteName || !config.collectorToken) {
-    return { ok: false, message: "Finish Setup before scanning clients." };
+    return { ok: false, message: "Finish Setup before scanning clients.", blocks: [] };
   }
   const url = `${config.nocApiUrl.replace(/\/$/, "")}/api/collector/${config.siteName}/stations`;
   try {
@@ -344,14 +361,42 @@ export async function pushStationsToNoc(
       body: JSON.stringify({ stations, at: new Date().toISOString() }),
       signal: AbortSignal.timeout(20000)
     });
-    await res.text();
+    const text = await res.text();
     if (!res.ok) {
-      return { ok: false, message: "The NOC did not accept the client list. Check the collector token in Setup." };
+      return { ok: false, message: "The NOC did not accept the client list. Check the collector token in Setup.", blocks: [] };
     }
-    return { ok: true, message: `Sent ${stations.length} clients to the NOC.` };
+    let blocks: Array<{ mac: string }> = [];
+    try {
+      const parsed = JSON.parse(text) as { blocks?: Array<{ mac?: string }> };
+      blocks = (parsed.blocks ?? [])
+        .map((row) => ({ mac: typeof row.mac === "string" ? row.mac : "" }))
+        .filter((row) => row.mac);
+    } catch {
+      blocks = [];
+    }
+    return { ok: true, message: `Sent ${stations.length} clients to the NOC.`, blocks };
   } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+    return { ok: false, message: err instanceof Error ? err.message : String(err), blocks: [] };
   }
+}
+
+async function reportBlockAttempts(
+  attempts: Array<{ mac: string; result: string; detail: string }>
+): Promise<void> {
+  if (attempts.length === 0) return;
+  const config = readConfig();
+  if (!config.nocApiUrl || !config.siteName || !config.collectorToken) return;
+  const url = `${config.nocApiUrl.replace(/\/$/, "")}/api/collector/${config.siteName}/client-blocks/report`;
+  await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.collectorToken}`,
+      "Content-Type": "application/json",
+      Accept: "application/json"
+    },
+    body: JSON.stringify({ attempts }),
+    signal: AbortSignal.timeout(15000)
+  });
 }
 
 let scanInFlight = false;
@@ -361,10 +406,19 @@ export async function scanAndPushStations(): Promise<{ ok: boolean; message: str
   scanInFlight = true;
   try {
     const scan = await scanAllStations();
-    const push = await pushStationsToNoc(scan.stations);
+    const stations = await attachFortiApps(scan.stations);
+    const push = await pushStationsToNoc(stations);
+    let blockNote = "";
+    if (push.ok && push.blocks.length > 0) {
+      const attempts = await applyClientBlocks(push.blocks, stations);
+      await reportBlockAttempts(attempts).catch(() => undefined);
+      const refused = attempts.filter((row) => row.result === "refused").length;
+      const dropped = attempts.filter((row) => row.result === "dropped").length;
+      blockNote = ` Blocked MACs: ${dropped} dropped, ${refused} refused.`;
+    }
     return {
       ok: push.ok,
-      message: `${scan.message} — ${push.message}`
+      message: `${scan.message} — ${push.message}${blockNote}`
     };
   } finally {
     scanInFlight = false;

@@ -9,6 +9,7 @@ import {
 import { env } from "../env";
 import { alertTypeByKind, type AlertTypeId } from "./alertCatalog";
 import { postAlerts, type PostedAlert } from "./alertmanager";
+import { listBandwidthIncidents } from "./clientWatch";
 import { loadNotificationsConfig } from "./notifications";
 import type { SiteStatus } from "./status";
 
@@ -213,6 +214,19 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
             `${d.name} is online, but SNMP is not answering. Check the SNMP community and that UDP port 161 is allowed, then use Force apply on the collector.`
         });
       }
+    }
+  }
+
+  for (const row of listBandwidthIncidents()) {
+    if (alertReady(row.siteId, "bandwidth", row.key, true, false)) {
+      track({
+        key: row.key,
+        siteId: row.siteId,
+        siteName: row.siteName,
+        kind: "bandwidth",
+        title: row.title,
+        detail: row.detail
+      });
     }
   }
 

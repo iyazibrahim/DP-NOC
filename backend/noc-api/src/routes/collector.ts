@@ -10,6 +10,8 @@ import {
 } from "../data/sites";
 import { computeSiteStatus } from "../services/status";
 import { saveSiteStations, type StoredStation } from "../data/siteStations";
+import { recordStationSamples, type LedgerSample } from "../services/clientLedger";
+import { listClientBlocks, reportBlockAttempts, type BlockResult } from "../services/clientBlocks";
 import { saveDeviceSnapshot, type DeviceProbe, type ProbeLevel } from "../data/deviceSnapshots";
 
 export const collectorRouter = express.Router();
@@ -44,7 +46,7 @@ collectorRouter.get("/:siteId/devices.json", (req, res) => {
   const siteId = req.params.siteId;
   if (!requireCollectorAuth(req, res, siteId)) return;
 
-  const devices = exportNetworkDevicesJson(siteId);
+  const devices = exportNetworkDevicesJson(siteId, { includeSecrets: true });
   const etag = `"${networkDevicesContentHash(siteId)}"`;
   res.setHeader("ETag", etag);
   res.setHeader("Cache-Control", "no-store");
@@ -103,6 +105,7 @@ collectorRouter.post("/:siteId/stations", (req, res) => {
   }
 
   const stations: StoredStation[] = [];
+  const samples: LedgerSample[] = [];
   for (const raw of body.stations) {
     if (!raw || typeof raw !== "object") continue;
     const r = raw as Record<string, unknown>;
@@ -125,13 +128,58 @@ collectorRouter.post("/:siteId/stations", (req, res) => {
       outBps: numOrNull(r.outBps),
       clientOs: strOrNull(r.clientOs),
       hwMode: strOrNull(r.hwMode),
-      clientIndex: strOrNull(r.clientIndex)
+      clientIndex: strOrNull(r.clientIndex),
+      apps: Array.isArray(r.apps) ? r.apps.filter((item): item is string => typeof item === "string") : undefined
+    });
+    const rx = numOrNull(r.rxBytes);
+    const tx = numOrNull(r.txBytes);
+    samples.push({
+      deviceId,
+      mac: strOrNull(r.mac),
+      hostname: strOrNull(r.hostname),
+      ip: strOrNull(r.ip),
+      ssid: strOrNull(r.ssid),
+      apLabel: strOrNull(r.apLabel),
+      vendor: strOrNull(r.vendor),
+      rxBytes: rx != null && Number.isFinite(rx) ? rx : null,
+      txBytes: tx != null && Number.isFinite(tx) ? tx : null,
+      apps: Array.isArray(r.apps) ? r.apps.filter((item): item is string => typeof item === "string") : []
     });
   }
 
   const at = typeof body.at === "string" ? body.at : undefined;
   const saved = saveSiteStations(siteId, stations, at);
-  return res.json({ ok: true, count: saved.stations.length, at: saved.at });
+  const sampledAt = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : new Date();
+  try {
+    recordStationSamples(siteId, samples, sampledAt);
+  } catch {
+    /* The live client list still saved. The ledger catches up on the next scan. */
+  }
+  return res.json({
+    ok: true,
+    count: saved.stations.length,
+    at: saved.at,
+    blocks: listClientBlocks(siteId).map((row) => ({ mac: row.mac }))
+  });
+});
+
+collectorRouter.post("/:siteId/client-blocks/report", (req, res) => {
+  const siteId = req.params.siteId;
+  if (!requireCollectorAuth(req, res, siteId)) return;
+  const body = (req.body ?? {}) as { attempts?: unknown };
+  if (!Array.isArray(body.attempts)) return res.status(400).json({ error: "attempts array required" });
+  const attempts: Array<{ mac: string; result: BlockResult; detail: string }> = [];
+  for (const raw of body.attempts) {
+    if (!raw || typeof raw !== "object") continue;
+    const row = raw as Record<string, unknown>;
+    const mac = typeof row.mac === "string" ? row.mac : "";
+    const result = row.result;
+    const detail = typeof row.detail === "string" ? row.detail : "";
+    if (result !== "dropped" && result !== "refused" && result !== "absent" && result !== "pending") continue;
+    if (!mac) continue;
+    attempts.push({ mac, result, detail });
+  }
+  return res.json({ blocks: reportBlockAttempts(siteId, attempts) });
 });
 
 /**

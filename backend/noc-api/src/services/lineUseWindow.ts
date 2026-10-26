@@ -184,6 +184,33 @@ export function bucketVolumeDays(
   }));
 }
 
+/** Local midnight-to-midnight slot for a `YYYY-MM-DD` in `timeZone`, or null if it is not within 40 days. */
+export function slotForYmd(timeZone: string, date: string, now = new Date()): DaySlot | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  for (let offset = -40; offset <= 1; offset++) {
+    const start = zonedDayStartUnix(timeZone, now, offset);
+    if (ymdInZone(timeZone, start) !== date) continue;
+    const next = zonedDayStartUnix(timeZone, now, offset + 1);
+    return { date, start, next };
+  }
+  return null;
+}
+
+/** `YYYY-MM-DDTHH` in `timeZone`. Hour is 00–23. */
+export function zonedHourKey(timeZone: string, date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit"
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  const hour = value("hour") === "24" ? "00" : value("hour").padStart(2, "0");
+  return `${value("year")}-${value("month")}-${value("day")}T${hour}`;
+}
+
 /** Sum of daily octets. Days with no samples contribute nothing and do not invent zeroes. */
 export function sumLineUseDays(days: LineUseDay[]): { inBytes: number | null; outBytes: number | null } {
   let inBytes = 0;
