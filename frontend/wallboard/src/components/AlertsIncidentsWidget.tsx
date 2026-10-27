@@ -4,7 +4,7 @@ import { useAuth } from "../auth/AuthContext";
 import { getIncidents, type NocIncident } from "../api";
 
 function statusChip(i: NocIncident) {
-  if (i.resolvedAt) return { label: "Needs ack", className: "incidentChip incidentChipNeedsAck" };
+  if (i.resolvedAt) return { label: "Recovered", className: "incidentChip incidentChipNeedsAck" };
   return { label: "Active", className: "incidentChip incidentChipActive" };
 }
 
@@ -42,11 +42,13 @@ export function AlertsIncidentsWidget({ compact }: { compact?: boolean }) {
             const chip = statusChip(a);
             return (
               <li key={a.id} className="alertIncidentRow">
-                <div className="alertIncidentMain">
+                <Link to="/alerts" className="alertIncidentMain alertIncidentLink">
                   <strong className="alertIncidentTitle">{a.title}</strong>
                   <span className="muted alertIncidentSite">{a.siteName}</span>
-                </div>
-                <span className={chip.className}>{chip.label}</span>
+                </Link>
+                <Link to="/alerts" className={chip.className}>
+                  {chip.label}
+                </Link>
               </li>
             );
           })}

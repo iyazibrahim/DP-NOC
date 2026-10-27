@@ -119,14 +119,39 @@ export function upsertOpenIncident(input: {
   return { incident: created, created: true };
 }
 
-/** Sets resolvedAt the first time a still-open incident leaves the active set. */
+/**
+ * Sets resolvedAt the first time a still-open incident leaves the active set.
+ * Recovery also acknowledges it, so the Open list does not wait for a click.
+ */
 export function markResolvedIfOpen(key: string): Incident | null {
   load();
   const open = incidents.find((i) => i.key === key && !i.acknowledgedAt);
   if (!open || open.resolvedAt) return null;
-  open.resolvedAt = new Date().toISOString();
+  const now = new Date().toISOString();
+  open.resolvedAt = now;
+  open.acknowledgedAt = now;
+  open.acknowledgedBy = "auto";
+  prune();
   persist();
   return open;
+}
+
+/** Clear any recovered rows that were still waiting for a manual acknowledge. */
+export function autoAcknowledgeResolvedOpen(): Incident[] {
+  load();
+  const now = new Date().toISOString();
+  const cleared: Incident[] = [];
+  for (const row of incidents) {
+    if (row.acknowledgedAt || !row.resolvedAt) continue;
+    row.acknowledgedAt = now;
+    row.acknowledgedBy = "auto";
+    cleared.push(row);
+  }
+  if (cleared.length > 0) {
+    prune();
+    persist();
+  }
+  return cleared;
 }
 
 export function acknowledgeIncident(id: string, by: string): Incident | null {

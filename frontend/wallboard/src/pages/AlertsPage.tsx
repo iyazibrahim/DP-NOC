@@ -42,11 +42,12 @@ function incidentStatusLabel(i: NocIncident) {
 
 function incidentStatusSentence(i: NocIncident) {
   if (i.kind === "bandwidth") {
-    if (i.acknowledgedAt) return "Acknowledged. Blocking the MAC is a separate step.";
-    return "This client crossed a daily cap. Acknowledge clears the alert. Block is optional.";
+    if (i.acknowledgedAt) return "Cleared. Blocking the MAC is a separate step.";
+    return "This client is still over a daily cap. It clears when the day ends or use drops. Block is optional.";
   }
-  if (i.acknowledgedAt) return "Acknowledged. This does not change whether the check is up.";
-  if (i.resolvedAt) return "The check has recovered. Acknowledge to move it to history.";
+  if (i.acknowledgedAt && i.resolvedAt) return "Recovered and cleared automatically.";
+  if (i.acknowledgedAt) return "Acknowledged while still failing. It stays silent until this outage recovers.";
+  if (i.resolvedAt) return "The check has recovered.";
   return "The check is still failing.";
 }
 
@@ -129,7 +130,6 @@ export function AlertsPage() {
   }
 
   const activeCount = open.filter((row) => !row.resolvedAt).length;
-  const pendingAck = open.filter((row) => row.resolvedAt).length;
   const openPager = useMemo(() => paginateItems(open, openPage, PAGE_SIZE), [open, openPage]);
   const historyPager = useMemo(
     () => paginateItems(history, historyPage, PAGE_SIZE),
@@ -147,7 +147,7 @@ export function AlertsPage() {
     <div className="page">
       <PageHeader
         title="Alerts"
-        subtitle="Click an incident for the full detail. Acknowledge clears it from this list and does not change site health."
+        subtitle="Active incidents stay here until the check recovers, then they move to History on their own. Acknowledge while still failing only silences that outage until it recovers again."
       />
 
       {error ? (
@@ -162,8 +162,8 @@ export function AlertsPage() {
           <strong>{activeCount}</strong>
         </div>
         <div className="healthChip">
-          <span className="healthChipLabel">Needs acknowledgement</span>
-          <strong>{pendingAck}</strong>
+          <span className="healthChipLabel">Open</span>
+          <strong>{open.length}</strong>
         </div>
       </div>
 
@@ -177,18 +177,25 @@ export function AlertsPage() {
               <th>Site</th>
               <th>Status</th>
               <th>Opened</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {open.length === 0 ? (
               <tr>
-                <td colSpan={5} className="muted">
+                <td colSpan={6} className="muted">
                   No open incidents.
                 </td>
               </tr>
             ) : (
               openPager.slice.map((row) => (
-                <IncidentRow key={row.id} row={row} onOpen={() => setSelected(row)} />
+                <IncidentRow
+                  key={row.id}
+                  row={row}
+                  busy={busyId === row.id}
+                  onOpen={() => setSelected(row)}
+                  onAck={() => void onAck(row.id)}
+                />
               ))
             )}
           </tbody>
@@ -263,10 +270,14 @@ export function AlertsPage() {
 function IncidentRow({
   row,
   onOpen,
+  onAck,
+  busy,
   history
 }: {
   row: NocIncident;
   onOpen: () => void;
+  onAck?: () => void;
+  busy?: boolean;
   history?: boolean;
 }) {
   return (
@@ -299,6 +310,13 @@ function IncidentRow({
             )}
           </td>
           <td>{formatWhen(row.openedAt)}</td>
+          <td onClick={(e) => e.stopPropagation()}>
+            {row.acknowledgedAt || !onAck ? null : (
+              <Button type="button" size="sm" disabled={busy} onClick={onAck}>
+                Acknowledge
+              </Button>
+            )}
+          </td>
         </>
       )}
     </tr>

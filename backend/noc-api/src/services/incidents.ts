@@ -1,5 +1,6 @@
 import { getSiteById, siteList } from "../data/sites";
 import {
+  autoAcknowledgeResolvedOpen,
   getHistoryIncidents,
   getOpenIncidents,
   markResolvedIfOpen,
@@ -252,6 +253,10 @@ export function syncIncidentsFromStatuses(statuses: SiteStatus[]): {
       const resolved = markResolvedIfOpen(key);
       if (resolved) remember(pages, resolved, true);
     }
+  }
+
+  for (const row of autoAcknowledgeResolvedOpen()) {
+    remember(pages, row, true);
   }
 
   if (pages.length > 0) void postAlerts(pages);

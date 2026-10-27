@@ -416,4 +416,7 @@ Collector box → Alloy → Prometheus (central)
   - Optional FortiGate API token on the firewall device. The collector reads session application names and the ledger shows them. Without the token or app-control logs, the column stays “Not logged”.
   - Names start after the collector image is rebuilt and Force apply has run. Last weekend’s laptop is still unknown.
   - Clients → Use on this day pages at 10 rows.
+  - Alerts page: Acknowledge on each open row. Dashboard Alerts widget links to /alerts.
+  - Recovered incidents auto-acknowledge (`acknowledgedBy: auto`) and move to History. Open list is for still-failing checks.
+  - Settings → Client misuse card: pick a location, guest SSIDs, and daily GB caps (same store as Edit site).
 

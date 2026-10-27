@@ -4,19 +4,23 @@ import { useAuth } from "@/auth/AuthContext";
 import {
   applyRetentionSettings,
   applyNotificationsSettings,
+  getClientWatch,
   getNotificationsSettings,
   getRetentionSettings,
   getSettings,
+  getSites,
   getStatusTiming,
   getHetrixSettings,
   listExports,
   resetDashboardLayout,
   resetSitesFromSeed,
   runExport,
+  saveClientWatch,
   saveNotificationsSettings,
-  saveRetentionSettings
+  saveRetentionSettings,
+  type ClientWatchPolicy
 } from "@/api";
-import type { ExportRecord, NotificationsConfig, RetentionConfig, StatusTimingInfo } from "@/types";
+import type { ExportRecord, NotificationsConfig, RetentionConfig, Site, StatusTimingInfo } from "@/types";
 import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/noc/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -28,7 +32,50 @@ function formatBytes(n: number | null) {
   return gb >= 1 ? `${gb.toFixed(2)} GB` : `${(n / (1024 * 1024)).toFixed(0)} MB`;
 }
 
-type SettingsModal = "notifications" | "storage" | "exports" | "advanced" | null;
+function gbFromBytes(bytes: number): string {
+  return String(Math.round((bytes / 1_000_000_000) * 100) / 100);
+}
+
+function bytesFromGb(value: string): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 1_000_000_000) : 0;
+}
+
+type SettingsModal = "notifications" | "storage" | "exports" | "advanced" | "misuse" | null;
+
+type MisuseForm = {
+  guestSsids: string[];
+  knownSsids: string[];
+  extraSsid: string;
+  guestGb: string;
+  totalGb: string;
+  uploadGb: string;
+  uploadPct: string;
+};
+
+function emptyMisuseForm(): MisuseForm {
+  return {
+    guestSsids: [],
+    knownSsids: [],
+    extraSsid: "",
+    guestGb: "5",
+    totalGb: "20",
+    uploadGb: "10",
+    uploadPct: "70"
+  };
+}
+
+function formFromPolicy(policy: ClientWatchPolicy, ssids: string[]): MisuseForm {
+  return {
+    guestSsids: policy.guestSsids,
+    knownSsids: ssids,
+    extraSsid: "",
+    guestGb: gbFromBytes(policy.guestDownloadBytes),
+    totalGb: gbFromBytes(policy.clientTotalBytes),
+    uploadGb: gbFromBytes(policy.uploadBytes),
+    uploadPct: String(Math.round(policy.uploadRatio * 100))
+  };
+}
 
 export function SettingsPage() {
   const { token } = useAuth();
@@ -50,16 +97,21 @@ export function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<SettingsModal>(null);
+  const [sites, setSites] = useState<Site[]>([]);
+  const [misuseSiteId, setMisuseSiteId] = useState("");
+  const [misuseForm, setMisuseForm] = useState<MisuseForm>(emptyMisuseForm);
+  const [misuseLoading, setMisuseLoading] = useState(false);
 
   async function reload() {
     if (!token) return;
-    const [settings, ret, ex, notif, timing, hx] = await Promise.all([
+    const [settings, ret, ex, notif, timing, hx, sitesRes] = await Promise.all([
       getSettings(),
       getRetentionSettings(token),
       listExports(token),
       getNotificationsSettings(token),
       getStatusTiming(token),
-      getHetrixSettings(token).catch(() => null)
+      getHetrixSettings(token).catch(() => null),
+      getSites(token).catch(() => ({ sites: [] as Site[] }))
     ]);
     setGrafanaUrl(settings.grafanaPublicUrl);
     setRetention(ret.config);
@@ -68,6 +120,7 @@ export function SettingsPage() {
     setNotifications(notif.config);
     setStatusTiming(timing);
     setHetrix(hx);
+    setSites(sitesRes.sites.filter((s) => s.id !== "global"));
   }
 
   useEffect(() => {
@@ -172,6 +225,51 @@ export function SettingsPage() {
     }
   };
 
+  useEffect(() => {
+    if (!token || modal !== "misuse") return;
+    const siteId = misuseSiteId || sites[0]?.id || "";
+    if (!siteId) return;
+    if (!misuseSiteId) setMisuseSiteId(siteId);
+    let cancelled = false;
+    setMisuseLoading(true);
+    getClientWatch(token, siteId)
+      .then((res) => {
+        if (!cancelled) setMisuseForm(formFromPolicy(res.policy, res.ssids));
+      })
+      .catch(() => {
+        if (!cancelled) setMisuseForm(emptyMisuseForm());
+      })
+      .finally(() => {
+        if (!cancelled) setMisuseLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, modal, misuseSiteId, sites]);
+
+  const onSaveMisuse = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!token || !misuseSiteId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await saveClientWatch(token, misuseSiteId, {
+        guestSsids: misuseForm.guestSsids,
+        guestDownloadBytes: bytesFromGb(misuseForm.guestGb),
+        clientTotalBytes: bytesFromGb(misuseForm.totalGb),
+        uploadBytes: bytesFromGb(misuseForm.uploadGb),
+        uploadRatio: Math.min(1, Math.max(0, Number(misuseForm.uploadPct) / 100 || 0))
+      });
+      setMisuseForm(formFromPolicy(res.policy, res.ssids));
+      setMsg("Client misuse settings saved.");
+      setModal(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const notifSummary = notifications
     ? [
         notifications.telegram.enabled ? "Telegram" : null,
@@ -181,6 +279,11 @@ export function SettingsPage() {
         .filter(Boolean)
         .join(" · ") || "All channels off"
     : "Loading…";
+
+  const misuseSummary =
+    sites.length === 0
+      ? "No locations yet"
+      : `${sites.length} location${sites.length === 1 ? "" : "s"} · guest SSIDs and daily caps`;
 
   const hetrixLabel = !hetrix
     ? "…"
@@ -296,6 +399,20 @@ export function SettingsPage() {
             <span className="settingsModuleBlurb">
               Retention & scrape · {formatBytes(storageBytes)}
             </span>
+            <span className="settingsModuleCta">Configure →</span>
+          </button>
+
+          <button
+            type="button"
+            className="settingsModule"
+            onClick={() => {
+              setMisuseSiteId(sites[0]?.id ?? "");
+              setModal("misuse");
+            }}
+          >
+            <span className="settingsModuleEyebrow">Wi‑Fi</span>
+            <span className="settingsModuleTitle">Client misuse</span>
+            <span className="settingsModuleBlurb">{misuseSummary}</span>
             <span className="settingsModuleCta">Configure →</span>
           </button>
 
@@ -587,6 +704,120 @@ export function SettingsPage() {
         ) : (
           <p className="muted">Loading retention…</p>
         )}
+      </Modal>
+
+      <Modal open={modal === "misuse"} title="Client misuse" onClose={() => setModal(null)} wide>
+        <form className="deviceForm" onSubmit={onSaveMisuse}>
+          <p className="muted">
+            Caps are per Wi‑Fi client (MAC) per Malaysia calendar day. Tick guest SSIDs yourself. Combined means
+            download plus upload. Upload-shaped catches nearly equal up and down, like last weekend. Blocking a MAC
+            stays a separate confirm step on Clients or Alerts.
+          </p>
+          {sites.length === 0 ? (
+            <p className="muted">Add a location first, then set caps here.</p>
+          ) : (
+            <>
+              <label className="label">Location</label>
+              <select
+                value={misuseSiteId}
+                onChange={(e) => setMisuseSiteId(e.target.value)}
+                aria-label="Location for client misuse"
+              >
+                {sites.map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.name}
+                  </option>
+                ))}
+              </select>
+              {misuseLoading ? (
+                <p className="muted">Loading caps…</p>
+              ) : (
+                <>
+                  <div className="tableTitle">Guest SSIDs</div>
+                  {[...new Set([...misuseForm.knownSsids, ...misuseForm.guestSsids])].length === 0 ? (
+                    <p className="muted">No SSIDs seen yet. Add a name below, or wait for the collector to report clients.</p>
+                  ) : null}
+                  {[...new Set([...misuseForm.knownSsids, ...misuseForm.guestSsids])].map((ssid) => (
+                    <label key={ssid} className="label">
+                      <input
+                        type="checkbox"
+                        checked={misuseForm.guestSsids.includes(ssid)}
+                        onChange={(e) =>
+                          setMisuseForm((f) => ({
+                            ...f,
+                            guestSsids: e.target.checked
+                              ? [...f.guestSsids, ssid]
+                              : f.guestSsids.filter((item) => item !== ssid)
+                          }))
+                        }
+                      />{" "}
+                      Guest · {ssid}
+                    </label>
+                  ))}
+                  <label className="label">Add an SSID name</label>
+                  <div className="formActions">
+                    <input
+                      value={misuseForm.extraSsid}
+                      onChange={(e) => setMisuseForm((f) => ({ ...f, extraSsid: e.target.value }))}
+                      placeholder="Digital Economy"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        const name = misuseForm.extraSsid.trim();
+                        if (!name) return;
+                        setMisuseForm((f) => ({
+                          ...f,
+                          extraSsid: "",
+                          knownSsids: f.knownSsids.includes(name) ? f.knownSsids : [...f.knownSsids, name],
+                          guestSsids: f.guestSsids.includes(name) ? f.guestSsids : [...f.guestSsids, name]
+                        }));
+                      }}
+                    >
+                      Add guest SSID
+                    </Button>
+                  </div>
+                  <label className="label">Guest download cap (GB)</label>
+                  <input
+                    value={misuseForm.guestGb}
+                    onChange={(e) => setMisuseForm((f) => ({ ...f, guestGb: e.target.value }))}
+                    inputMode="decimal"
+                  />
+                  <label className="label">Any client combined cap (GB)</label>
+                  <input
+                    value={misuseForm.totalGb}
+                    onChange={(e) => setMisuseForm((f) => ({ ...f, totalGb: e.target.value }))}
+                    inputMode="decimal"
+                  />
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    Download + upload for that MAC. Default 20 GB. Typical office days are often under 10 GB.
+                  </p>
+                  <label className="label">Upload-shaped floor (GB)</label>
+                  <input
+                    value={misuseForm.uploadGb}
+                    onChange={(e) => setMisuseForm((f) => ({ ...f, uploadGb: e.target.value }))}
+                    inputMode="decimal"
+                  />
+                  <label className="label">Upload must be at least this % of download</label>
+                  <input
+                    value={misuseForm.uploadPct}
+                    onChange={(e) => setMisuseForm((f) => ({ ...f, uploadPct: e.target.value }))}
+                    inputMode="numeric"
+                  />
+                </>
+              )}
+            </>
+          )}
+          <div className="formActions">
+            <Button type="submit" disabled={busy || sites.length === 0 || misuseLoading || !misuseSiteId}>
+              Save
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setModal(null)} disabled={busy}>
+              Cancel
+            </Button>
+          </div>
+        </form>
       </Modal>
 
       <Modal open={modal === "exports"} title="Reports & exports" onClose={() => setModal(null)} wide>
