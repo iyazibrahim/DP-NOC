@@ -92,7 +92,7 @@ See [`docs/STORAGE_RETENTION.md`](docs/STORAGE_RETENTION.md). Defaults: **30 day
 
 ## Reports
 
-Weekly (Sunday 00:00 MYT) and monthly (1st 00:00 MYT) exports when enabled. Manual **Export now** and download from Settings. Files stored in `noc_exports` volume.
+Weekly (Sunday 00:00 MYT) and monthly (1st 00:00 MYT, covering the month that just ended) exports when enabled. Manual generate for this week, this month, or last month from Settings. Files stored in `noc_exports` volume.
 
 ## Site agents
 

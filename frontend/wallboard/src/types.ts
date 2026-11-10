@@ -254,6 +254,7 @@ export type ExportRecord = {
   dir: string;
   files: string[];
   reports?: Array<{ file: string; title: string; scope: string }>;
+  rangeLabel?: string;
 };
 
 export type MonthlyReportPayload = {

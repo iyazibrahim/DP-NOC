@@ -9,6 +9,7 @@ import {
   getLatestMonthlyReport,
   getExportPayload,
   ensureExportHtml,
+  type ExportMonth,
   type ExportPeriod
 } from "../services/exports";
 
@@ -26,8 +27,9 @@ exportsRouter.get("/latest/monthly", requireJwt(["operator", "wallboard"]), (_re
 
 exportsRouter.post("/run", requireJwt(["operator"]), async (req, res) => {
   const period = (req.body?.period === "monthly" ? "monthly" : "weekly") as ExportPeriod;
+  const month = (req.body?.month === "previous" ? "previous" : "current") as ExportMonth;
   try {
-    const record = await runExport(period);
+    const record = await runExport(period, { month });
     return res.status(201).json({ export: record });
   } catch (e) {
     return res.status(500).json({ error: e instanceof Error ? e.message : "Export failed" });

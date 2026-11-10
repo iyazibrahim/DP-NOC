@@ -125,6 +125,17 @@ export function calendarMonthSlots(timeZone: string, now: Date): DaySlot[] {
   return slots;
 }
 
+/**
+ * The calendar month before the one that contains `now`.
+ * Used when the monthly report runs at 00:00 on the 1st: that instant is a new month,
+ * and the closed month is the one that just ended.
+ */
+export function previousCalendarMonthSlots(timeZone: string, now: Date): DaySlot[] {
+  const parts = tzParts(timeZone, now);
+  const firstThisMonth = zonedDayStartUnix(timeZone, now, -(parts.day - 1));
+  return calendarMonthSlots(timeZone, new Date(firstThisMonth * 1000 - 1000));
+}
+
 /** `count` local calendar days ending today, oldest first. */
 export function calendarDaySlots(timeZone: string, now: Date, count: number): DaySlot[] {
   const slots: DaySlot[] = [];

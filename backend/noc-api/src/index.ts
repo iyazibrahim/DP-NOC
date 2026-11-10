@@ -35,9 +35,9 @@ async function main() {
       try {
         const cfg = loadRetentionConfig();
         if (!cfg.scheduledExportsEnabled) return;
-        const record = await runExport("monthly");
+        const record = await runExport("monthly", { month: "previous" });
         // eslint-disable-next-line no-console
-        console.log(`[cron] monthly export completed: ${record.id}`);
+        console.log(`[cron] monthly export completed: ${record.id} (${record.rangeLabel ?? "previous month"})`);
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error("[cron] monthly export failed:", e);

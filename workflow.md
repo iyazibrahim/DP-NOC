@@ -419,4 +419,8 @@ Collector box → Alloy → Prometheus (central)
   - Alerts page: Acknowledge on each open row. Dashboard Alerts widget links to /alerts.
   - Recovered incidents auto-acknowledge (`acknowledgedBy: auto`) and move to History. Open list is for still-failing checks.
   - Settings → Client misuse card: pick a location, guest SSIDs, and daily GB caps (same store as Edit site).
+- [x] **Reports modal width + closed month (2026-11-10)**
+  - Reports & exports dialog is wide enough for every location button. Buttons wrap inside the reports column instead of running off the panel.
+  - The 00:00 job on the 1st writes the month that just ended (October when it fires on 1 November), not the empty new month.
+  - Generate can target This week, This month, or Last month. Each new row shows the calendar span it covers.
 

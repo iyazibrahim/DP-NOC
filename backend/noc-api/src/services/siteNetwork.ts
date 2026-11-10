@@ -16,6 +16,7 @@ import {
   slotForYmd,
   ymdInZone,
   zonedDayStartUnix,
+  type DaySlot,
   type LineUseDay
 } from "./lineUseWindow";
 
@@ -653,6 +654,22 @@ export async function collectLineUseDays(
     today: ymdInZone(env.NOC_TZ, todayStart),
     todayHours: hoursFromSamples(inbound, outbound, todayStart, nowSec)
   };
+}
+
+/** Hourly WAN increases placed into the given calendar days, ending at `endSec`. */
+export async function collectLineUseForSlots(
+  siteId: string,
+  deviceId: string,
+  ifName: string,
+  slots: DaySlot[],
+  endSec: number
+): Promise<LineUseDay[]> {
+  const windowStart = slots[0]?.start ?? endSec;
+  const [inbound, outbound] = await Promise.all([
+    loadHourlyVolume("in", siteId, deviceId, ifName, windowStart, endSec),
+    loadHourlyVolume("out", siteId, deviceId, ifName, windowStart, endSec)
+  ]);
+  return bucketVolumeDays(slots, inbound, outbound, endSec);
 }
 
 function hoursFromSamples(

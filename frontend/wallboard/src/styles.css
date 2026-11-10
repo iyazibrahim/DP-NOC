@@ -966,6 +966,23 @@ textarea {
   margin: 0;
 }
 
+.exportTable {
+  width: 100%;
+  table-layout: fixed;
+  margin-top: 12px;
+}
+
+.exportTable .exportWhen {
+  width: 11.5rem;
+}
+
+.exportReports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
 .widgetConfig {
   padding: 0;
   border-bottom: none;

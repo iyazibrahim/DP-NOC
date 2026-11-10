@@ -3,6 +3,7 @@ import {
   calendarDaySlots,
   calendarMonthSlots,
   calendarWeekSlots,
+  previousCalendarMonthSlots,
   sumLineUseDays,
   zonedDayStartUnix,
   ymdInZone
@@ -61,6 +62,26 @@ function run() {
   const february = calendarMonthSlots("Asia/Kuala_Lumpur", new Date("2026-02-10T04:00:00Z"));
   assert(february.length === 28, `February 2026 has 28 days, got ${february.length}`);
   assert(february[0].date === "2026-02-01" && february[27].date === "2026-02-28", "February bounds");
+
+  const octoberFromFirst = previousCalendarMonthSlots(
+    "Asia/Kuala_Lumpur",
+    new Date("2026-10-31T16:00:00Z")
+  );
+  assert(octoberFromFirst.length === 31, `previous month from 1 Nov has 31 days, got ${octoberFromFirst.length}`);
+  assert(
+    octoberFromFirst[0].date === "2026-10-01" && octoberFromFirst[30].date === "2026-10-31",
+    `1 Nov closes October, got ${octoberFromFirst[0].date}–${octoberFromFirst[30].date}`
+  );
+  const octoberFromTenth = previousCalendarMonthSlots(
+    "Asia/Kuala_Lumpur",
+    new Date("2026-11-10T04:00:00Z")
+  );
+  assert(
+    octoberFromTenth[0].date === "2026-10-01" && octoberFromTenth[30].date === "2026-10-31",
+    "10 Nov still closes October"
+  );
+  const leap = previousCalendarMonthSlots("Asia/Kuala_Lumpur", new Date("2024-02-29T16:00:00Z"));
+  assert(leap.length === 29 && leap[0].date === "2024-02-01" && leap[28].date === "2024-02-29", "leap February");
 
   const dayStart = 1_000_000;
   const day = 86_400;

@@ -790,11 +790,15 @@ export async function getLatestMonthlyReport(token: string) {
   });
 }
 
-export async function runExport(token: string, period: "weekly" | "monthly") {
+export async function runExport(
+  token: string,
+  period: "weekly" | "monthly",
+  month: "current" | "previous" = "current"
+) {
   return fetchJson<{ export: ExportRecord }>("/api/exports/run", {
     method: "POST",
     headers: { ...authHeaders(token), "content-type": "application/json" },
-    body: JSON.stringify({ period })
+    body: JSON.stringify({ period, month })
   });
 }
 

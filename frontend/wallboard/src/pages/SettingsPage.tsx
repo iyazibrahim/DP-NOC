@@ -83,7 +83,7 @@ export function SettingsPage() {
   const [retention, setRetention] = useState<RetentionConfig | null>(null);
   const [storageBytes, setStorageBytes] = useState<number | null>(null);
   const [exports, setExports] = useState<ExportRecord[]>([]);
-  const [exportPeriod, setExportPeriod] = useState<"weekly" | "monthly">("weekly");
+  const [exportChoice, setExportChoice] = useState<"weekly" | "monthly" | "last-month">("weekly");
   const [notifications, setNotifications] = useState<NotificationsConfig | null>(null);
   const [statusTiming, setStatusTiming] = useState<StatusTimingInfo | null>(null);
   const [hetrix, setHetrix] = useState<{
@@ -165,13 +165,20 @@ export function SettingsPage() {
     }
   };
 
-  const onRunExport = async (period: "weekly" | "monthly") => {
+  const onRunExport = async (choice: "weekly" | "monthly" | "last-month") => {
     if (!token) return;
     setBusy(true);
     try {
-      await runExport(token, period);
+      const period = choice === "weekly" ? "weekly" : "monthly";
+      await runExport(token, period, choice === "last-month" ? "previous" : "current");
       await reload();
-      setMsg(period === "weekly" ? "This week’s reports are ready." : "This month’s reports are ready.");
+      setMsg(
+        choice === "weekly"
+          ? "This week’s reports are ready."
+          : choice === "last-month"
+            ? "Last month’s reports are ready."
+            : "This month’s reports are ready."
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Export failed");
     } finally {
@@ -820,27 +827,40 @@ export function SettingsPage() {
         </form>
       </Modal>
 
-      <Modal open={modal === "exports"} title="Reports & exports" onClose={() => setModal(null)} wide>
-        <p className="muted">This week or this month. One report per location, plus one for all locations.</p>
+      <Modal
+        open={modal === "exports"}
+        title="Reports & exports"
+        onClose={() => setModal(null)}
+        wide
+        className="sm:max-w-6xl"
+      >
+        <p className="muted">
+          This week, this month, or last month. One report per location, plus one for all locations. The automatic
+          monthly report runs at 00:00 on the 1st and covers the month that just ended.
+        </p>
         <div className="exportBar">
           <select
-            value={exportPeriod}
-            onChange={(e) => setExportPeriod(e.target.value === "monthly" ? "monthly" : "weekly")}
+            value={exportChoice}
+            onChange={(e) => {
+              const value = e.target.value;
+              setExportChoice(value === "monthly" || value === "last-month" ? value : "weekly");
+            }}
           >
             <option value="weekly">This week</option>
             <option value="monthly">This month</option>
+            <option value="last-month">Last month</option>
           </select>
-          <Button type="button" onClick={() => onRunExport(exportPeriod)} disabled={busy}>
+          <Button type="button" onClick={() => onRunExport(exportChoice)} disabled={busy}>
             Generate
           </Button>
         </div>
 
         <div className="tableTitle">Generated reports</div>
-        <table className="dataTable" style={{ marginTop: 12 }}>
+        <table className="dataTable exportTable">
           <thead>
             <tr>
-              <th>Period</th>
-              <th>Created</th>
+              <th className="exportWhen">Period</th>
+              <th className="exportWhen">Created</th>
               <th>Reports</th>
             </tr>
           </thead>
@@ -857,28 +877,31 @@ export function SettingsPage() {
                   rec.reports && rec.reports.length > 0
                     ? rec.reports
                     : [{ file: "report.html", title: "Report", scope: "all" }];
+                const periodLabel =
+                  rec.rangeLabel || (rec.period === "weekly" ? "This week" : "This month");
                 return (
                   <tr key={rec.id}>
-                    <td>{rec.period === "weekly" ? "This week" : "This month"}</td>
+                    <td>{periodLabel}</td>
                     <td>{new Date(rec.createdAt).toLocaleString()}</td>
                     <td>
-                      {reports.map((report) => (
-                        <Button
-                          key={report.file}
-                          asChild
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="mr-2 mb-1"
-                        >
-                          <Link
-                            to={`/reports/${encodeURIComponent(rec.id)}?file=${encodeURIComponent(report.file)}`}
-                            onClick={() => setModal(null)}
+                      <div className="exportReports">
+                        {reports.map((report) => (
+                          <Button
+                            key={report.file}
+                            asChild
+                            type="button"
+                            variant="outline"
+                            size="sm"
                           >
-                            {report.title}
-                          </Link>
-                        </Button>
-                      ))}
+                            <Link
+                              to={`/reports/${encodeURIComponent(rec.id)}?file=${encodeURIComponent(report.file)}`}
+                              onClick={() => setModal(null)}
+                            >
+                              {report.title}
+                            </Link>
+                          </Button>
+                        ))}
+                      </div>
                     </td>
                   </tr>
                 );

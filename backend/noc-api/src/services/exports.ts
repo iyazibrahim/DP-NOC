@@ -4,12 +4,20 @@ import { siteList, type Site } from "../data/sites";
 import { listIncidents, type Incident } from "../data/incidents";
 import { env } from "../env";
 import { promQuery, promQueryRange, parseFirstVectorValue, type PromQueryResult } from "./prometheus";
-import { collectLineUseDays } from "./siteNetwork";
+import { collectLineUseForSlots } from "./siteNetwork";
 import { buildIfUtilQuery } from "./metrics";
-import { calendarMonthSlots, calendarWeekSlots, sumLineUseDays, type DaySlot, type LineUseDay } from "./lineUseWindow";
+import {
+  calendarMonthSlots,
+  calendarWeekSlots,
+  previousCalendarMonthSlots,
+  sumLineUseDays,
+  type DaySlot,
+  type LineUseDay
+} from "./lineUseWindow";
 import { renderExportReportHtml } from "./exportReportHtml";
 
 export type ExportPeriod = "weekly" | "monthly";
+export type ExportMonth = "current" | "previous";
 
 export type ExportReportFile = {
   file: string;
@@ -24,6 +32,8 @@ export type ExportRecord = {
   dir: string;
   files: string[];
   reports?: ExportReportFile[];
+  /** Calendar span covered by the report, e.g. "1 Oct 2026 – 31 Oct 2026". */
+  rangeLabel?: string;
 };
 
 export type ReportBytes = {
@@ -123,12 +133,18 @@ function pruneExports(period: ExportPeriod, keep = 12) {
   }
 }
 
-function readManifest(dir: string): ExportReportFile[] | undefined {
+function readManifest(dir: string): { reports?: ExportReportFile[]; rangeLabel?: string } | undefined {
   const file = path.join(dir, "manifest.json");
   if (!fs.existsSync(file)) return undefined;
   try {
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as { reports?: ExportReportFile[] };
-    return Array.isArray(parsed.reports) ? parsed.reports : undefined;
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as {
+      reports?: ExportReportFile[];
+      rangeLabel?: string;
+    };
+    return {
+      reports: Array.isArray(parsed.reports) ? parsed.reports : undefined,
+      rangeLabel: typeof parsed.rangeLabel === "string" ? parsed.rangeLabel : undefined
+    };
   } catch {
     return undefined;
   }
@@ -147,9 +163,9 @@ function isApLike(d: { type: string; kind: string; vendor: string }): boolean {
   return false;
 }
 
-async function avgQuery(query: string): Promise<number | null> {
+async function avgQuery(query: string, atSec?: number): Promise<number | null> {
   try {
-    const data = await promQuery(query);
+    const data = await promQuery(query, atSec);
     const value = parseFirstVectorValue(data);
     return value != null && Number.isFinite(value) ? value : null;
   } catch {
@@ -265,17 +281,17 @@ function rangeLabel(slots: DaySlot[]): string {
   return `${fmt(first)} – ${fmt(last)}`;
 }
 
-async function networkBandwidth(site: Site, range: string): Promise<ReportBandwidth[]> {
+async function networkBandwidth(site: Site, range: string, atSec: number): Promise<ReportBandwidth[]> {
   const devices = site.devices.filter((d) => d.kind === "network");
   return Promise.all(
     devices.map(async (device) => {
       const inbound = buildIfUtilQuery("in", site.id, device.id);
       const outbound = buildIfUtilQuery("out", site.id, device.id);
       const [avgIn, peakIn, avgOut, peakOut] = await Promise.all([
-        avgQuery(`avg_over_time((${inbound})[${range}:1h])`),
-        avgQuery(`max_over_time((${inbound})[${range}:1h])`),
-        avgQuery(`avg_over_time((${outbound})[${range}:1h])`),
-        avgQuery(`max_over_time((${outbound})[${range}:1h])`)
+        avgQuery(`avg_over_time((${inbound})[${range}:1h])`, atSec),
+        avgQuery(`max_over_time((${inbound})[${range}:1h])`, atSec),
+        avgQuery(`avg_over_time((${outbound})[${range}:1h])`, atSec),
+        avgQuery(`max_over_time((${outbound})[${range}:1h])`, atSec)
       ]);
       return {
         name: device.nickname || device.name,
@@ -290,29 +306,30 @@ async function networkBandwidth(site: Site, range: string): Promise<ReportBandwi
 
 async function locationFacts(
   site: Site,
-  period: ExportPeriod,
+  slots: DaySlot[],
   windowStart: number,
-  nowSec: number,
+  windowEnd: number,
   rangeSec: number
 ): Promise<{ location: ReportLocation; hasData: boolean; incidents: ReportIncident[] }> {
   const siteLabel = escapePromLabel(site.id);
   const range = `${rangeSec}s`;
   const [probe, internet, line, accessPoints, bandwidth, incidents] = await Promise.all([
     avgQuery(
-      `avg_over_time((max(up{site="${siteLabel}",job=~"site_host|integrations/unix"}))[${range}:5m])`
+      `avg_over_time((max(up{site="${siteLabel}",job=~"site_host|integrations/unix"}))[${range}:5m])`,
+      windowEnd
     ),
     avgQuery(
-      `avg_over_time((max(probe_success{site="${siteLabel}",check=~"wan_dns|wan_dns2"}) * max(probe_success{site="${siteLabel}",check="wan_vps"}))[${range}:5m])`
+      `avg_over_time((max(probe_success{site="${siteLabel}",check=~"wan_dns|wan_dns2"}) * max(probe_success{site="${siteLabel}",check="wan_vps"}))[${range}:5m])`,
+      windowEnd
     ),
     (async (): Promise<LineUseDay[]> => {
       const wan = site.wanUplink;
       if (!wan?.deviceId || !wan.ifName) return [];
-      const collected = await collectLineUseDays(site.id, wan.deviceId, wan.ifName);
-      return period === "weekly" ? collected.weekDays : collected.monthDays;
+      return collectLineUseForSlots(site.id, wan.deviceId, wan.ifName, slots, windowEnd);
     })(),
-    accessPointBytes(site, windowStart, nowSec),
-    networkBandwidth(site, range),
-    Promise.resolve(incidentsBetween(windowStart, nowSec, site.id))
+    accessPointBytes(site, windowStart, windowEnd),
+    networkBandwidth(site, range, windowEnd),
+    Promise.resolve(incidentsBetween(windowStart, windowEnd, site.id))
   ]);
 
   const totals = sumLineUseDays(line);
@@ -345,12 +362,24 @@ function writeReport(dir: string, file: string, payload: ExportReportPayload) {
   fs.writeFileSync(path.join(dir, file), renderExportReportHtml(payload), "utf8");
 }
 
-export async function runExport(period: ExportPeriod): Promise<ExportRecord> {
+export async function runExport(
+  period: ExportPeriod,
+  options?: { month?: ExportMonth }
+): Promise<ExportRecord> {
   const now = new Date();
   const nowSec = Math.floor(now.getTime() / 1000);
-  const slots = period === "weekly" ? calendarWeekSlots(env.NOC_TZ, now) : calendarMonthSlots(env.NOC_TZ, now);
+  const month: ExportMonth =
+    period === "monthly" && options?.month === "previous" ? "previous" : "current";
+  const slots =
+    period === "weekly"
+      ? calendarWeekSlots(env.NOC_TZ, now)
+      : month === "previous"
+        ? previousCalendarMonthSlots(env.NOC_TZ, now)
+        : calendarMonthSlots(env.NOC_TZ, now);
   const windowStart = slots[0]?.start ?? nowSec;
-  const rangeSec = Math.max(3600, nowSec - windowStart);
+  const slotEnd = slots[slots.length - 1]?.next ?? nowSec;
+  const windowEnd = Math.min(nowSec, slotEnd);
+  const rangeSec = Math.max(3600, windowEnd - windowStart);
   const label = rangeLabel(slots);
   const stamp = now.toISOString().slice(0, 10);
   const dirName = `${stamp}-${nowSec}`;
@@ -359,7 +388,7 @@ export async function runExport(period: ExportPeriod): Promise<ExportRecord> {
 
   const facts = [];
   for (const site of siteList) {
-    facts.push(await locationFacts(site, period, windowStart, nowSec, rangeSec));
+    facts.push(await locationFacts(site, slots, windowStart, windowEnd, rangeSec));
   }
 
   const included = facts.filter((f) => f.hasData);
@@ -394,11 +423,15 @@ export async function runExport(period: ExportPeriod): Promise<ExportRecord> {
     rangeLabel: label,
     locations: included.map((f) => f.location),
     skipped,
-    incidents: incidentSummary(incidentsBetween(windowStart, nowSec))
+    incidents: incidentSummary(incidentsBetween(windowStart, windowEnd))
   });
   reports.unshift({ file: allFile, title: "All locations", scope: "all" });
 
-  fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ reports }, null, 2), "utf8");
+  fs.writeFileSync(
+    path.join(dir, "manifest.json"),
+    JSON.stringify({ reports, rangeLabel: label }, null, 2),
+    "utf8"
+  );
   pruneExports(period, 12);
 
   return {
@@ -407,7 +440,8 @@ export async function runExport(period: ExportPeriod): Promise<ExportRecord> {
     createdAt: generatedAt,
     dir,
     files: reports.map((r) => r.file).concat(["manifest.json"]),
-    reports
+    reports,
+    rangeLabel: label
   };
 }
 
@@ -418,13 +452,15 @@ export function listExports(): ExportRecord[] {
       const date = path.basename(dir);
       const files = fs.readdirSync(dir);
       const stat = fs.statSync(dir);
+      const manifest = readManifest(dir);
       out.push({
         id: `${period}-${date}`,
         period,
         createdAt: stat.mtime.toISOString(),
         dir,
         files,
-        reports: readManifest(dir)
+        reports: manifest?.reports,
+        rangeLabel: manifest?.rangeLabel
       });
     }
   }
